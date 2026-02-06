@@ -84,3 +84,22 @@ model TeamDriver {
   @@unique([teamId, driverId])
   @@index([teamId])
 }
+
+model Race {
+  id        String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name     String
+  country  String?
+  city     String?
+
+  season   Int
+  round    Int
+
+  isSprint Boolean @default(false)
+
+  qualifyingUtc       DateTime?
+  sprintQualifyingUtc DateTime?
+}
+
