@@ -1,7 +1,7 @@
 workflows:
   ios_release:
     name: iOS Release (Capacitor)
-    max_build_duration: 60
+    max_build_duration: 90
     environment:
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
@@ -15,27 +15,44 @@ workflows:
         script: npm run build
       - name: Sync Capacitor iOS
         script: npx cap sync ios
+      - name: Build iOS (unsigned)
+        script: |
+          cd ios/App
+          xcodebuild \
+            -workspace "App.xcworkspace" \
+            -scheme "App" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export IPA (unsigned)
+        script: |
+          cat > $CM_BUILD_DIR/exportOptions.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            CODE_SIGNING_ALLOWED=NO
+
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
-
-  android_release:
-    name: Android Release (Capacitor)
-    max_build_duration: 60
-    environment:
-      node: 22
-    scripts:
-      - name: Install deps
-        script: npm ci
-      - name: Build web
-        script: npm run build
-      - name: Sync Capacitor Android
-        script: npx cap sync android
-      - name: Build AAB
-        script: |
-          cd android
-          ./gradlew bundleRelease
-    artifacts:
-      - android/app/build/outputs/**/*.aab
-      - android/app/build/outputs/**/*.apk
