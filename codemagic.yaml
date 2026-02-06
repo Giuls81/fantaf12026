@@ -1,32 +1,31 @@
 workflows:
   ios_release:
-    name: iOS Release (Capacitor)
+    name: iOS Release (Capacitor) - TestFlight
     max_build_duration: 90
 
     environment:
       node: 22
       xcode: latest
 
-      # ✅ USA SOLO QUESTO (manual signing via references)
       ios_signing:
+        # ✅ USA SOLO QUESTO METODO (ref che hai appena creato in Codemagic)
         certificates:
           - ios_dist_cert
         provisioning_profiles:
           - ios_appstore_profile
 
-      vars:
-        BUNDLE_ID: "com.fantaf1.app"
-        XCODE_SCHEME: "App"
-
     scripts:
       - name: Install deps
-        script: npm ci
+        script: |
+          npm ci
 
       - name: Build web
-        script: npm run build
+        script: |
+          npm run build
 
       - name: Sync Capacitor iOS
-        script: npx cap sync ios
+        script: |
+          npx cap sync ios
 
       - name: Debug iOS paths
         script: |
@@ -35,9 +34,15 @@ workflows:
           echo "=== find xcworkspace ==="
           find ios -maxdepth 6 -name "*.xcworkspace" -print || true
           echo "=== find xcodeproj ==="
-          find ios -maxdepth 7 -name "*.xcodeproj" -print || true
+          find ios -maxdepth 6 -name "*.xcodeproj" -print || true
 
-      - name: Build iOS archive (signed)
+      # (OPZIONALE) Forza build number a 36 (se vuoi essere SICURO)
+      # Se preferisci gestire build number in Xcode, puoi rimuovere questo step.
+      - name: Force iOS build number (36)
+        script: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 36" "ios/App/App/Info.plist" || true
+
+      - name: Archive iOS (signed)
         script: |
           cd ios/App
           xcodebuild \
@@ -50,27 +55,24 @@ workflows:
 
       - name: Export IPA (App Store)
         script: |
-          cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
+          cat > $CM_BUILD_DIR/exportOptions.plist <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>method</key>
             <string>app-store</string>
-
             <key>signingStyle</key>
             <string>manual</string>
-
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>${BUNDLE_ID}</key>
-              <string>ios_appstore_profile</string>
-            </dict>
-
             <key>stripSwiftSymbols</key>
             <true/>
             <key>compileBitcode</key>
             <false/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.fantaf1.app</key>
+              <string>ios_appstore_profile</string>
+            </dict>
           </dict>
           </plist>
           EOF
@@ -84,3 +86,9 @@ workflows:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
       - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        # Se la tua integrazione Apple Developer Portal/App Store Connect è già collegata in Codemagic,
+        # questo basta. Altrimenti Codemagic ti dirà cosa manca (API Key ecc.).
+        submit_to_testflight: true
