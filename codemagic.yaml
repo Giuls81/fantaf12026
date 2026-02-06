@@ -8,7 +8,6 @@ workflows:
       xcode: latest
 
       ios_signing:
-        # ✅ USA SOLO QUESTO METODO (ref che hai appena creato in Codemagic)
         certificates:
           - ios_dist_cert
         provisioning_profiles:
@@ -34,10 +33,10 @@ workflows:
           echo "=== find xcworkspace ==="
           find ios -maxdepth 6 -name "*.xcworkspace" -print || true
           echo "=== find xcodeproj ==="
-          find ios -maxdepth 6 -name "*.xcodeproj" -print || true
+          find ios -maxdepth 7 -name "*.xcodeproj" -print || true
+          echo "=== Info.plist ==="
+          cat ios/App/App/Info.plist || true
 
-      # (OPZIONALE) Forza build number a 36 (se vuoi essere SICURO)
-      # Se preferisci gestire build number in Xcode, puoi rimuovere questo step.
       - name: Force iOS build number (36)
         script: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 36" "ios/App/App/Info.plist" || true
@@ -89,6 +88,5 @@ workflows:
 
     publishing:
       app_store_connect:
-        # Se la tua integrazione Apple Developer Portal/App Store Connect è già collegata in Codemagic,
-        # questo basta. Altrimenti Codemagic ti dirà cosa manca (API Key ecc.).
+        auth: integration
         submit_to_testflight: true
