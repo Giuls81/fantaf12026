@@ -4,39 +4,62 @@ workflows:
     max_build_duration: 90
     environment:
       vars:
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
       node: 22
       xcode: latest
+
     scripts:
       - name: Install deps
         script: npm ci
+
       - name: Build web
         script: npm run build
+
       - name: Sync Capacitor iOS
         script: npx cap sync ios
+
       - name: Debug iOS paths
         script: |
           echo "=== ls ios ==="
           ls -la ios || true
           echo "=== find xcworkspace ==="
-          find ios -maxdepth 5 -name "*.xcworkspace" -print || true
+          find ios -maxdepth 6 -name "*.xcworkspace" -print || true
           echo "=== find xcodeproj ==="
           find ios -maxdepth 6 -name "*.xcodeproj" -print || true
-      - name: Build iOS (unsigned)
+
+      - name: Build iOS archive (unsigned)
         script: |
           cd ios/App
-          xcodebuild \
-            -workspace "App.xcworkspace" \
-            -scheme "App" \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
-            archive \
-            CODE_SIGNING_ALLOWED=NO
 
-      - name: Export IPA (unsigned)
+          if [ -d "App.xcworkspace" ]; then
+            echo "Using workspace: ios/App/App.xcworkspace"
+            xcodebuild \
+              -workspace "App.xcworkspace" \
+              -scheme "App" \
+              -configuration Release \
+              -sdk iphoneos \
+              -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+              archive \
+              CODE_SIGNING_ALLOWED=NO
+          else
+            echo "Workspace not found. Using project: ios/App/App.xcodeproj"
+            xcodebuild \
+              -project "App.xcodeproj" \
+              -scheme "App" \
+              -configuration Release \
+              -sdk iphoneos \
+              -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+              archive \
+              CODE_SIGNING_ALLOWED=NO
+          fi
+
+      - name: Export IPA (best-effort, unsigned)
         script: |
+          if [ ! -d "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" ]; then
+            echo "No archive found, skipping export."
+            exit 0
+          fi
+
           cat > $CM_BUILD_DIR/exportOptions.plist <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,13 +77,14 @@ workflows:
           </plist>
           EOF
 
+          # Export may fail without signing; don't fail the whole build.
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
             -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO || true
 
     artifacts:
-      - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
