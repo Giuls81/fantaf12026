@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LeagueRole {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  displayName String?
+  authToken   String  @unique
+
+  memberships LeagueMember[]
+  teams       Team[]
+}
+
+model League {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name     String
+  joinCode String @unique
+
+  members LeagueMember[]
+  teams   Team[]
+}
+
+model LeagueMember {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId   String
+  leagueId String
+  role     LeagueRole @default(MEMBER)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, leagueId])
+  @@index([leagueId])
+  @@index([userId])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leagueId String
+  userId   String
+
+  budget    Int
+  captainId String?
+  reserveId String?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  drivers TeamDriver[]
+
+  @@unique([leagueId, userId])
+  @@index([leagueId])
+  @@index([userId])
+}
+
+model TeamDriver {
+  id       String @id @default(cuid())
+  teamId   String
+  driverId String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, driverId])
+  @@index([teamId])
+}
