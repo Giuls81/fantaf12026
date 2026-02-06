@@ -3,6 +3,10 @@ import Layout from './components/Layout';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, RACES_2026, DRIVERS, CONSTRUCTORS } from './constants';
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+console.log("API_URL =", API_URL);
+fetch(`${API_URL}/health`).then(r => r.json()).then(d => console.log("API /health =", d)).catch(e => console.log("API /health ERROR", e));
+
 const INITIAL_TEAM: UserTeam = {
   name: 'My F1 Team',
   driverIds: [],
