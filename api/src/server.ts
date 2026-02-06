@@ -21,6 +21,16 @@ function getBearerToken(authHeader: unknown): string | null {
   return token.length ? token : null;
 }
 
+async function requireUser(req: any, reply: any) {
+  const token = getBearerToken(req.headers["authorization"]);
+  if (!token) return { ok: false as const, replied: reply.code(401).send({ error: "missing_token" }) };
+
+  const user = await prisma.user.findUnique({ where: { authToken: token } });
+  if (!user) return { ok: false as const, replied: reply.code(401).send({ error: "invalid_token" }) };
+
+  return { ok: true as const, user };
+}
+
 async function start() {
   await app.register(cors, {
     origin: true,
@@ -39,11 +49,8 @@ async function start() {
   });
 
   app.post("/leagues", async (req, reply) => {
-    const token = getBearerToken(req.headers["authorization"]);
-    if (!token) return reply.code(401).send({ error: "missing_token" });
-
-    const user = await prisma.user.findUnique({ where: { authToken: token } });
-    if (!user) return reply.code(401).send({ error: "invalid_token" });
+    const auth = await requireUser(req, reply);
+    if (!auth.ok) return auth.replied;
 
     const body = (req.body ?? {}) as { name?: string };
     const name = (body.name?.trim() || "League").slice(0, 64);
@@ -56,7 +63,7 @@ async function start() {
         joinCode,
         members: {
           create: {
-            userId: user.id,
+            userId: auth.user.id,
             role: "ADMIN",
           },
         },
@@ -65,6 +72,36 @@ async function start() {
     });
 
     return league;
+  });
+
+  app.post("/leagues/join", async (req, reply) => {
+    const auth = await requireUser(req, reply);
+    if (!auth.ok) return auth.replied;
+
+    const body = (req.body ?? {}) as { joinCode?: string };
+    const joinCode = (body.joinCode ?? "").toString().trim().toUpperCase();
+
+    if (!joinCode) return reply.code(400).send({ error: "missing_joinCode" });
+
+    const league = await prisma.league.findUnique({ where: { joinCode } });
+    if (!league) return reply.code(404).send({ error: "league_not_found" });
+
+    await prisma.leagueMember.upsert({
+      where: {
+        userId_leagueId: {
+          userId: auth.user.id,
+          leagueId: league.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: auth.user.id,
+        leagueId: league.id,
+        role: "MEMBER",
+      },
+    });
+
+    return { leagueId: league.id, name: league.name, joinCode: league.joinCode };
   });
 
   const host = "0.0.0.0";
