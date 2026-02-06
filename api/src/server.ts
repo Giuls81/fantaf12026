@@ -14,6 +14,13 @@ function makeToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
+function getBearerToken(authHeader: unknown): string | null {
+  if (typeof authHeader !== "string") return null;
+  if (!authHeader.startsWith("Bearer ")) return null;
+  const token = authHeader.slice("Bearer ".length).trim();
+  return token.length ? token : null;
+}
+
 async function start() {
   await app.register(cors, {
     origin: true,
@@ -29,6 +36,35 @@ async function start() {
       select: { id: true, authToken: true },
     });
     return user;
+  });
+
+  app.post("/leagues", async (req, reply) => {
+    const token = getBearerToken(req.headers["authorization"]);
+    if (!token) return reply.code(401).send({ error: "missing_token" });
+
+    const user = await prisma.user.findUnique({ where: { authToken: token } });
+    if (!user) return reply.code(401).send({ error: "invalid_token" });
+
+    const body = (req.body ?? {}) as { name?: string };
+    const name = (body.name?.trim() || "League").slice(0, 64);
+
+    const joinCode = crypto.randomBytes(4).toString("hex").toUpperCase();
+
+    const league = await prisma.league.create({
+      data: {
+        name,
+        joinCode,
+        members: {
+          create: {
+            userId: user.id,
+            role: "ADMIN",
+          },
+        },
+      },
+      select: { id: true, name: true, joinCode: true },
+    });
+
+    return league;
   });
 
   const host = "0.0.0.0";
