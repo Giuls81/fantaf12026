@@ -23,10 +23,18 @@ function getBearerToken(authHeader: unknown): string | null {
 
 async function requireUser(req: any, reply: any) {
   const token = getBearerToken(req.headers["authorization"]);
-  if (!token) return { ok: false as const, replied: reply.code(401).send({ error: "missing_token" }) };
+  if (!token)
+    return {
+      ok: false as const,
+      replied: reply.code(401).send({ error: "missing_token" }),
+    };
 
   const user = await prisma.user.findUnique({ where: { authToken: token } });
-  if (!user) return { ok: false as const, replied: reply.code(401).send({ error: "invalid_token" }) };
+  if (!user)
+    return {
+      ok: false as const,
+      replied: reply.code(401).send({ error: "invalid_token" }),
+    };
 
   return { ok: true as const, user };
 }
@@ -46,6 +54,31 @@ async function start() {
       select: { id: true, authToken: true },
     });
     return user;
+  });
+
+  app.get("/me", async (req, reply) => {
+    const auth = await requireUser(req, reply);
+    if (!auth.ok) return auth.replied;
+
+    const memberships = await prisma.leagueMember.findMany({
+      where: { userId: auth.user.id },
+      select: {
+        role: true,
+        league: { select: { id: true, name: true, joinCode: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      user: { id: auth.user.id },
+      leagues: memberships.map((m) => ({
+        id: m.league.id,
+        name: m.league.name,
+        joinCode: m.league.joinCode,
+        role: m.role,
+        isAdmin: m.role === "ADMIN",
+      })),
+    };
   });
 
   app.post("/leagues", async (req, reply) => {
