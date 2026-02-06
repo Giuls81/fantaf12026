@@ -1,0 +1,41 @@
+workflows:
+  ios_release:
+    name: iOS Release (Capacitor)
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Install deps
+        script: npm ci
+      - name: Build web
+        script: npm run build
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
+      - /tmp/xcodebuild_logs/*.log
+
+  android_release:
+    name: Android Release (Capacitor)
+    max_build_duration: 60
+    environment:
+      node: 22
+    scripts:
+      - name: Install deps
+        script: npm ci
+      - name: Build web
+        script: npm run build
+      - name: Sync Capacitor Android
+        script: npx cap sync android
+      - name: Build AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
