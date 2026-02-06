@@ -136,6 +136,11 @@ const App: React.FC = () => {
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   }, [language]);
 
+  // Translation Helper
+  const t = (dict: { [key: string]: string }) => {
+    return dict[language] || dict['en'] || '';
+  };
+
   // Load races from localStorage
   useEffect(() => {
     const storedRaces = localStorage.getItem('fantaF1Races');
@@ -166,7 +171,7 @@ const App: React.FC = () => {
           parsed.constructors = CONSTRUCTORS;
         }
         // Migration for schemaVersion
-        if (!parsed.schemaVersion) {
+        if (!parsed.schemaVersion || typeof parsed.schemaVersion !== 'number') {
             parsed.schemaVersion = 1;
         }
         setData(parsed);
@@ -212,11 +217,6 @@ const App: React.FC = () => {
         setActiveTab(Tab.HOME);
     }
   }, [activeTab, data]);
-
-  // Translation Helper
-  const t = (dict: { [key: string]: string }) => {
-    return dict[language] || dict['en'] || '';
-  };
 
   const handleLogin = () => {
     if (!username.trim()) return alert(t({en:"Please enter a username.", it:"Inserisci un nome utente."}));
@@ -384,6 +384,8 @@ const App: React.FC = () => {
 
   const handleRacePointChange = (index: number, val: number) => {
       if (!data) return;
+      if (!Number.isFinite(val)) return; // Anti-NaN
+
       // Safeguard: handle if array is smaller (e.g. from old localstorage)
       const newPoints = [...(data.rules.racePositionPoints || [])];
       
@@ -398,9 +400,13 @@ const App: React.FC = () => {
 
   const handleSprintPointsChange = (input: string) => {
       setSprintPointsInput(input);
-      const parts = input.split(',').map(s => Number(s.trim()));
+      // Robust split and validation
+      const parts = input.split(',').map(s => {
+          const trimmed = s.trim();
+          return trimmed === '' ? NaN : Number(trimmed);
+      });
       
-      if (parts.length !== 8 || parts.some(n => isNaN(n))) {
+      if (parts.length !== 8 || parts.some(n => !Number.isFinite(n))) {
           setPointsError(prev => ({...prev, sprint: t({en:'Must be 8 numbers separated by commas', it:'Devono essere 8 numeri separati da virgole'})}));
       } else {
           setPointsError(prev => ({...prev, sprint: undefined}));
@@ -767,6 +773,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="mt-2 text-[10px] font-mono text-red-200 opacity-80 border-t border-red-700/50 pt-1">
                             <div>{t({en:'Lock only affects Captain/Reserve selection.', it:'Il blocco riguarda solo Capitano/Riserva.'})}</div>
+                            <div className="text-yellow-200 mt-1">{t({en:'Market is still OPEN.', it:'Il Mercato è ancora APERTO.'})}</div>
                         </div>
                     </div>
                 )}
@@ -1209,7 +1216,7 @@ const App: React.FC = () => {
   return (
     <>
         {activeTab === Tab.HOME && LangMenu}
-        <Layout activeTab={activeTab} onTabChange={setActiveTab} showAdmin={data.user.isAdmin} lang={language}>
+        <Layout activeTab={activeTab} onTabChange={setActiveTab} showAdmin={data.user.isAdmin} lang={language} t={t}>
         {renderContent()}
         </Layout>
     </>

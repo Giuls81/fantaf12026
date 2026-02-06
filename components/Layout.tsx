@@ -7,9 +7,10 @@ interface LayoutProps {
   onTabChange: (tab: Tab) => void;
   showAdmin: boolean;
   lang: string;
+  t: (dict: { [key: string]: string }) => string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showAdmin, lang }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showAdmin, lang, t }) => {
   
   const getLabel = (tab: Tab) => {
       const labels: Record<Tab, Record<string, string>> = {
@@ -19,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
           [Tab.MARKET]: { en: 'Market', it: 'Mercato', fr: 'Marché', de: 'Markt', es: 'Mercado', ru: 'Рынок', zh: '市场', ar: 'سوق', ja: '市場' },
           [Tab.ADMIN]: { en: 'Admin', it: 'Admin', fr: 'Admin', de: 'Admin', es: 'Admin', ru: 'Админ', zh: '管理', ar: 'مسؤول', ja: '管理' },
       };
-      return labels[tab][lang] || labels[tab]['en'];
+      return t(labels[tab]);
   };
 
   const tabs = [
