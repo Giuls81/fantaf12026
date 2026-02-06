@@ -1,19 +1,22 @@
 workflows:
   ios_release:
-    name: iOS Release (Capacitor - App Store)
+    name: iOS Release (Capacitor)
     max_build_duration: 90
 
     environment:
       node: 22
       xcode: latest
 
+      # ✅ USA SOLO QUESTO (manual signing via references)
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.fantaf1.app
-        provisioning_profiles:
-          - ios_appstore_profile
         certificates:
           - ios_dist_cert
+        provisioning_profiles:
+          - ios_appstore_profile
+
+      vars:
+        BUNDLE_ID: "com.fantaf1.app"
+        XCODE_SCHEME: "App"
 
     scripts:
       - name: Install deps
@@ -27,24 +30,18 @@ workflows:
 
       - name: Debug iOS paths
         script: |
-          echo "=== pwd ==="
-          pwd
-          echo "=== ls -la ==="
-          ls -la
           echo "=== ls ios ==="
           ls -la ios || true
-          echo "=== ls ios/App ==="
-          ls -la ios/App || true
-          echo "=== find xcodeproj ==="
-          find ios -maxdepth 6 -name "*.xcodeproj" -print || true
           echo "=== find xcworkspace ==="
           find ios -maxdepth 6 -name "*.xcworkspace" -print || true
+          echo "=== find xcodeproj ==="
+          find ios -maxdepth 7 -name "*.xcodeproj" -print || true
 
       - name: Build iOS archive (signed)
         script: |
           cd ios/App
           xcodebuild \
-            -project "App.xcodeproj" \
+            -workspace "App.xcworkspace" \
             -scheme "App" \
             -configuration Release \
             -sdk iphoneos \
@@ -53,13 +50,27 @@ workflows:
 
       - name: Export IPA (App Store)
         script: |
-          cat > $CM_BUILD_DIR/exportOptions.plist <<'EOF'
+          cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>method</key>
             <string>app-store</string>
+
+            <key>signingStyle</key>
+            <string>manual</string>
+
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>ios_appstore_profile</string>
+            </dict>
+
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
           </dict>
           </plist>
           EOF
@@ -72,27 +83,4 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
-      - $CM_BUILD_DIR/build/ios/ipa/*.ipa
-      - $CM_BUILD_DIR/build/ios/archive/*.xcarchive
-
-  # ===== ANDROID (abilitalo SOLO quando hai la cartella android/) =====
-  # android_release:
-  #   name: Android Release (Capacitor)
-  #   max_build_duration: 90
-  #   environment:
-  #     node: 22
-  #     java: 17
-  #   scripts:
-  #     - name: Install deps
-  #       script: npm ci
-  #     - name: Build web
-  #       script: npm run build
-  #     - name: Sync Capacitor Android
-  #       script: npx cap sync android
-  #     - name: Build Android (AAB)
-  #       script: |
-  #         cd android
-  #         ./gradlew bundleRelease
-  #   artifacts:
-  #     - android/app/build/outputs/**/*.aab
-  #     - android/app/build/outputs/**/*.apk
+      - /tmp/xcodebuild_logs/*.log
