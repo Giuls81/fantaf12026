@@ -1,0 +1,88 @@
+workflows:
+  ios_release:
+    name: iOS Release (Capacitor) - TestFlight
+    max_build_duration: 90
+    environment:
+      node: 22
+      xcode: latest
+      vars:
+        APP_ID: "com.fantaf1.app"
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+    scripts:
+      - name: Install deps
+        script: npm ci
+
+      - name: Build web
+        script: npm run build
+
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
+
+      - name: Install iOS pods
+        script: |
+          cd ios/App
+          pod install
+
+      - name: Build IPA (signed for App Store)
+        script: |
+          cd ios/App
+          xcodebuild \
+            -workspace "App.xcworkspace" \
+            -scheme "App" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            archive \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            CODE_SIGN_STYLE=Automatic \
+            PRODUCT_BUNDLE_IDENTIFIER="$APP_ID"
+
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa"
+
+      - name: Create exportOptions.plist
+        script: |
+          cat > $CM_BUILD_DIR/exportOptions.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+
+  # Android lo attiviamo dopo che crei la cartella android/ con `npx cap add android`
+  android_release:
+    name: Android Release (Capacitor)
+    max_build_duration: 90
+    environment:
+      node: 22
+    scripts:
+      - name: Guard - missing android folder
+        script: |
+          if [ ! -d "android" ]; then
+            echo "android/ folder not found. Run: npx cap add android && npx cap sync android, then commit."
+            exit 1
+          fi
