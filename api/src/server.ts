@@ -81,6 +81,25 @@ async function start() {
     };
   });
 
+  app.get("/races", async () => {
+    const races = await prisma.race.findMany({
+      orderBy: { round: "asc" },
+      select: {
+        id: true,
+        name: true,
+        country: true,
+        city: true,
+        season: true,
+        round: true,
+        isSprint: true,
+        qualifyingUtc: true,
+        sprintQualifyingUtc: true,
+      },
+    });
+
+    return races;
+  });
+
   app.post("/leagues", async (req, reply) => {
     const auth = await requireUser(req, reply);
     if (!auth.ok) return auth.replied;
