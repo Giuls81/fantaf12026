@@ -29,6 +29,8 @@ workflows:
             cd "$IOS_DIR"
             pod install
           fi
+      - name: Set up code signing
+        script: xcode-project use-profiles
       - name: Build IPA (signed) + Upload to TestFlight
         script: |
           cd "$IOS_DIR"
@@ -42,7 +44,6 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -sdk iphoneos \
-            -allowProvisioningUpdates \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             archive
           cat > "$CM_BUILD_DIR/exportOptions.plist" <<'EOF'
