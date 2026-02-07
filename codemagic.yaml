@@ -46,23 +46,22 @@ workflows:
             -sdk iphoneos \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             archive
-          printf '<?xml version="1.0" encoding="UTF-8"?>\n\
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n\
-<plist version="1.0">\n\
-<dict>\n\
-  <key>method</key>\n\
-  <string>app-store</string>\n\
-  <key>teamID</key>\n\
-  <string>L4252U7H8L</string>\n\
-  <key>signingStyle</key>\n\
-  <string>automatic</string>\n\
-  <key>stripSwiftSymbols</key>\n\
-  <true/>\n\
-  <key>compileBitcode</key>\n\
-  <false/>\n\
-</dict>\n\
-</plist>\n\
-' > "$CM_BUILD_DIR/exportOptions.plist"
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n' > "$CM_BUILD_DIR/exportOptions.plist"
+          printf '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '<plist version="1.0">\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '<dict>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <key>method</key>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <string>app-store</string>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <key>teamID</key>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <string>L4252U7H8L</string>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <key>signingStyle</key>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <string>automatic</string>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <key>stripSwiftSymbols</key>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <true/>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <key>compileBitcode</key>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '  <false/>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '</dict>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          printf '</plist>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
