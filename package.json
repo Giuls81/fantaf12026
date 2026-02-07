@@ -1,0 +1,14 @@
+{
+  "name": "fantaf12026",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
