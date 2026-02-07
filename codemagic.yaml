@@ -2,8 +2,6 @@ workflows:
   ios_testflight:
     name: iOS Release (Capacitor) - TestFlight
     max_build_duration: 90
-    integrations:
-      app_store_connect: Fanta F1 App Store Connect
     environment:
       node: 22
       xcode: latest
@@ -79,10 +77,10 @@ workflows:
       - build/ios/archive/*.xcarchive
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_ID
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
-        beta_groups:
-          - Internal Testers
 
   android_release:
     name: Android Release (APK/AAB)
