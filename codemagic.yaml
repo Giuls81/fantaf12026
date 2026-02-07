@@ -79,7 +79,8 @@ workflows:
       scripts:
         - name: Upload to TestFlight
           script: |
-            echo "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" > /tmp/AuthKey.p8
+            mkdir -p ~/private_keys
+            printf '%b' "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
             xcrun altool --upload-app \
               --type ios \
               --file "$CM_BUILD_DIR/build/ios/ipa/App.ipa" \
