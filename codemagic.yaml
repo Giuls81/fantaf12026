@@ -46,8 +46,7 @@ workflows:
             -sdk iphoneos \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             archive
-          cat > "$CM_BUILD_DIR/exportOptions.plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
+          printf '<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -63,7 +62,7 @@ workflows:
   <false/>
 </dict>
 </plist>
-EOF
+' > "$CM_BUILD_DIR/exportOptions.plist"
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
