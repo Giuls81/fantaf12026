@@ -76,11 +76,15 @@ workflows:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
     publishing:
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        submit_to_testflight: true
+      scripts:
+        - name: Upload to TestFlight
+          script: |
+            echo "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" > /tmp/AuthKey.p8
+            xcrun altool --upload-app \
+              --type ios \
+              --file "$CM_BUILD_DIR/build/ios/ipa/App.ipa" \
+              --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+              --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
 
   android_release:
     name: Android Release (APK/AAB)
