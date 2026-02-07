@@ -62,6 +62,7 @@ workflows:
           printf '  <false/>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
           printf '</dict>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
           printf '</plist>\n' >> "$CM_BUILD_DIR/exportOptions.plist"
+          mkdir -p "$CM_BUILD_DIR/build/ios/ipa"
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
