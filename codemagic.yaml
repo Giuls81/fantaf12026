@@ -67,9 +67,6 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive
-    publishing:
-      app_store_connect:
-        submit_to_testflight: true
 
   android_release:
     name: Android Release (APK/AAB)
