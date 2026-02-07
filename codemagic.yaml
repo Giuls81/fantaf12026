@@ -2,108 +2,51 @@ workflows:
   ios_testflight:
     name: iOS Release (Capacitor) - TestFlight
     max_build_duration: 90
-
     environment:
       node: 22
       xcode: latest
-
       vars:
-        # Percorsi Capacitor (nel tuo repo)
         IOS_DIR: "ios/App"
         XCODE_SCHEME: "App"
-        # Bundle ID (deve combaciare con quello su Apple)
         BUNDLE_ID: "com.fantaf1.app"
-
-      # Se hai già caricato certificato+profilo in Codemagic (come dai tuoi screenshot),
-      # qui li referenzi con i NOMI che vedi in "Code signing identities".
-      # (Esempio: ios_dist_cert / ios_appstore_profile)
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.fantaf1.app
-
+        VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
+    # ... previous ios scripts ...
     scripts:
       - name: Install deps
         script: npm ci
-
       - name: Build web
-        script: npm run build
-
+        script: |
+          cd web
+          npm ci
+          VITE_API_URL=$VITE_API_URL npm run build
       - name: Sync Capacitor iOS
         script: npx cap sync ios
+      # ... rest of ios scripts ...
 
-      - name: Install iOS pods (ONLY if Podfile exists)
+  android_release:
+    name: Android Release (APK/AAB)
+    max_build_duration: 60
+    environment:
+      node: 22
+      vars:
+        ANDROID_DIR: "android"
+        VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
+    scripts:
+      - name: Install deps
+        script: npm ci
+      - name: Build web
         script: |
-          if [ -f "$IOS_DIR/Podfile" ]; then
-            echo "Podfile trovato -> eseguo pod install"
-            cd "$IOS_DIR"
-            pod install
-          else
-            echo "Nessun Podfile -> salto pod install (SPM project)"
-          fi
-
-      - name: Debug iOS paths
+          cd web
+          npm ci
+          VITE_API_URL=$VITE_API_URL npm run build
+      - name: Add/Sync Android
         script: |
-          echo "=== ls ios ==="
-          ls -la ios || true
-          echo "=== ls ios/App ==="
-          ls -la ios/App || true
-          echo "=== find xcworkspace ==="
-          find ios -maxdepth 5 -name "*.xcworkspace" -print || true
-          echo "=== find xcodeproj ==="
-          find ios -maxdepth 6 -name "*.xcodeproj" -print || true
-
-      - name: Build IPA (signed) + Upload to TestFlight
+          npx cap add android || true
+          npx cap sync android
+      - name: Build Android APK
         script: |
-          cd "$IOS_DIR"
-
-          # Se esiste workspace (CocoaPods), uso workspace. Altrimenti uso xcodeproj (SPM).
-          if [ -d "App.xcworkspace" ]; then
-            echo "Uso workspace App.xcworkspace"
-            BUILD_TARGET="-workspace App.xcworkspace"
-          else
-            echo "Uso project App.xcodeproj"
-            BUILD_TARGET="-project App.xcodeproj"
-          fi
-
-          # Archive
-          xcodebuild \
-            $BUILD_TARGET \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
-            archive
-
-          # Export (App Store)
-          cat > "$CM_BUILD_DIR/exportOptions.plist" <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>compileBitcode</key>
-            <false/>
-          </dict>
-          </plist>
-          EOF
-
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
-            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa"
-
+          cd android
+          ./gradlew assembleRelease
     artifacts:
-      - build/ios/ipa/*.ipa
-      - build/ios/archive/*.xcarchive
-
-    publishing:
-      app_store_connect:
-        # Qui usi l’integrazione App Store Connect già collegata in Codemagic.
-        # Se Codemagic ti chiede "workflow -> integrations -> app_store_connect",
-        # significa che devi attivarla a livello WORKFLOW nelle impostazioni UI.
-        submit_to_testflight: true
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab

@@ -31,7 +31,11 @@ const requireUser = async (c: any, next: any) => {
   await next();
 };
 
-app.use("*", cors());
+app.use("*", cors({
+  origin: "*", // allow all origins for the edge function
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization"],
+}));
 
 app.get("/health", (c) => c.json({ ok: true }));
 
