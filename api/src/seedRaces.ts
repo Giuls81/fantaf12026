@@ -13,9 +13,32 @@ async function main() {
 
   const mod: any = await import(constantsUrl);
   const races = mod.RACES_2026 as any[];
+  const drivers = mod.DRIVERS as any[];
 
   if (!Array.isArray(races)) throw new Error("RACES_2026 not found");
+  if (!Array.isArray(drivers)) throw new Error("DRIVERS not found");
 
+  // 1. Seed Drivers
+  console.log("Seeding drivers...");
+  for (const d of drivers) {
+    await prisma.driver.upsert({
+      where: { id: d.id },
+      update: {
+        name: d.name,
+        constructorId: d.constructorId,
+        price: d.price,
+      },
+      create: {
+        id: d.id,
+        name: d.name,
+        constructorId: d.constructorId,
+        price: d.price,
+      },
+    });
+  }
+
+  // 2. Seed Races
+  console.log("Seeding races...");
   const withIndex = races.map((r, i) => ({ r, i }));
 
   for (const { r, i } of withIndex) {
@@ -34,7 +57,9 @@ async function main() {
         sprintQualifyingUtc: r.sprintQualifyingUtc
           ? new Date(r.sprintQualifyingUtc)
           : null,
-      },
+        date: new Date(r.date),
+        isCompleted: !!r.isCompleted,
+      } as any,
       create: {
         id: r.id,
         name: r.name,
@@ -47,12 +72,15 @@ async function main() {
         sprintQualifyingUtc: r.sprintQualifyingUtc
           ? new Date(r.sprintQualifyingUtc)
           : null,
-      },
+        date: new Date(r.date),
+        isCompleted: !!r.isCompleted,
+      } as any,
     });
   }
 
-  const count = await prisma.race.count();
-  console.log(`Seeded races: ${count}`);
+  const raceCount = await prisma.race.count();
+  const driverCount = await prisma.driver.count();
+  console.log(`Seeded ${raceCount} races and ${driverCount} drivers.`);
 }
 
 main()

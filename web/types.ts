@@ -24,17 +24,25 @@ export interface Driver {
 export interface Race {
   id: string;
   name: string;
-  date: string; // YYYY-MM-DD
+  date: string; // ISO String from API
   isSprint: boolean;
   isCompleted: boolean;
   
+  // API Fields
+  country: string | null;
+  city: string | null;
+  season: number;
+  round: number;
+
   // Session Times (UTC ISO Strings)
+  qualifyingUtc: string | null;
+  sprintQualifyingUtc: string | null;
+  
+  // Legacy/Optional (API doesn't return these yet)
   fp1Utc?: string | null;
   fp2Utc?: string | null;
   fp3Utc?: string | null;
-  sprintQualifyingUtc?: string | null;
   sprintUtc?: string | null;
-  qualifyingUtc?: string | null;
   raceUtc?: string | null;
 }
 
@@ -82,6 +90,7 @@ export interface User {
   id: string;
   name: string;
   isAdmin: boolean;
+  leagueId: string;
   leagueName?: string;
   leagueCode: string;
 }
