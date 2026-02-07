@@ -10,7 +10,9 @@ workflows:
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.fantaf1.app"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
-    # ... previous ios scripts ...
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.fantaf1.app
     scripts:
       - name: Install deps
         script: npm ci
@@ -21,7 +23,53 @@ workflows:
           VITE_API_URL=$VITE_API_URL npm run build
       - name: Sync Capacitor iOS
         script: npx cap sync ios
-      # ... rest of ios scripts ...
+      - name: Install iOS pods (if Podfile exists)
+        script: |
+          if [ -f "$IOS_DIR/Podfile" ]; then
+            cd "$IOS_DIR"
+            pod install
+          fi
+      - name: Build IPA (signed) + Upload to TestFlight
+        script: |
+          cd "$IOS_DIR"
+          if [ -d "App.xcworkspace" ]; then
+            BUILD_TARGET="-workspace App.xcworkspace"
+          else
+            BUILD_TARGET="-project App.xcodeproj"
+          fi
+          xcodebuild \
+            $BUILD_TARGET \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            archive
+          cat > "$CM_BUILD_DIR/exportOptions.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
+    publishing:
+      app_store_connect:
+        submit_to_testflight: true
 
   android_release:
     name: Android Release (APK/AAB)
