@@ -46,22 +46,22 @@ workflows:
             -sdk iphoneos \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
             archive
-          printf '<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>method</key>
-  <string>app-store</string>
-  <key>teamID</key>
-  <string>L4252U7H8L</string>
-  <key>signingStyle</key>
-  <string>automatic</string>
-  <key>stripSwiftSymbols</key>
-  <true/>
-  <key>compileBitcode</key>
-  <false/>
-</dict>
-</plist>
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n\
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n\
+<plist version="1.0">\n\
+<dict>\n\
+  <key>method</key>\n\
+  <string>app-store</string>\n\
+  <key>teamID</key>\n\
+  <string>L4252U7H8L</string>\n\
+  <key>signingStyle</key>\n\
+  <string>automatic</string>\n\
+  <key>stripSwiftSymbols</key>\n\
+  <true/>\n\
+  <key>compileBitcode</key>\n\
+  <false/>\n\
+</dict>\n\
+</plist>\n\
 ' > "$CM_BUILD_DIR/exportOptions.plist"
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
