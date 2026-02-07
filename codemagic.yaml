@@ -79,13 +79,16 @@ workflows:
       scripts:
         - name: Upload to TestFlight
           script: |
+            KEY_ID="7XRTBU8623"
+            ISSUER_ID="4c4f8539-f816-4f20-89ec-83b73e49eee0"
             mkdir -p ~/private_keys
-            printf '%b' "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+            printf '%b' "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
+            cat ~/private_keys/AuthKey_${KEY_ID}.p8
             xcrun altool --upload-app \
               --type ios \
               --file "$CM_BUILD_DIR/build/ios/ipa/App.ipa" \
-              --apiKey "$APP_STORE_CONNECT_KEY_ID" \
-              --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+              --apiKey "$KEY_ID" \
+              --apiIssuer "$ISSUER_ID"
 
   android_release:
     name: Android Release (APK/AAB)
