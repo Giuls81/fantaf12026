@@ -226,9 +226,11 @@ app.post("/team/market", requireUser, async (c) => {
       await sql`DELETE FROM "TeamDriver" WHERE "teamId" = ${team.id} AND "driverId" = ${driverIdOut}`;
     }
     if (driverIdIn) {
-      await sql`INSERT INTO "TeamDriver" ("teamId", "driverId") VALUES (${team.id}, ${driverIdIn})`;
+      const tdId = crypto.randomUUID();
+      await sql`INSERT INTO "TeamDriver" (id, "teamId", "driverId") VALUES (${tdId}, ${team.id}, ${driverIdIn})`;
     }
-    await sql`UPDATE "Team" SET budget = ${newBudget} WHERE id = ${team.id}`;
+    const now = new Date().toISOString();
+    await sql`UPDATE "Team" SET budget = ${newBudget}, "updatedAt" = ${now} WHERE id = ${team.id}`;
   });
 
   return c.json({ ok: true, newBudget });
@@ -249,9 +251,10 @@ app.post("/team/lineup", requireUser, async (c) => {
     }
   }
 
+  const now = new Date().toISOString();
   await sql`
     UPDATE "Team" 
-    SET "captainId" = ${captainId ?? null}, "reserveId" = ${reserveId ?? null}
+    SET "captainId" = ${captainId ?? null}, "reserveId" = ${reserveId ?? null}, "updatedAt" = ${now}
     WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id}
   `;
 
