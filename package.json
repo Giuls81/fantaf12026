@@ -8,6 +8,10 @@
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0"
   },
+  "scripts": {
+    "build": "cd web && npm install && npm run build",
+    "sync": "npx cap sync"
+  },
   "devDependencies": {
     "typescript": "^5.9.3"
   }
