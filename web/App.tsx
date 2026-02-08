@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
@@ -700,7 +701,8 @@ const App: React.FC = () => {
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs mb-4">
         API: {getApiUrl()}<br/>
         API: {getApiUrl()}<br/>
-        Build: 45 (Fix Race Cond)<br/>
+        API: {getApiUrl()}<br/>
+        Build: 46 (Crash Dump)<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - (window as any)._mountTime) / 1000).toFixed(1)}s
       </div>
@@ -1497,16 +1499,18 @@ const App: React.FC = () => {
 
   return (
     <>
-      {activeTab === Tab.HOME && LangMenu}
-      <Layout
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        showAdmin={data.user.isAdmin}
-        lang={language}
-        t={t}
-      >
-        {renderContent()}
-      </Layout>
+      <ErrorBoundary>
+        {activeTab === Tab.HOME && LangMenu}
+        <Layout
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          showAdmin={data.user.isAdmin}
+          lang={language}
+          t={t}
+        >
+          {renderContent()}
+        </Layout>
+      </ErrorBoundary>
     </>
   );
 };
