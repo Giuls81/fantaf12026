@@ -2,7 +2,7 @@
 import Layout from './components/Layout';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
-import { health, getRaces, getDrivers, createAnonUser, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo } from "./api";
+import { health, getRaces, getDrivers, createAnonUser, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, getApiUrl } from "./api";
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -336,6 +336,10 @@ const App: React.FC = () => {
         msg = t({ en: "League not found. Check the code.", it: "Lega non trovata. Controlla il codice." });
       } else if (e.message && e.message.includes("404")) {
          msg = t({ en: "League not found.", it: "Lega non trovata." });
+      } else {
+         // Verbose debug for mobile
+         msg += `\nError: ${e.message || String(e)}`;
+         msg += `\nAPI: ${getApiUrl()}`;
       }
 
       alert(msg);
