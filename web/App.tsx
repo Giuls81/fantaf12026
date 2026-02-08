@@ -214,7 +214,7 @@ const App: React.FC = () => {
           const firstLeague = leagues[0];
           const fullUser: User = {
             id: user.id,
-            name: 'Player', 
+            name: user.name || 'Player', 
             isAdmin: firstLeague.isAdmin,
             leagueId: firstLeague.id,
             leagueName: firstLeague.name,
@@ -259,7 +259,7 @@ const App: React.FC = () => {
       setLoadingStandings(true);
       const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/standings`);
       const list = await res.json();
-      setStandings(list);
+      setStandings(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -379,7 +379,7 @@ const App: React.FC = () => {
 
     try {
       // 1. Create User (Anon)
-      const { authToken } = await createAnonUser();
+      const { authToken } = await createAnonUser(username.trim());
       localStorage.setItem('fantaF1AuthToken', authToken);
 
       // 2. Create or Join League

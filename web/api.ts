@@ -81,14 +81,14 @@ export async function getDrivers(): Promise<Driver[]> {
 
 // --- Auth & League ---
 
-export async function createAnonUser() {
-  return apiPost<{ id: string; authToken: string }>("/auth/anon", {});
+export async function createAnonUser(name: string) {
+  return apiPost<{ id: string; authToken: string; displayName: string }>("/auth/anon", { name });
 }
 
 export async function getMe() {
   // Returns user + leagues (with teams)
   return apiGet<{
-    user: { id: string };
+    user: { id: string; name: string };
     leagues: { 
       id: string; 
       name: string; 

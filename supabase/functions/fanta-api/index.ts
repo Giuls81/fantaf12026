@@ -22,7 +22,7 @@ const requireUser = async (c: any, next: any) => {
   }
   const token = authHeader.slice(7);
   
-  const [user] = await sql`SELECT id, "authToken" FROM "User" WHERE "authToken" = ${token}`;
+  const [user] = await sql`SELECT id, "authToken", "displayName" FROM "User" WHERE "authToken" = ${token}`;
   if (!user) {
     return c.json({ error: "invalid_token" }, 401);
   }
@@ -48,12 +48,14 @@ app.get("/health", async (c) => {
 
 app.post("/auth/anon", async (c) => {
   try {
+    const { name } = await c.req.json();
+    const displayName = (name || "Player").slice(0, 32);
     const token = makeToken();
     const id = crypto.randomUUID();
     const [user] = await sql`
-      INSERT INTO "User" (id, "authToken", "updatedAt") 
-      VALUES (${id}, ${token}, ${new Date().toISOString()}) 
-      RETURNING id, "authToken"
+      INSERT INTO "User" (id, "authToken", "displayName", "updatedAt") 
+      VALUES (${id}, ${token}, ${displayName}, ${new Date().toISOString()}) 
+      RETURNING id, "authToken", "displayName"
     `;
     return c.json(user);
   } catch (e: any) {
@@ -98,7 +100,7 @@ app.get("/me", requireUser, async (c) => {
   }));
 
   return c.json({
-    user: { id: user.id },
+    user: { id: user.id, name: user.displayName },
     leagues
   });
 });
