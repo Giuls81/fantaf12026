@@ -681,7 +681,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs">
         API: {getApiUrl()}<br/>
-        Build: 41<br/>
+        Build: 43<br/>
         Time: {((now - (window as any)._mountTime) / 1000).toFixed(1)}s
       </div>
 
