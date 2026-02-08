@@ -40,8 +40,10 @@ workflows:
         script: |
           cd "$IOS_DIR"
           
-          echo "Clearing SPM cache and resolving dependencies..."
+          echo "Deep cleaning SPM and Xcode caches..."
           rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts
+          rm -rf ~/Library/Caches/org.swift.swiftpm/repositories
+          rm -rf ~/Library/Developer/Xcode/DerivedData
           
           if [ -d "App.xcworkspace" ]; then
             BUILD_TARGET="-workspace App.xcworkspace"
@@ -49,6 +51,7 @@ workflows:
             BUILD_TARGET="-project App.xcodeproj"
           fi
           
+          echo "Resolving package dependencies..."
           xcodebuild $BUILD_TARGET -scheme "$XCODE_SCHEME" -resolvePackageDependencies
           
           xcodebuild \
