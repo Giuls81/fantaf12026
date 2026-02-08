@@ -715,11 +715,11 @@ const App: React.FC = () => {
       <div className="text-xl font-bold text-white mb-2">Loading Paddock...</div>
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-6"></div>
       
-      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs mb-4">
+      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-4">
         API: {getApiUrl()}<br/>
-        Build: 47 (Global Trap)<br/>
+        Build: 50 (Global Lang + Fix)<br/>
         Status: {loadingStatus}<br/>
-        Time: {((now - (window as any)._mountTime) / 1000).toFixed(1)}s
+        Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
       </div>
       
       {startupError && (
@@ -775,7 +775,6 @@ const App: React.FC = () => {
   if (!data.user) {
     return (
       <div className="flex flex-col h-screen bg-slate-900 text-white items-center justify-center p-6">
-        {LangMenu}
         <h1 className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-red-500">
           FantaF1
         </h1>
@@ -1533,7 +1532,7 @@ const App: React.FC = () => {
   return (
     <>
       <ErrorBoundary>
-        {activeTab === Tab.HOME && LangMenu}
+        {LangMenu}
         <Layout
           activeTab={activeTab}
           onTabChange={setActiveTab}
