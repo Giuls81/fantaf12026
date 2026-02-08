@@ -110,8 +110,10 @@ const App: React.FC = () => {
           setRaces(apiRaces);
           setFetchedDrivers(apiDrivers);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("API load failed", e);
+        // Fallback for races? Or Alert?
+        alert(`Failed to load race data: ${e.message}`);
       }
     })();
     return () => { alive = false; };
@@ -195,6 +197,9 @@ const App: React.FC = () => {
         console.error("Session restore failed", e);
         // Invalid token? Log out
         localStorage.removeItem('fantaF1AuthToken');
+        // Ensure data is set to initial so login screen appears
+        const freshData = { ...INITIAL_DATA, currentRaceIndex: 0 };
+        setData(freshData);
       }
     })();
   }, [races]); // Depend on races to ensure index calc is correct if needed
@@ -210,7 +215,9 @@ const App: React.FC = () => {
   // Load data from localStorage on mount
   // Load data from localStorage on mount (Wait for races to be loaded!)
   useEffect(() => {
-    if (races.length === 0) return; // Wait for API
+    // If races failed to load, we still might want to show login or use empty races
+    // if (races.length === 0) return; // Wait for API -> This blocks everything if API fails!
+    
     if (data) return; // Already loaded
 
     const storedData = localStorage.getItem('fantaF1Data');
@@ -664,7 +671,8 @@ const App: React.FC = () => {
     </div>
   );
 
-  if (!data || races.length === 0) return <div className="flex h-screen items-center justify-center text-slate-400">Loading Paddock...</div>;
+  // Allow render if data exists (even if races empty, though UI might break elsewhere)
+  if (!data) return <div className="flex h-screen items-center justify-center text-slate-400">Loading Paddock...</div>;
 
   // Login / Auth Screen
   if (!data.user) {
