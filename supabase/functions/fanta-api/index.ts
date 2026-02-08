@@ -261,6 +261,54 @@ app.post("/team/lineup", requireUser, async (c) => {
   return c.json({ ok: true });
 });
 
+app.get("/leagues/:id/standings", requireUser, async (c) => {
+  const leagueId = c.req.param("id");
+  const standings = await sql`
+    SELECT t."userId", u."displayName" as "userName", t."totalPoints"
+    FROM "Team" t
+    JOIN "User" u ON t."userId" = u.id
+    WHERE t."leagueId" = ${leagueId}
+    ORDER BY t."totalPoints" DESC
+  `;
+  
+  return c.json(standings.map((s, idx) => ({
+    ...s,
+    rank: idx + 1,
+    userName: s.userName || "User " + s.userId.slice(0, 4)
+  })));
+});
+
+app.get("/leagues/:leagueId/results/:raceId", requireUser, async (c) => {
+  const { leagueId, raceId } = c.req.param();
+  const results = await sql`
+    SELECT tr.*, u."displayName" as "userName"
+    FROM "TeamResult" tr
+    JOIN "Team" t ON tr."teamId" = t.id
+    JOIN "User" u ON t."userId" = u.id
+    WHERE t."leagueId" = ${leagueId} AND tr."raceId" = ${raceId}
+    ORDER BY tr.points DESC
+  `;
+
+  const resultsWithDrivers = await Promise.all(results.map(async (r) => {
+    const drivers = await sql`
+      SELECT d.id, d.name, trd.points
+      FROM "TeamResultDriver" trd
+      JOIN "Driver" d ON trd."driverId" = d.id
+      WHERE trd."teamResultId" = ${r.id}
+    `;
+    return {
+      userId: r.userId,
+      userName: r.userName || "User",
+      points: Number(r.points),
+      captainId: r.captainId,
+      reserveId: r.reserveId,
+      drivers
+    };
+  }));
+
+  return c.json(resultsWithDrivers);
+});
+
 app.post("/admin/drivers", requireUser, async (c) => {
   const user = c.get("user");
   const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
