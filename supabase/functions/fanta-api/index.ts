@@ -49,9 +49,10 @@ app.get("/health", async (c) => {
 app.post("/auth/anon", async (c) => {
   try {
     const token = makeToken();
+    const id = crypto.randomUUID();
     const [user] = await sql`
-      INSERT INTO "User" ("authToken") 
-      VALUES (${token}) 
+      INSERT INTO "User" (id, "authToken", "updatedAt") 
+      VALUES (${id}, ${token}, ${new Date().toISOString()}) 
       RETURNING id, "authToken"
     `;
     return c.json(user);
