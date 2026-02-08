@@ -16,15 +16,25 @@ export async function apiGet<T>(path: string): Promise<T> {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "GET",
-    headers,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`GET ${path} failed: ${res.status} ${text}`);
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`GET ${path} failed: ${res.status} ${text}`);
+    }
+    return (await res.json()) as T;
+  } catch (e: any) {
+    clearTimeout(id);
+    throw e;
   }
-  return (await res.json()) as T;
 }
 
 export async function apiPost<T>(path: string, body: any): Promise<T> {
@@ -34,17 +44,28 @@ export async function apiPost<T>(path: string, body: any): Promise<T> {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`POST ${path} failed: ${res.status} ${text}`);
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`POST ${path} failed: ${res.status} ${text}`);
+    }
+    return (await res.json()) as T;
+  } catch (e: any) {
+    clearTimeout(id);
+    throw e;
   }
-  return (await res.json()) as T;
 }
+
 
 export async function health() {
   return apiGet<{ ok: boolean }>("/health");
