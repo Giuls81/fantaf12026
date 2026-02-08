@@ -37,16 +37,27 @@ app.use("*", cors({
   allowHeaders: ["Content-Type", "Authorization"],
 }));
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", async (c) => {
+  try {
+    await sql`SELECT 1`;
+    return c.json({ ok: true, db: "connected" });
+  } catch (e: any) {
+    return c.json({ ok: false, error: e.message }, 500);
+  }
+});
 
 app.post("/auth/anon", async (c) => {
-  const token = makeToken();
-  const [user] = await sql`
-    INSERT INTO "User" ("authToken") 
-    VALUES (${token}) 
-    RETURNING id, "authToken"
-  `;
-  return c.json(user);
+  try {
+    const token = makeToken();
+    const [user] = await sql`
+      INSERT INTO "User" ("authToken") 
+      VALUES (${token}) 
+      RETURNING id, "authToken"
+    `;
+    return c.json(user);
+  } catch (e: any) {
+    return c.json({ error: e.message, type: "auth_anon_error" }, 500);
+  }
 });
 
 app.get("/me", requireUser, async (c) => {
