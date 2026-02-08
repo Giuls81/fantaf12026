@@ -107,7 +107,15 @@ const App: React.FC = () => {
     (async () => {
       try {
         setLoadingStatus("Fetching API (Races/Drivers)...");
-        const [apiRaces, apiDrivers] = await Promise.all([getRaces(), getDrivers()]);
+        // Timeout wrapper for Promise.all
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("API Timeout")), 15000)
+        );
+
+        const racePromise = Promise.all([getRaces(), getDrivers()]);
+        
+        // Race the API against 15s timeout
+        const [apiRaces, apiDrivers] = await Promise.race([racePromise, timeoutPromise]) as [Race[], Driver[]];
         
         if (apiRaces.length === 0) {
           setStartupError("API returned 0 races. Database empty?");
@@ -156,7 +164,12 @@ const App: React.FC = () => {
   // Timer for countdown
   useEffect(() => {
     (window as any)._mountTime = Date.now();
-    const interval = setInterval(() => setNow(Date.now()), 1000);
+    const interval = setInterval(() => {
+       const n = Date.now();
+       setNow(n);
+       // Log every 5s to check thread aliveness (visible in xCode logs or Safari inspector)
+       if (n % 5000 < 1000) console.log("Tick", n);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -700,9 +713,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs mb-4">
         API: {getApiUrl()}<br/>
-        API: {getApiUrl()}<br/>
-        API: {getApiUrl()}<br/>
-        Build: 46 (Crash Dump)<br/>
+        Build: 47 (Global Trap)<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - (window as any)._mountTime) / 1000).toFixed(1)}s
       </div>
@@ -719,6 +730,24 @@ const App: React.FC = () => {
           className="text-xs text-blue-400 hover:text-blue-300 underline"
         >
           Retry Connection
+        </button>
+
+        <button 
+          onClick={() => {
+             // Force manual fetch if stuck
+             setLoadingStatus("Manual Fetching...");
+             getRaces().then(r => {
+               if (r.length > 0) {
+                 setRaces(r);
+                 setLoadingStatus("Manual Load OK");
+               } else {
+                 setStartupError("Manual Fetch: 0 Races");
+               }
+             }).catch(e => setStartupError("Manual Fail: " + e.message));
+          }}
+          className="text-xs text-green-400 hover:text-green-300 underline"
+        >
+          Force Fetch Races
         </button>
 
         {(now - ((window as any)._mountTime || now)) > 5000 && (
