@@ -1,6 +1,9 @@
 ﻿import { Race, Driver } from "./types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:54321/functions/v1/fanta-api";
+const PROD_API = "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api";
+const DEV_API = "http://localhost:54321/functions/v1/fanta-api";
+
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? PROD_API : DEV_API);
 
 export function getApiUrl() {
   return API_URL;
