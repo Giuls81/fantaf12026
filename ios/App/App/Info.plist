@@ -11,6 +11,9 @@
 	<key>CFBundleDisplayName</key>
 	<string>Fanta F1</string>
 
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 
