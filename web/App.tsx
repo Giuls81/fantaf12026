@@ -105,15 +105,23 @@ const App: React.FC = () => {
     let alive = true;
     (async () => {
       try {
+        setLoadingStatus("Fetching API (Races/Drivers)...");
         const [apiRaces, apiDrivers] = await Promise.all([getRaces(), getDrivers()]);
-        if (alive) {
-          setRaces(apiRaces);
-          setFetchedDrivers(apiDrivers);
+        
+        if (apiRaces.length === 0) {
+          setStartupError("API returned 0 races. Database empty?");
+          setLoadingStatus("Error: No Races");
+        } else {
+          setLoadingStatus("API Data Loaded");
+          if (alive) {
+            setRaces(apiRaces);
+            setFetchedDrivers(apiDrivers);
+          }
         }
       } catch (e: any) {
         console.error("API load failed", e);
-        // Fallback for races? Or Alert?
-        alert(`Failed to load race data: ${e.message}`);
+        setStartupError(`API Fail: ${e.message}`);
+        setLoadingStatus("Error: API Failed");
       }
     })();
     return () => { alive = false; };
@@ -140,6 +148,8 @@ const App: React.FC = () => {
 
   // UI State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("Initializing...");
+  const [startupError, setStartupError] = useState("");
   
   // Timer for countdown
   // Timer for countdown
@@ -170,6 +180,7 @@ const App: React.FC = () => {
 
     (async () => {
       try {
+        setLoadingStatus("Restoring Session...");
         const { user, leagues } = await getMe();
           const firstLeague = leagues[0];
           const fullUser: User = {
@@ -679,25 +690,41 @@ const App: React.FC = () => {
       <div className="text-xl font-bold text-white mb-2">Loading Paddock...</div>
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-6"></div>
       
-      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs">
+      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs mb-4">
         API: {getApiUrl()}<br/>
-        Build: 43<br/>
+        Build: 44<br/>
+        Status: {loadingStatus}<br/>
         Time: {((now - (window as any)._mountTime) / 1000).toFixed(1)}s
       </div>
-
-      {(now - ((window as any)._mountTime || now)) > 5000 && (
-        <button 
-          onClick={() => {
-            if (confirm("Reset App Data & Logout?")) {
-              localStorage.clear();
-              location.reload();
-            }
-          }}
-          className="mt-8 text-xs text-red-400 hover:text-red-300 underline"
-        >
-          Force Reset App
-        </button>
+      
+      {startupError && (
+        <div className="text-red-400 font-bold mb-4 px-4 text-sm bg-red-900/20 p-2 rounded">
+          {startupError}
+        </div>
       )}
+
+      <div className="flex gap-4">
+        <button 
+          onClick={() => location.reload()}
+          className="text-xs text-blue-400 hover:text-blue-300 underline"
+        >
+          Retry Connection
+        </button>
+
+        {(now - ((window as any)._mountTime || now)) > 5000 && (
+          <button 
+            onClick={() => {
+              if (confirm("Reset App Data & Logout?")) {
+                localStorage.clear();
+                location.reload();
+              }
+            }}
+            className="text-xs text-red-400 hover:text-red-300 underline"
+          >
+            Force Reset App
+          </button>
+        )}
+      </div>
     </div>
   );
 
