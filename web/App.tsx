@@ -148,6 +148,14 @@ const App: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
 
   const [showDebug, setShowDebug] = useState(false);
+  
+  // Standings & History States
+  const [standings, setStandings] = useState<any[]>([]);
+  const [loadingStandings, setLoadingStandings] = useState(false);
+  const [selectedRaceId, setSelectedRaceId] = useState<string | null>(null);
+  const [raceResults, setRaceResults] = useState<any[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const [viewingResult, setViewingResult] = useState<any | null>(null);
 
   // Login Form State
   const [username, setUsername] = useState('');
@@ -237,6 +245,51 @@ const App: React.FC = () => {
       }
     })();
   }, [races]); // Depend on races to ensure index calc is correct if needed
+
+  // 3. Standings & Results Fetching
+  useEffect(() => {
+    if (activeTab === Tab.STANDINGS && data?.user?.leagueId) {
+       fetchStandings();
+    }
+  }, [activeTab]);
+
+  const fetchStandings = async () => {
+    if (!data?.user?.leagueId) return;
+    try {
+      setLoadingStandings(true);
+      const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/standings`);
+      const list = await res.json();
+      setStandings(list);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingStandings(false);
+    }
+  };
+
+  const fetchRaceResults = async (raceId: string) => {
+    if (!data?.user?.leagueId) return;
+    try {
+      setLoadingResults(true);
+      const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/results/${raceId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('fantaF1AuthToken')}` }
+      });
+      const list = await res.json();
+      setRaceResults(list);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingResults(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedRaceId) {
+      fetchRaceResults(selectedRaceId);
+    } else {
+      setRaceResults([]);
+    }
+  }, [selectedRaceId]);
 
   // Translation Helper
   const t = (dict: { [key: string]: string }) => {
@@ -416,72 +469,64 @@ const App: React.FC = () => {
 
   const handleBuyDriver = async (driver: Driver) => {
     if (!data?.user) return;
-    if (data.team.budget < driver.price) {
-      alert(t({ en: "Insufficient budget!", it: "Budget insufficiente!" }));
-      return;
-    }
-
     try {
-      const { newBudget } = await updateMarket(data.user.leagueId, driver.id);
-      
-      const newDriverIds = [...data.team.driverIds, driver.id];
-      const newTeamRaw = {
-        ...data.team,
-        driverIds: newDriverIds,
-        budget: newBudget,
-        totalValue: calculateTotalValue(newBudget, newDriverIds)
-      };
-
-      setData({
-        ...data,
-        team: sanitizeTeamRoles(newTeamRaw)
-      });
-    } catch (e: any) {
+      await updateMarket(data.user.leagueId, driver.id, undefined);
+      const updatedData = await getMe();
+      const league = updatedData.leagues.find(l => l.id === data.user?.leagueId);
+      if (league?.team) {
+         setData({
+            ...data,
+            team: {
+               ...data.team,
+               budget: league.team.budget,
+               driverIds: league.team.driverIds,
+               captainId: league.team.captainId,
+               reserveDriverId: league.team.reserveId,
+               totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
+            }
+         });
+      }
+    } catch (e) {
       console.error(e);
-      alert(t({ en: "Market update failed.", it: "Aggiornamento mercato fallito." }));
+      alert(t({ en: 'Failed to buy driver.', it: 'Acquisto pilota fallito.' }));
     }
   };
 
-  const handleSwapDriver = async (driverOut: Driver, driverIn: Driver) => {
+  const handleSwapDriver = async (oldD: Driver, newD: Driver) => {
     if (!data?.user) return;
-    const estimatedBudget = data.team.budget + driverOut.price - driverIn.price;
-    if (estimatedBudget < 0) {
-      alert(t({ en: "Insufficient budget for this swap.", it: "Budget insufficiente per questo scambio." }));
-      return;
-    }
-
     try {
-      const { newBudget } = await updateMarket(data.user.leagueId, driverIn.id, driverOut.id);
-      
-      const newDriverIds = data.team.driverIds.filter(id => id !== driverOut.id);
-      newDriverIds.push(driverIn.id);
-
-      const newTeamRaw = {
-        ...data.team,
-        driverIds: newDriverIds,
-        budget: newBudget,
-        totalValue: calculateTotalValue(newBudget, newDriverIds)
-      };
-
-      setData({
-        ...data,
-        team: sanitizeTeamRoles(newTeamRaw)
-      });
+      await updateMarket(data.user.leagueId, newD.id, oldD.id);
+      const updatedData = await getMe();
+      const league = updatedData.leagues.find(l => l.id === data.user?.leagueId);
+      if (league?.team) {
+         setData({
+            ...data,
+            team: {
+               ...data.team,
+               budget: league.team.budget,
+               driverIds: league.team.driverIds,
+               captainId: league.team.captainId,
+               reserveDriverId: league.team.reserveId,
+               totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
+            }
+         });
+      }
       setSwapCandidate(null);
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      alert(t({ en: "Swap failed.", it: "Scambio fallito." }));
+      alert(t({ en: 'Failed to swap driver.', it: 'Scambio pilota fallito.' }));
     }
   };
 
-  const isValidUtc = (str: string) => {
-    return str.trim() !== '' && !isNaN(new Date(str).getTime());
+  const isValidUtc = (val: string) => {
+    if (!val) return false;
+    const d = new Date(val);
+    return !isNaN(d.getTime()) && val.endsWith('Z');
   };
 
-  const handleSaveQuali = () => {
+  const handleSaveQuali = async () => {
     if (!data) return;
     if (!isValidUtc(qualifyingUtcDraft)) return;
-
     const newRaces = [...races];
     newRaces[data.currentRaceIndex] = {
       ...newRaces[data.currentRaceIndex],
@@ -490,10 +535,9 @@ const App: React.FC = () => {
     setRaces(newRaces);
   };
 
-  const handleSaveSprint = () => {
+  const handleSaveSprint = async () => {
     if (!data) return;
     if (!isValidUtc(sprintQualifyingUtcDraft)) return;
-
     const newRaces = [...races];
     newRaces[data.currentRaceIndex] = {
       ...newRaces[data.currentRaceIndex],
@@ -516,29 +560,18 @@ const App: React.FC = () => {
     setRaces(newRaces);
   };
 
-  const handleRuleChange = (key: keyof ScoringRules, value: any) => {
+  const handleRuleChange = (key: keyof ScoringRules, val: any) => {
     if (!data) return;
     setData({
       ...data,
-      rules: {
-        ...data.rules,
-        [key]: value
-      }
+      rules: { ...data.rules, [key]: val }
     });
   };
 
   const handleRacePointChange = (index: number, val: number) => {
     if (!data) return;
-    if (!Number.isFinite(val)) return; // Anti-NaN
-
-    // Safeguard: handle if array is smaller (e.g. from old localstorage)
-    const newPoints = [...(data.rules.racePositionPoints || [])];
-
-    // Ensure we have enough slots
-    while (newPoints.length < 22) {
-      newPoints.push(0);
-    }
-
+    if (!Number.isFinite(val)) return;
+    const newPoints = [...(data.rules.racePositionPoints || Array(22).fill(0))];
     newPoints[index] = val;
     handleRuleChange('racePositionPoints', newPoints);
   };
@@ -546,12 +579,7 @@ const App: React.FC = () => {
   const handleSprintSinglePointChange = (index: number, val: number) => {
     if (!data) return;
     if (!Number.isFinite(val)) return;
-
-    const newPoints = [...(data.rules.sprintPositionPoints || [8, 7, 6, 5, 4, 3, 2, 1])];
-    while (newPoints.length < 8) {
-      newPoints.push(0);
-    }
-
+    const newPoints = [...(data.rules.sprintPositionPoints || Array(8).fill(0))];
     newPoints[index] = val;
     handleRuleChange('sprintPositionPoints', newPoints);
   };
@@ -561,34 +589,26 @@ const App: React.FC = () => {
     const newConstructors = data.constructors.map(c =>
       c.id === id ? { ...c, multiplier } : c
     );
-    setData({
-      ...data,
-      constructors: newConstructors
-    });
+    setData({ ...data, constructors: newConstructors });
   };
 
   const getLockStatus = (race: Race, currentTime: number): LockState => {
     const targetStr = race.isSprint ? race.sprintQualifyingUtc : race.qualifyingUtc;
-
     if (!targetStr || targetStr === 'TODO_UTC') {
       return { status: 'unconfigured', targetSessionUtc: null, lockTimeUtc: null, msToLock: null };
     }
-
     const targetDate = new Date(targetStr);
     if (isNaN(targetDate.getTime())) {
       return { status: 'unconfigured', targetSessionUtc: targetStr, lockTimeUtc: null, msToLock: null };
     }
-
     const lockDate = new Date(targetDate.getTime() - 5 * 60 * 1000); // 5 mins before
     const msToLock = lockDate.getTime() - currentTime;
-
     let status: LockStatus = 'open';
     if (msToLock <= 0) {
       status = 'locked';
     } else if (msToLock <= 30 * 60 * 1000) {
       status = 'closing_soon';
     }
-
     return {
       status,
       targetSessionUtc: targetDate.toISOString(),
@@ -598,13 +618,16 @@ const App: React.FC = () => {
   };
 
   const handleSyncOpenF1 = async () => {
-    if (!data || !currentRace) return;
+    if (!data) return;
+    const currentRace = races[data.currentRaceIndex];
+    if (!currentRace) return;
+    
     try {
       setSyncing(true);
       const res = await fetch(`${getApiUrl()}/admin/sync-race`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('fanta_token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('fantaF1AuthToken')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ raceId: currentRace.id })
@@ -612,7 +635,6 @@ const App: React.FC = () => {
       const result = await res.json();
       if (result.ok) {
         alert(t({ en: 'Race synced successfully!', it: 'Gara sincronizzata con successo!' }));
-        // Refresh data
         window.location.reload();
       } else {
         alert(t({ en: `Sync failed: ${result.error}`, it: `Sincronizzazione fallita: ${result.error}` }));
@@ -623,6 +645,168 @@ const App: React.FC = () => {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const renderStandings = () => {
+    const completedRaces = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
+    
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+           <span className="text-3xl">🏆</span> {t({ en: 'Standings', it: 'Classifica' })}
+        </h1>
+
+        {/* Global Standings Card */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
+           <div className="bg-slate-700/50 p-3 border-b border-slate-700 font-bold text-xs uppercase tracking-widest text-slate-300">
+              {t({ en: 'Global Rankings', it: 'Classifica Globale' })}
+           </div>
+           {loadingStandings ? (
+             <div className="p-8 text-center text-slate-500 animate-pulse">{t({ en: 'Loading standings...', it: 'Caricamento classifica...' })}</div>
+           ) : (
+             <div className="divide-y divide-slate-700">
+                {standings.map((s, idx) => (
+                   <div key={s.userId} className={`p-4 flex justify-between items-center ${s.userId === data?.user?.id ? 'bg-blue-900/10' : ''}`}>
+                      <div className="flex items-center gap-4">
+                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                            {s.rank}
+                         </div>
+                         <div>
+                            <div className="text-white font-bold">{s.userName} {s.userId === data?.user?.id && <span className="text-[10px] bg-blue-500 text-white px-1 rounded ml-1">TU</span>}</div>
+                            <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Total Points', it: 'Punti Totali' })}</div>
+                         </div>
+                      </div>
+                      <div className="text-right">
+                         <div className="text-xl font-mono font-bold text-blue-400">{s.totalPoints}</div>
+                      </div>
+                   </div>
+                ))}
+                {standings.length === 0 && <div className="p-8 text-center text-slate-500 italic">No users found in this league.</div>}
+             </div>
+           )}
+        </div>
+
+        {/* Race Results / History Section */}
+        <div className="space-y-4">
+           <h2 className="text-lg font-bold text-slate-400 uppercase tracking-wider px-1">{t({ en: 'Historical Results', it: 'Risultati Storici' })}</h2>
+           
+           {/* Race Filter */}
+           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+              <button 
+                onClick={() => setSelectedRaceId(null)}
+                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${!selectedRaceId ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+              >
+                {t({ en: 'Overall', it: 'Generale' })}
+              </button>
+              {completedRaces.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => setSelectedRaceId(r.id)}
+                  className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${selectedRaceId === r.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+                >
+                  {r.name.replace(' Grand Prix', '')}
+                </button>
+              ))}
+           </div>
+
+           {/* Selected Race Results List */}
+           {selectedRaceId && (
+              <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-2">
+                 <div className="bg-slate-700/50 p-3 border-b border-slate-700 flex justify-between items-center">
+                    <span className="font-bold text-xs uppercase tracking-widest text-slate-300">
+                       {races.find(r => r.id === selectedRaceId)?.name}
+                    </span>
+                    {loadingResults && <div className="w-3 h-3 border-2 border-slate-400 border-t-white rounded-full animate-spin"></div>}
+                 </div>
+                 <div className="divide-y divide-slate-700">
+                    {raceResults.map((r) => (
+                      <div key={r.userId} className="p-4 flex justify-between items-center group">
+                         <div className="flex items-center gap-4">
+                            <div>
+                               <div className="text-white font-bold">{r.userName}</div>
+                               <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Race Score', it: 'Punti Gara' })}</div>
+                            </div>
+                         </div>
+                         <div className="flex items-center gap-4">
+                            <div className="text-right">
+                               <div className="text-lg font-mono font-bold text-green-400">+{r.points}</div>
+                            </div>
+                            <button 
+                              onClick={() => setViewingResult(r)}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-100 p-2 rounded-lg transition-colors border border-slate-600"
+                            >
+                               🔍
+                            </button>
+                         </div>
+                      </div>
+                    ))}
+                    {raceResults.length === 0 && !loadingResults && <div className="p-8 text-center text-slate-500 italic">No results stored for this race yet.</div>}
+                 </div>
+              </div>
+           )}
+        </div>
+
+        {/* Modal: Result/Lineup Details */}
+        {viewingResult && (
+           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setViewingResult(null)}>
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 overflow-y-auto max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                 <div className="flex justify-between items-center mb-6">
+                    <div>
+                       <h3 className="text-xl font-bold text-white">{viewingResult.userName}</h3>
+                       <p className="text-slate-400 text-sm">{selectedRaceId ? races.find(r => r.id === selectedRaceId)?.name : ''}</p>
+                    </div>
+                    <button onClick={() => setViewingResult(null)} className="text-slate-500 hover:text-white text-2xl">&times;</button>
+                 </div>
+
+                 <div className="space-y-3">
+                    {viewingResult.drivers.length > 0 ? (
+                      viewingResult.drivers.map((d: any) => {
+                         const isCaptain = viewingResult.captainId === d.id;
+                         const isReserve = viewingResult.reserveId === d.id;
+                         return (
+                           <div key={d.id} className={`bg-slate-800 p-3 rounded-xl border ${isCaptain ? 'border-yellow-500' : isReserve ? 'border-green-500' : 'border-slate-700'} flex justify-between items-center`}>
+                              <div className="flex items-center gap-3">
+                                 <div className="text-lg">🏎️</div>
+                                 <div className="flex-1">
+                                    <div className="text-white font-bold text-sm">
+                                       {d.name} 
+                                       {isCaptain && <span className="text-[8px] bg-yellow-500 text-black px-1 rounded ml-1">CPT</span>}
+                                       {isReserve && <span className="text-[8px] bg-green-500 text-black px-1 rounded ml-1">RES</span>}
+                                    </div>
+                                 </div>
+                              </div>
+                              <div className="text-right">
+                                 <div className="text-blue-400 font-mono font-bold text-sm">+{d.points}</div>
+                              </div>
+                           </div>
+                         );
+                      })
+                    ) : (
+                      <div className="p-8 text-center text-slate-500 italic bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
+                         {t({ 
+                           en: 'Lineup hidden. Results can be viewed once the race is completed.', 
+                           it: 'Formazione nascosta. Potrai vederla quando la gara sarà completata.' 
+                         })}
+                      </div>
+                    )}
+                    
+                    <div className="bg-blue-600/10 border border-blue-600/30 p-4 rounded-xl mt-4 flex justify-between items-center">
+                       <span className="text-slate-300 font-bold text-sm capitalize">{t({ en: 'Total Score', it: 'Punteggio Totale' })}</span>
+                       <span className="text-2xl font-mono font-bold text-white">{viewingResult.points}</span>
+                    </div>
+                 </div>
+
+                 <button 
+                   onClick={() => setViewingResult(null)}
+                   className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-slate-700 transition-colors"
+                 >
+                    Close
+                 </button>
+              </div>
+           </div>
+        )}
+      </div>
+    );
   };
 
   const formatCountdown = (ms: number) => {
@@ -816,24 +1000,24 @@ const App: React.FC = () => {
               onClick={() => setLoginMode('create')}
               className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${loginMode === 'create' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              {t({ en: 'Create League', it: 'Crea Lega', fr: 'CrÃƒÂ©er ligue', de: 'Liga erstellen', es: 'Crear liga', ru: 'ÃÂ¡ÃÂ¾ÃÂ·ÃÂ´ÃÂ°Ã‘â€šÃ‘Å’ ÃÂ»ÃÂ¸ÃÂ³Ã‘Æ’', zh: 'Ã¥Ë†â€ºÃ¥Â»ÂºÃ¨Ââ€Ã§â€ºÅ¸', ar: 'Ã˜Â¥Ã™â€ Ã˜Â´Ã˜Â§Ã˜Â¡ Ã˜Â¯Ã™Ë†Ã˜Â±Ã™Å ', ja: 'Ã£Æ’ÂªÃ£Æ’Â¼Ã£â€šÂ°Ã¤Â½Å“Ã¦Ë†Â' })}
+              {t({ en: 'Create League', it: 'Crea Lega', fr: 'Créer ligue', de: 'Liga erstellen', es: 'Crear liga', ru: 'Создать лигу', zh: '创建联盟', ar: 'إنشاء دوري', ja: 'リーグ作成' })}
             </button>
             <button
               onClick={() => setLoginMode('join')}
               className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${loginMode === 'join' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              {t({ en: 'Join League', it: 'Unisciti', fr: 'Rejoindre', de: 'Beitreten', es: 'Unirse', ru: 'Ãâ€™ÃÂ¾ÃÂ¹Ã‘â€šÃÂ¸', zh: 'Ã¥Å  Ã¥â€¦Â¥Ã¨Ââ€Ã§â€ºÅ¸', ar: 'Ã˜Â§Ã™â€ Ã˜Â¶Ã™â€¦Ã˜Â§Ã™â€¦', ja: 'Ã¥Ââ€šÃ¥Å  ' })}
+              {t({ en: 'Join League', it: 'Unisciti', fr: 'Rejoindre', de: 'Beitreten', es: 'Unirse', ru: 'Войти', zh: '加入联盟', ar: 'انضمام', ja: '参加' })}
             </button>
           </div>
 
           {/* Common Input */}
           <div className="mb-4">
-            <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'Username', it: 'Nome Utente', fr: "Nom d'utilisateur", de: 'Benutzername', es: 'Usuario', ru: 'ÃËœÃÂ¼Ã‘Â ÃÂ¿ÃÂ¾ÃÂ»Ã‘Å’ÃÂ·ÃÂ¾ÃÂ²ÃÂ°Ã‘â€šÃÂµÃÂ»Ã‘Â', zh: 'Ã§â€Â¨Ã¦Ë†Â·Ã¥ÂÂ', ar: 'Ã˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã˜ÂªÃ˜Â®Ã˜Â¯Ã™â€¦', ja: 'Ã£Æ’Â¦Ã£Æ’Â¼Ã£â€šÂ¶Ã£Æ’Â¼Ã¥ÂÂ' })}</label>
+            <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'Username', it: 'Nome Utente', fr: "Nom d'utilisateur", de: 'Benutzername', es: 'Usuario', ru: 'Имя пользователя', zh: '用户名', ar: 'اسم المستخدم', ja: 'ユーザー名' })}</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder={t({ en: 'Enter your name', it: 'Inserisci nome', fr: 'Entrez votre nom', de: 'Name eingeben', es: 'Ingresa tu nombre', ru: 'Ãâ€™ÃÂ²ÃÂµÃÂ´ÃÂ¸Ã‘â€šÃÂµ ÃÂ¸ÃÂ¼Ã‘Â', zh: 'Ã¨Â¾â€œÃ¥â€¦Â¥Ã¥ÂÂÃ¥Â­â€”', ar: 'Ã˜Â£Ã˜Â¯Ã˜Â®Ã™â€ž Ã˜Â§Ã˜Â³Ã™â€¦Ã™Æ’', ja: 'Ã¥ÂÂÃ¥â€°ÂÃ£â€šâ€™Ã¥â€¦Â¥Ã¥Å â€º' })}
+              placeholder={t({ en: 'Enter your name', it: 'Inserisci nome', fr: 'Entrez votre nom', de: 'Name eingeben', es: 'Ingresa tu nombre', ru: 'Введите имя', zh: '输入名字', ar: 'أدخل اسمك', ja: '名前を入力' })}
               className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -841,12 +1025,12 @@ const App: React.FC = () => {
           {/* Create Fields */}
           {loginMode === 'create' && (
             <div className="mb-6">
-              <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Name', it: 'Nome Lega', fr: 'Nom de la ligue', de: 'Liganame', es: 'Nombre Liga', ru: 'ÃÂÃÂ°ÃÂ·ÃÂ²ÃÂ°ÃÂ½ÃÂ¸ÃÂµ ÃÂ»ÃÂ¸ÃÂ³ÃÂ¸', zh: 'Ã¨Ââ€Ã§â€ºÅ¸Ã¥ÂÂÃ§Â§Â°', ar: 'Ã˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ˜Â¯Ã™Ë†Ã˜Â±Ã™Å ', ja: 'Ã£Æ’ÂªÃ£Æ’Â¼Ã£â€šÂ°Ã¥ÂÂ' })}</label>
+              <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Name', it: 'Nome Lega', fr: 'Nom de la ligue', de: 'Liganame', es: 'Nombre Liga', ru: 'Название лиги', zh: '联盟名称', ar: 'اسم الدوري', ja: 'リーグ名' })}</label>
               <input
                 type="text"
                 value={leagueName}
                 onChange={(e) => setLeagueName(e.target.value)}
-                placeholder={t({ en: 'e.g. Sunday Racing Club', it: 'es. Racing Club', fr: 'ex. Racing Club', de: 'z.B. Racing Club', es: 'ej. Racing Club', ru: 'ÃÂ½ÃÂ°ÃÂ¿Ã‘â‚¬. ÃÅ¡ÃÂ»Ã‘Æ’ÃÂ±', zh: 'Ã¤Â¾â€¹Ã¥Â¦â€šÃ¯Â¼Å¡Ã¥â€˜Â¨Ã¦â€”Â¥Ã¨Âµâ€ºÃ¨Â½Â¦', ar: 'Ã™â€¦Ã˜Â«Ã˜Â§Ã™â€ž: Ã™â€ Ã˜Â§Ã˜Â¯Ã™Å  Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â¨Ã˜Â§Ã™â€š', ja: 'Ã¤Â¾â€¹: Ã£Æ’Â¬Ã£Æ’Â¼Ã£â€šÂ·Ã£Æ’Â³Ã£â€šÂ°Ã£â€šÂ¯Ã£Æ’Â©Ã£Æ’â€“' })}
+                placeholder={t({ en: 'e.g. Sunday Racing Club', it: 'es. Racing Club', fr: 'ex. Racing Club', de: 'z.B. Racing Club', es: 'ej. Racing Club', ru: 'напр. Клуб', zh: '例如：周日赛车', ar: 'مثال: نادي السباق', ja: '例: レーシングクラブ' })}
                 className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -855,12 +1039,12 @@ const App: React.FC = () => {
           {/* Join Fields */}
           {loginMode === 'join' && (
             <div className="mb-6">
-              <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'CÃƒÂ³digo Liga', ru: 'ÃÅ¡ÃÂ¾ÃÂ´ ÃÂ»ÃÂ¸ÃÂ³ÃÂ¸', zh: 'Ã¨Ââ€Ã§â€ºÅ¸Ã¤Â»Â£Ã§ Â', ar: 'Ã˜Â±Ã™â€¦Ã˜Â² Ã˜Â§Ã™â€žÃ˜Â¯Ã™Ë†Ã˜Â±Ã™Å ', ja: 'Ã£Æ’ÂªÃ£Æ’Â¼Ã£â€šÂ°Ã£â€šÂ³Ã£Æ’Â¼Ã£Æ’â€°' })}</label>
+              <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}</label>
               <input
                 type="text"
                 value={leagueCodeInput}
                 onChange={(e) => setLeagueCodeInput(e.target.value.toUpperCase())}
-                placeholder={t({ en: '6-Digit Code', it: 'Codice 6 cifre', fr: 'Code 6 chiffres', de: '6-stelliger Code', es: 'CÃƒÂ³digo 6 dÃƒÂ­gitos', ru: '6 Ã‘â€ ÃÂ¸Ã‘â€žÃ‘â‚¬', zh: '6Ã¤Â½ÂÃ¤Â»Â£Ã§ Â', ar: 'Ã˜Â±Ã™â€¦Ã˜Â² Ã™â€¦Ã™â€  6 Ã˜Â£Ã˜Â±Ã™â€šÃ˜Â§Ã™â€¦', ja: '6Ã¦Â¡ÂÃ£â€šÂ³Ã£Æ’Â¼Ã£Æ’â€°' })}
+                placeholder={t({ en: '6-Digit Code', it: 'Codice 6 cifre', fr: 'Code 6 chiffres', de: '6-stelliger Code', es: 'Código 6 dígitos', ru: '6 цифр', zh: '6位代码', ar: 'رمز من 6 أرقام', ja: '6桁コード' })}
                 maxLength={6}
                 className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 font-mono tracking-widest uppercase"
               />
@@ -871,7 +1055,7 @@ const App: React.FC = () => {
             onClick={handleLogin}
             className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded transition-all shadow-lg transform hover:scale-[1.02]"
           >
-            {loginMode === 'create' ? t({ en: 'Start Season', it: 'Inizia Stagione', fr: 'DÃƒÂ©marrer saison', de: 'Saison starten', es: 'Iniciar temporada', ru: 'ÃÂÃÂ°Ã‘â€¡ÃÂ°Ã‘â€šÃ‘Å’ Ã‘ÂÃÂµÃÂ·ÃÂ¾ÃÂ½', zh: 'Ã¥Â¼â‚¬Ã¥Â§â€¹Ã¨Âµâ€ºÃ¥Â­Â£', ar: 'Ã˜Â¨Ã˜Â¯Ã˜Â¡ Ã˜Â§Ã™â€žÃ™â€¦Ã™Ë†Ã˜Â³Ã™â€¦', ja: 'Ã£â€šÂ·Ã£Æ’Â¼Ã£â€šÂºÃ£Æ’Â³Ã©â€“â€¹Ã¥Â§â€¹' }) : t({ en: 'Join Season', it: 'Unisciti', fr: 'Rejoindre saison', de: 'Beitreten', es: 'Unirse', ru: 'ÃÅ¸Ã‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂµÃÂ´ÃÂ¸ÃÂ½ÃÂ¸Ã‘â€šÃ‘Å’Ã‘ÂÃ‘Â', zh: 'Ã¥Å  Ã¥â€¦Â¥Ã¨Âµâ€ºÃ¥Â­Â£', ar: 'Ã˜Â§Ã™â€ Ã˜Â¶Ã™â€¦Ã˜Â§Ã™â€¦ Ã™â€žÃ™â€žÃ™â€¦Ã™Ë†Ã˜Â³Ã™â€¦', ja: 'Ã£â€šÂ·Ã£Æ’Â¼Ã£â€šÂºÃ£Æ’Â³Ã¥Ââ€šÃ¥Å  ' })}
+            {loginMode === 'create' ? t({ en: 'Start Season', it: 'Inizia Stagione', fr: 'Démarrer saison', de: 'Saison starten', es: 'Iniciar temporada', ru: 'Начать сезон', zh: '开始赛季', ar: 'بدء الموسم', ja: 'シーズン開始' }) : t({ en: 'Join Season', it: 'Unisciti', fr: 'Rejoindre saison', de: 'Beitreten', es: 'Unirse', ru: 'Присоединиться', zh: '加入赛季', ar: 'انضمام للموسم', ja: 'シーズン参加' })}
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
@@ -906,25 +1090,25 @@ const App: React.FC = () => {
         return (
           <div className="space-y-6">
             <header>
-              <h1 className="text-2xl font-bold text-white">{t({ en: 'Welcome', it: 'Benvenuto', fr: 'Bienvenue', de: 'Willkommen', es: 'Bienvenido', ru: 'Ãâ€ÃÂ¾ÃÂ±Ã‘â‚¬ÃÂ¾ ÃÂ¿ÃÂ¾ÃÂ¶ÃÂ°ÃÂ»ÃÂ¾ÃÂ²ÃÂ°Ã‘â€šÃ‘Å’', zh: 'Ã¦Â¬Â¢Ã¨Â¿Å½', ar: 'Ã™â€¦Ã˜Â±Ã˜Â­Ã˜Â¨Ã˜Â§Ã™â€¹', ja: 'Ã£â€šË†Ã£Ââ€ Ã£Ââ€œÃ£ÂÂ' })}, {data.user?.name}</h1>
+              <h1 className="text-2xl font-bold text-white">{t({ en: 'Welcome', it: 'Benvenuto', fr: 'Bienvenue', de: 'Willkommen', es: 'Bienvenido', ru: 'Добро пожаловать', zh: '欢迎', ar: 'مرحباً', ja: 'ようこそ' })}, {data.user?.name}</h1>
               <p className="text-slate-400">
-                {data.user?.isAdmin ? `${t({ en: 'Admin of', it: 'Admin di', fr: 'Admin de', de: 'Admin von', es: 'Admin de', ru: 'ÃÂÃÂ´ÃÂ¼ÃÂ¸ÃÂ½', zh: 'Ã§Â®Â¡Ã§Ââ€ Ã¥â€˜Ëœ', ar: 'Ã™â€¦Ã˜Â³Ã˜Â¤Ã™Ë†Ã™â€ž Ã˜Â¹Ã™â€ ', ja: 'Ã§Â®Â¡Ã§Ââ€ Ã¨â‚¬â€¦' })} ${data.user.leagueName}` : t({ en: 'Member', it: 'Membro', fr: 'Membre', de: 'Mitglied', es: 'Miembro', ru: 'ÃÂ£Ã‘â€¡ÃÂ°Ã‘ÂÃ‘â€šÃÂ½ÃÂ¸ÃÂº', zh: 'Ã¦Ë†ÂÃ¥â€˜Ëœ', ar: 'Ã˜Â¹Ã˜Â¶Ã™Ë†', ja: 'Ã£Æ’Â¡Ã£Æ’Â³Ã£Æ’ÂÃ£Æ’Â¼' })}
+                {data.user?.isAdmin ? `${t({ en: 'Admin of', it: 'Admin di', fr: 'Admin de', de: 'Admin von', es: 'Admin de', ru: 'Админ', zh: '管理员', ar: 'مسؤول عن', ja: '管理者' })} ${data.user.leagueName}` : t({ en: 'Member', it: 'Membro', fr: 'Membre', de: 'Mitglied', es: 'Miembro', ru: 'Участник', zh: '成员', ar: 'عضو', ja: 'メンバー' })}
               </p>
               {data.user?.isAdmin && (
                 <div className="mt-2 inline-block bg-blue-900/50 border border-blue-500/30 rounded px-3 py-1">
-                  <span className="text-slate-400 text-xs mr-2">{t({ en: 'LEAGUE CODE', it: 'CODICE LEGA', fr: 'CODE LIGUE', de: 'LIGA-CODE', es: 'CÃƒâ€œDIGO LIGA', ru: 'ÃÅ¡ÃÅ¾Ãâ€ Ãâ€ºÃËœÃâ€œÃËœ', zh: 'Ã¨Ââ€Ã§â€ºÅ¸Ã¤Â»Â£Ã§ Â', ar: 'Ã˜Â±Ã™â€¦Ã˜Â² Ã˜Â§Ã™â€žÃ˜Â¯Ã™Ë†Ã˜Â±Ã™Å ', ja: 'Ã£Æ’ÂªÃ£Æ’Â¼Ã£â€šÂ°Ã£â€šÂ³Ã£Æ’Â¼Ã£Æ’â€°' })}:</span>
+                  <span className="text-slate-400 text-xs mr-2">{t({ en: 'LEAGUE CODE', it: 'CODICE LEGA', fr: 'CODE LIGUE', de: 'LIGA-CODE', es: 'CÓDIGO LIGA', ru: 'КОД ЛИГИ', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span>
                   <span className="font-mono font-bold text-blue-300">{data.user.leagueCode}</span>
                 </div>
               )}
             </header>
 
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h2 className="text-lg font-semibold text-blue-400 mb-2">{t({ en: 'Selected Race', it: 'Gara Selezionata', fr: 'Course sÃƒÂ©lectionnÃƒÂ©e', de: 'AusgewÃƒÂ¤hltes Rennen', es: 'Carrera seleccionada', ru: 'Ãâ€™Ã‘â€¹ÃÂ±Ã‘â‚¬ÃÂ°ÃÂ½ÃÂ½ÃÂ°Ã‘Â ÃÂ³ÃÂ¾ÃÂ½ÃÂºÃÂ°', zh: 'Ã¥Â·Â²Ã©â‚¬â€°Ã¨Âµâ€ºÃ¤Âºâ€¹', ar: 'Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â¨Ã˜Â§Ã™â€š Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â¯Ã˜Â¯', ja: 'Ã©ÂÂ¸Ã¦Å Å¾Ã£Ââ€¢Ã£â€šÅ’Ã£ÂÅ¸Ã£Æ’Â¬Ã£Æ’Â¼Ã£â€šÂ¹' })}</h2>
+              <h2 className="text-lg font-semibold text-blue-400 mb-2">{t({ en: 'Selected Race', it: 'Gara Selezionata', fr: 'Course sélectionnée', de: 'Ausgewähltes Rennen', es: 'Carrera seleccionada', ru: 'Выбранная гонка', zh: '已选赛事', ar: 'السباق المحدد', ja: '選択されたレース' })}</h2>
               <div className="text-3xl font-bold text-white">{currentRace.name}</div>
               <div className="text-slate-400 mt-1">{currentRace.date}</div>
               {lockState.status !== 'unconfigured' && (
                 <div className="mt-3 bg-slate-900/50 p-2 rounded text-center border border-slate-600">
-                  <span className="text-xs text-slate-400 uppercase mr-2">{t({ en: 'Lineup Locks In', it: 'Chiude tra', fr: 'Verrouillage dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Ãâ€”ÃÂ°ÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃÂ¸ÃÂµ Ã‘â€¡ÃÂµÃ‘â‚¬ÃÂµÃÂ·', zh: 'Ã©ËœÂµÃ¥Â®Â¹Ã©â€ÂÃ¥Â®Å¡Ã¤ÂºÅ½', ar: 'Ã™Å Ã˜ÂºÃ™â€žÃ™â€š Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â´Ã™Æ’Ã™Å Ã™â€ž Ã™ÂÃ™Å ', ja: 'Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’Â³Ã£Æ’Å Ã£Æ’Æ’Ã£Æ’â€”Ã¥â€ºÂºÃ¥Â®Å¡Ã£ÂÂ¾Ã£ÂÂ§' })}</span>
+                  <span className="text-xs text-slate-400 uppercase mr-2">{t({ en: 'Lineup Locks In', it: 'Chiude tra', fr: 'Verrouillage dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '阵容锁定于', ar: 'يغلق التشكيل في', ja: 'ラインナップ固定まで' })}</span>
                   <span className={`font-mono font-bold ${lockState.status === 'locked' ? 'text-red-400' : 'text-green-400'}`}>
                     {lockState.status === 'locked' ? 'LOCKED' : formatCountdown(lockState.msToLock || 0)}
                   </span>
@@ -933,13 +1117,13 @@ const App: React.FC = () => {
             </div>
 
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h2 className="text-lg font-semibold text-green-400 mb-2">{t({ en: 'Team Status', it: 'Stato Team', fr: 'Statut ÃƒÂ©quipe', de: 'Teamstatus', es: 'Estado Equipo', ru: 'ÃÂ¡Ã‘â€šÃÂ°Ã‘â€šÃ‘Æ’Ã‘Â ÃÂºÃÂ¾ÃÂ¼ÃÂ°ÃÂ½ÃÂ´Ã‘â€¹', zh: 'Ã¨Â½Â¦Ã©ËœÅ¸Ã§Å Â¶Ã¦â‚¬Â', ar: 'Ã˜Â­Ã˜Â§Ã™â€žÃ˜Â© Ã˜Â§Ã™â€žÃ™ÂÃ˜Â±Ã™Å Ã™â€š', ja: 'Ã£Æ’ÂÃ£Æ’Â¼Ã£Æ’ Ã§Å Â¶Ã¦Â³Â' })}</h2>
+              <h2 className="text-lg font-semibold text-green-400 mb-2">{t({ en: 'Team Status', it: 'Stato Team', fr: 'Statut équipe', de: 'Teamstatus', es: 'Estado Equipo', ru: 'Статус команды', zh: '车队状态', ar: 'حالة الفريق', ja: 'チーム状況' })}</h2>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-slate-300">{t({ en: 'Budget', it: 'Budget', fr: 'Budget', de: 'Budget', es: 'Presupuesto', ru: 'Ãâ€˜Ã‘Å½ÃÂ´ÃÂ¶ÃÂµÃ‘â€š', zh: 'Ã©Â¢â€žÃ§Â®â€”', ar: 'Ã˜Â§Ã™â€žÃ™â€¦Ã™Å Ã˜Â²Ã˜Â§Ã™â€ Ã™Å Ã˜Â©', ja: 'Ã¤ÂºË†Ã§Â®â€”' })}</span>
+                <span className="text-slate-300">{t({ en: 'Budget', it: 'Budget', fr: 'Budget', de: 'Budget', es: 'Presupuesto', ru: 'Бюджет', zh: '预算', ar: 'الميزانية', ja: '予算' })}</span>
                 <span className="font-mono text-white text-lg">${data.team.budget.toFixed(1)}M</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-300">{t({ en: 'Drivers Signed', it: 'Piloti', fr: 'Pilotes', de: 'Fahrer', es: 'Pilotos', ru: 'ÃÅ¸ÃÂ¸ÃÂ»ÃÂ¾Ã‘â€šÃ‘â€¹', zh: 'Ã¨Â½Â¦Ã¦â€°â€¹', ar: 'Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â§Ã˜Â¦Ã™â€šÃ™Å Ã™â€ ', ja: 'Ã¥Â¥â€˜Ã§Â´â€žÃ£Æ’â€°Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’ÂÃ£Æ’Â¼' })}</span>
+                <span className="text-slate-300">{t({ en: 'Drivers Signed', it: 'Piloti', fr: 'Pilotes', de: 'Fahrer', es: 'Pilotos', ru: 'Пилоты', zh: '车手', ar: 'السائقين', ja: '契約ドライバー' })}</span>
                 <span className="font-mono text-white text-lg">{data.team.driverIds.length}/5</span>
               </div>
             </div>
@@ -949,17 +1133,17 @@ const App: React.FC = () => {
       case Tab.TEAM:
         return (
           <div className="space-y-4">
-            <h1 className="text-2xl font-bold text-white mb-4">{t({ en: 'My Team', it: 'Il Mio Team', fr: 'Mon Ãƒâ€°quipe', de: 'Mein Team', es: 'Mi Equipo', ru: 'ÃÅ“ÃÂ¾Ã‘Â ÃÅ¡ÃÂ¾ÃÂ¼ÃÂ°ÃÂ½ÃÂ´ÃÂ°', zh: 'Ã¦Ë†â€˜Ã§Å¡â€žÃ¨Â½Â¦Ã©ËœÅ¸', ar: 'Ã™ÂÃ˜Â±Ã™Å Ã™â€šÃ™Å ', ja: 'Ã£Æ’Å¾Ã£â€šÂ¤Ã£Æ’ÂÃ£Æ’Â¼Ã£Æ’ ' })}</h1>
+            <h1 className="text-2xl font-bold text-white mb-4">{t({ en: 'My Team', it: 'Il Mio Team', fr: 'Mon Équipe', de: 'Mein Team', es: 'Mi Equipo', ru: 'Моя Команда', zh: '我的车队', ar: 'فريقي', ja: 'マイチーム' })}</h1>
             <div className="p-4 bg-slate-800 rounded-lg text-center border border-slate-700">
-              <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'ÃƒÂ©quipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'ÃÂÃÂ°ÃÂ·ÃÂ²ÃÂ°ÃÂ½ÃÂ¸ÃÂµ ÃÂºÃÂ¾ÃÂ¼ÃÂ°ÃÂ½ÃÂ´Ã‘â€¹', zh: 'Ã¨Â½Â¦Ã©ËœÅ¸Ã¥ÂÂÃ§Â§Â°', ar: 'Ã˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ™ÂÃ˜Â±Ã™Å Ã™â€š', ja: 'Ã£Æ’ÂÃ£Æ’Â¼Ã£Æ’ Ã¥ÂÂ' })}</p>
+              <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'équipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'Название команды', zh: '车队名称', ar: 'اسم الفريق', ja: 'チーム名' })}</p>
               <h2 className="text-xl font-bold text-white">{data.team.name}</h2>
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-lg font-semibold text-slate-200">{t({ en: 'Roster', it: 'Rosa', fr: 'Effectif', de: 'Kader', es: 'Plantilla', ru: 'ÃÂ¡ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ²', zh: 'Ã©ËœÂµÃ¥Â®Â¹', ar: 'Ã˜Â§Ã™â€žÃ™â€šÃ˜Â§Ã˜Â¦Ã™â€¦Ã˜Â©', ja: 'Ã£Æ’Â­Ã£Æ’Â¼Ã£â€šÂ¹Ã£â€šÂ¿Ã£Æ’Â¼' })}</h3>
+              <h3 className="text-lg font-semibold text-slate-200">{t({ en: 'Roster', it: 'Rosa', fr: 'Effectif', de: 'Kader', es: 'Plantilla', ru: 'Состав', zh: '阵容', ar: 'القائمة', ja: 'ロースター' })}</h3>
               {data.team.driverIds.length === 0 ? (
                 <div className="p-8 border-2 border-dashed border-slate-700 rounded-lg text-center text-slate-500">
-                  {t({ en: 'No drivers selected yet. Go to Market.', it: 'Nessun pilota selezionato. Vai al Mercato.', fr: 'Aucun pilote sÃƒÂ©lectionnÃƒÂ©. Allez au MarchÃƒÂ©.', de: 'Noch keine Fahrer ausgewÃƒÂ¤hlt. Zum Markt gehen.', es: 'Sin pilotos seleccionados. Ir al Mercado.', ru: 'ÃÅ¸ÃÂ¸ÃÂ»ÃÂ¾Ã‘â€šÃ‘â€¹ ÃÂ½ÃÂµ ÃÂ²Ã‘â€¹ÃÂ±Ã‘â‚¬ÃÂ°ÃÂ½Ã‘â€¹. ÃÅ¸ÃÂµÃ‘â‚¬ÃÂµÃÂ¹ÃÂ´ÃÂ¸Ã‘â€šÃÂµ ÃÂ½ÃÂ° Ã‘â‚¬Ã‘â€¹ÃÂ½ÃÂ¾ÃÂº.', zh: 'Ã¥Â°Å¡Ã¦Å“ÂªÃ©â‚¬â€°Ã¦â€¹Â©Ã¨Â½Â¦Ã¦â€°â€¹Ã£â‚¬â€šÃ¥â€°ÂÃ¥Â¾â‚¬Ã¥Â¸â€šÃ¥Å“ÂºÃ£â‚¬â€š', ar: 'Ã™â€žÃ™â€¦ Ã™Å Ã˜ÂªÃ™â€¦ Ã˜Â§Ã˜Â®Ã˜ÂªÃ™Å Ã˜Â§Ã˜Â± Ã˜Â³Ã˜Â§Ã˜Â¦Ã™â€šÃ™Å Ã™â€  Ã˜Â¨Ã˜Â¹Ã˜Â¯. Ã˜Â§Ã˜Â°Ã™â€¡Ã˜Â¨ Ã˜Â¥Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â³Ã™Ë†Ã™â€š.', ja: 'Ã£Æ’â€°Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’ÂÃ£Æ’Â¼Ã¦Å“ÂªÃ©ÂÂ¸Ã¦Å Å¾Ã£â‚¬â€šÃ£Æ’Å¾Ã£Æ’Â¼Ã£â€šÂ±Ã£Æ’Æ’Ã£Æ’Ë†Ã£ÂÂ¸Ã£â‚¬â€š' })}
+                  {t({ en: 'No drivers selected yet. Go to Market.', it: 'Nessun pilota selezionato. Vai al Mercato.', fr: 'Aucun pilote sélectionné. Allez au Marché.', de: 'Noch keine Fahrer ausgewählt. Zum Markt gehen.', es: 'Sin pilotos seleccionados. Ir al Mercado.', ru: 'Пилоты не выбраны. Перейдите на рынок.', zh: '尚未选择车手。前往市场。', ar: 'لم يتم اختيار سائقين بعد. اذهب إلى السوق.', ja: 'ドライバー未選択。マーケットへ。' })}
                 </div>
               ) : (
                 <ul className="space-y-2">
@@ -991,15 +1175,15 @@ const App: React.FC = () => {
             {/* Lock Status Banner */}
             {lockState.status === 'unconfigured' && (
               <div className="bg-yellow-900/50 border border-yellow-600 p-3 rounded text-center">
-                <div className="text-yellow-400 font-bold">{t({ en: 'Config Missing', it: 'Config Mancante', fr: 'Config manquante', de: 'Konfig fehlt', es: 'Falta config', ru: 'ÃÂÃÂµÃ‘â€š ÃÂºÃÂ¾ÃÂ½Ã‘â€žÃÂ¸ÃÂ³ÃÂ°', zh: 'Ã§Â¼ÂºÃ¥Â°â€˜Ã©â€¦ÂÃ§Â½Â®', ar: 'Ã˜Â§Ã™â€žÃ˜ÂªÃ™Æ’Ã™Ë†Ã™Å Ã™â€  Ã™â€¦Ã™ÂÃ™â€šÃ™Ë†Ã˜Â¯', ja: 'Ã¨Â¨Â­Ã¥Â®Å¡Ã¤Â¸ÂÃ¨Â¶Â³' })}</div>
-                <div className="text-xs text-yellow-200">{t({ en: 'Admin: Set UTC times.', it: 'Admin: Imposta orari UTC.', fr: 'Admin: DÃƒÂ©finir heures UTC.', de: 'Admin: UTC-Zeiten setzen.', es: 'Admin: Fijar horas UTC.', ru: 'ÃÂÃÂ´ÃÂ¼ÃÂ¸ÃÂ½: ÃÂ£Ã‘ÂÃ‘â€š. UTC.', zh: 'Ã§Â®Â¡Ã§Ââ€ Ã¥â€˜ËœÃ¯Â¼Å¡Ã¨Â®Â¾Ã§Â½Â®UTCÃ¦â€”Â¶Ã©â€”Â´Ã£â‚¬â€š', ar: 'Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã˜Â¤Ã™Ë†Ã™â€ž: Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜ÂªÃ™Ë†Ã™â€šÃ™Å Ã˜Âª UTC.', ja: 'Ã§Â®Â¡Ã§Ââ€ Ã¨â‚¬â€¦: UTCÃ¨Â¨Â­Ã¥Â®Å¡' })}</div>
+                <div className="text-yellow-400 font-bold">{t({ en: 'Config Missing', it: 'Config Mancante', fr: 'Config manquante', de: 'Konfig fehlt', es: 'Falta config', ru: 'Нет конфига', zh: '缺少配置', ar: 'التكوين مفقود', ja: '設定不足' })}</div>
+                <div className="text-xs text-yellow-200">{t({ en: 'Admin: Set UTC times.', it: 'Admin: Imposta orari UTC.', fr: 'Admin: Définir heures UTC.', de: 'Admin: UTC-Zeiten setzen.', es: 'Admin: Fijar horas UTC.', ru: 'Админ: Уст. UTC.', zh: '管理员：设置UTC时间。', ar: 'المسؤول: تعيين توقيت UTC.', ja: '管理者: UTC設定' })}</div>
               </div>
             )}
             {lockState.status === 'open' && (
               <div className="bg-green-900/50 border border-green-600 p-3 rounded text-center">
-                <div className="text-green-400 font-bold">{t({ en: 'Lineup Open', it: 'Formazione Aperta', fr: 'Alignement ouvert', de: 'Lineup offen', es: 'AlineaciÃƒÂ³n abierta', ru: 'ÃÂ¡ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ² ÃÂ¾Ã‘â€šÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€š', zh: 'Ã©ËœÂµÃ¥Â®Â¹Ã¥Â¼â‚¬Ã¦â€Â¾', ar: 'Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â´Ã™Æ’Ã™Å Ã™â€ž Ã™â€¦Ã™ÂÃ˜ÂªÃ™Ë†Ã˜Â­', ja: 'Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’Â³Ã£Æ’Å Ã£Æ’Æ’Ã£Æ’â€”Ã¥Â¤â€°Ã¦â€ºÂ´Ã¥ÂÂ¯' })}</div>
+                <div className="text-green-400 font-bold">{t({ en: 'Lineup Open', it: 'Formazione Aperta', fr: 'Alignement ouvert', de: 'Lineup offen', es: 'Alineación abierta', ru: 'Состав открыт', zh: '阵容开放', ar: 'التشكيل مفتوح', ja: 'ラインナップ変更可能' })}</div>
                 {lockState.msToLock !== null && (
-                  <div className="text-xs text-green-200">{t({ en: 'Locks in', it: 'Chiude tra', fr: 'Verrouille dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Ãâ€”ÃÂ°ÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃÂ¸ÃÂµ Ã‘â€¡ÃÂµÃ‘â‚¬ÃÂµÃÂ·', zh: 'Ã©â€ÂÃ¥Â®Å¡Ã¤ÂºÅ½', ar: 'Ã™Å Ã˜ÂºÃ™â€žÃ™â€š Ã™ÂÃ™Å ', ja: 'Ã¥â€ºÂºÃ¥Â®Å¡Ã£ÂÂ¾Ã£ÂÂ§' })} {formatCountdown(lockState.msToLock)}</div>
+                  <div className="text-xs text-green-200">{t({ en: 'Locks in', it: 'Chiude tra', fr: 'Verrouille dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '锁定于', ar: 'يغلق في', ja: '固定まで' })} {formatCountdown(lockState.msToLock)}</div>
                 )}
                 <div className="mt-2 text-[10px] font-mono text-green-200 opacity-80 border-t border-green-700/50 pt-1">
                   <div>Session UTC: {lockState.targetSessionUtc || 'N/A'}</div>
@@ -1009,9 +1193,9 @@ const App: React.FC = () => {
             )}
             {lockState.status === 'closing_soon' && (
               <div className="bg-orange-900/50 border border-orange-600 p-3 rounded text-center animate-pulse">
-                <div className="text-orange-400 font-bold">{t({ en: 'Closing Soon', it: 'Chiude Presto', fr: 'Fermeture bientÃƒÂ´t', de: 'SchlieÃƒÅ¸t bald', es: 'Cierra pronto', ru: 'ÃÂ¡ÃÂºÃÂ¾Ã‘â‚¬ÃÂ¾ ÃÂ·ÃÂ°ÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃÂ¸ÃÂµ', zh: 'Ã¥ÂÂ³Ã¥Â°â€ Ã¥â€¦Â³Ã©â€”Â­', ar: 'Ã™Å Ã˜ÂºÃ™â€žÃ™â€š Ã™â€šÃ˜Â±Ã™Å Ã˜Â¨Ã˜Â§', ja: 'Ã£ÂÂ¾Ã£â€šâ€šÃ£ÂÂªÃ£ÂÂÃ§Âµâ€šÃ¤Âºâ€ ' })}</div>
+                <div className="text-orange-400 font-bold">{t({ en: 'Closing Soon', it: 'Chiude Presto', fr: 'Fermeture bientôt', de: 'Schließt bald', es: 'Cierra pronto', ru: 'Скоро закрытие', zh: '即将关闭', ar: 'يغلق قريباً', ja: 'まもなく終了' })}</div>
                 {lockState.msToLock !== null && (
-                  <div className="text-xs text-orange-200">{t({ en: 'Locks in', it: 'Chiude tra', fr: 'Verrouille dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Ãâ€”ÃÂ°ÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃÂ¸ÃÂµ Ã‘â€¡ÃÂµÃ‘â‚¬ÃÂµÃÂ·', zh: 'Ã©â€ÂÃ¥Â®Å¡Ã¤ÂºÅ½', ar: 'Ã™Å Ã˜ÂºÃ™â€žÃ™â€š Ã™ÂÃ™Å ', ja: 'Ã¥â€ºÂºÃ¥Â®Å¡Ã£ÂÂ¾Ã£ÂÂ§' })} {formatCountdown(lockState.msToLock)}</div>
+                  <div className="text-xs text-orange-200">{t({ en: 'Locks in', it: 'Chiude tra', fr: 'Verrouille dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '锁定于', ar: 'يغلق في', ja: '固定まで' })} {formatCountdown(lockState.msToLock)}</div>
                 )}
                 <div className="mt-2 text-[10px] font-mono text-orange-200 opacity-80 border-t border-orange-700/50 pt-1">
                   <div>Session UTC: {lockState.targetSessionUtc || 'N/A'}</div>
@@ -1021,24 +1205,24 @@ const App: React.FC = () => {
             )}
             {lockState.status === 'locked' && (
               <div className="bg-red-900/50 border border-red-600 p-3 rounded text-center">
-                <div className="text-red-400 font-bold">{t({ en: 'Lineup locked.', it: 'Formazione bloccata.', fr: 'Alignement verrouillÃƒÂ©.', de: 'Lineup gesperrt.', es: 'AlineaciÃƒÂ³n bloqueada.', ru: 'ÃÂ¡ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ² ÃÂ·ÃÂ°ÃÂ±ÃÂ»ÃÂ¾ÃÂºÃÂ¸Ã‘â‚¬ÃÂ¾ÃÂ²ÃÂ°ÃÂ½.', zh: 'Ã©ËœÂµÃ¥Â®Â¹Ã¥Â·Â²Ã©â€ÂÃ¥Â®Å¡Ã£â‚¬â€š', ar: 'Ã˜ÂªÃ™â€¦ Ã™â€šÃ™ÂÃ™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â´Ã™Æ’Ã™Å Ã™â€ž.', ja: 'Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’Â³Ã£Æ’Å Ã£Æ’Æ’Ã£Æ’â€”Ã¥â€ºÂºÃ¥Â®Å¡Ã¦Â¸Ë†Ã£ÂÂ¿Ã£â‚¬â€š' })}</div>
+                <div className="text-red-400 font-bold">{t({ en: 'Lineup locked.', it: 'Formazione bloccata.', fr: 'Alignement verrouillé.', de: 'Lineup gesperrt.', es: 'Alineación bloqueada.', ru: 'Состав заблокирован.', zh: '阵容已锁定。', ar: 'تم قفل التشكيل.', ja: 'ラインナップ固定済み。' })}</div>
                 <div className="text-xs text-red-200">
                   {currentRace.isSprint
-                    ? t({ en: 'Sprint Qualifying is about to start.', it: 'La Sprint Shootout sta per iniziare.', fr: 'Qualification Sprint commence.', de: 'Sprint-Quali beginnt.', es: 'Sprint Quali va a comenzar.', ru: 'ÃÂ¡ÃÂ¿Ã‘â‚¬ÃÂ¸ÃÂ½Ã‘â€š-ÃÂºÃÂ²ÃÂ°ÃÂ»ÃÂ¸Ã‘â€žÃÂ¸ÃÂºÃÂ°Ã‘â€ ÃÂ¸Ã‘Â ÃÂ½ÃÂ°Ã‘â€¡ÃÂ¸ÃÂ½ÃÂ°ÃÂµÃ‘â€šÃ‘ÂÃ‘Â.', zh: 'Ã¥â€ Â²Ã¥Ë†ÂºÃ¦Å½â€™Ã¤Â½ÂÃ¥ÂÂ³Ã¥Â°â€ Ã¥Â¼â‚¬Ã¥Â§â€¹Ã£â‚¬â€š', ar: 'Ã˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â±Ã˜Â¹Ã˜Â© Ã˜Â³Ã˜ÂªÃ˜Â¨Ã˜Â¯Ã˜Â£ Ã™â€šÃ˜Â±Ã™Å Ã˜Â¨Ã˜Â§.', ja: 'Ã£â€šÂ¹Ã£Æ’â€”Ã£Æ’ÂªÃ£Æ’Â³Ã£Æ’Ë†Ã¤ÂºË†Ã©ÂÂ¸Ã©â€“â€¹Ã¥Â§â€¹Ã£â‚¬â€š' })
-                    : t({ en: 'Qualifying is about to start.', it: 'Le qualifiche stanno per iniziare.', fr: 'Les qualifications vont commencer.', de: 'Qualifying beginnt bald.', es: 'La clasificaciÃƒÂ³n estÃƒÂ¡ por comenzar.', ru: 'ÃÅ¡ÃÂ²ÃÂ°ÃÂ»ÃÂ¸Ã‘â€žÃÂ¸ÃÂºÃÂ°Ã‘â€ ÃÂ¸Ã‘Â ÃÂ½ÃÂ°Ã‘â€¡ÃÂ¸ÃÂ½ÃÂ°ÃÂµÃ‘â€šÃ‘ÂÃ‘Â.', zh: 'Ã¦Å½â€™Ã¤Â½ÂÃ¨Âµâ€ºÃ¥ÂÂ³Ã¥Â°â€ Ã¥Â¼â‚¬Ã¥Â§â€¹Ã£â‚¬â€š', ar: 'Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â§Ã˜Âª Ã˜Â³Ã˜ÂªÃ˜Â¨Ã˜Â¯Ã˜Â£ Ã™â€šÃ˜Â±Ã™Å Ã˜Â¨Ã˜Â§.', ja: 'Ã¤ÂºË†Ã©ÂÂ¸Ã£ÂÅ’Ã¥Â§â€¹Ã£ÂÂ¾Ã£â€šÅ Ã£ÂÂ¾Ã£Ââ„¢Ã£â‚¬â€š' })}
+                    ? t({ en: 'Sprint Qualifying is about to start.', it: 'La Sprint Shootout sta per iniziare.', fr: 'Qualification Sprint commence.', de: 'Sprint-Quali beginnt.', es: 'Sprint Quali va a comenzar.', ru: 'Спринт-квалификация начинается.', zh: '冲刺排位即将开始。', ar: 'تصفيات السرعة ستبدأ قريباً.', ja: 'スプリント予選開始。' })
+                    : t({ en: 'Qualifying is about to start.', it: 'Le qualifiche stanno per iniziare.', fr: 'Les qualifications vont commencer.', de: 'Qualifying beginnt bald.', es: 'La clasificación está por comenzar.', ru: 'Квалификация начинается.', zh: '排位赛即将开始。', ar: 'التصفيات ستبدأ قريباً.', ja: '予選が始まります。' })}
                 </div>
                 <div className="mt-2 text-[10px] font-mono text-red-200 opacity-80 border-t border-red-700/50 pt-1">
                   <div>{t({ en: 'Lock only affects Captain/Reserve selection.', it: 'Il blocco riguarda solo Capitano/Riserva.' })}</div>
-                  <div className="text-yellow-200 mt-1">{t({ en: 'Market is still OPEN.', it: 'Il Mercato ÃƒÂ¨ ancora APERTO.' })}</div>
+                  <div className="text-yellow-200 mt-1">{t({ en: 'Market is still OPEN.', it: 'Il Mercato è ancora APERTO.' })}</div>
                 </div>
               </div>
             )}
 
-            <h1 className="text-2xl font-bold text-white">{t({ en: 'Race Lineup', it: 'Formazione Gara', fr: 'Alignement course', de: 'Renn-Lineup', es: 'AlineaciÃƒÂ³n Carrera', ru: 'ÃÂ¡ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ² ÃÂ½ÃÂ° ÃÂ³ÃÂ¾ÃÂ½ÃÂºÃ‘Æ’', zh: 'Ã¦Â­Â£Ã¨Âµâ€ºÃ©ËœÂµÃ¥Â®Â¹', ar: 'Ã˜ÂªÃ˜Â´Ã™Æ’Ã™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â¨Ã˜Â§Ã™â€š', ja: 'Ã£Æ’Â¬Ã£Æ’Â¼Ã£â€šÂ¹Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’Â³Ã£Æ’Å Ã£Æ’Æ’Ã£Æ’â€”' })}</h1>
+            <h1 className="text-2xl font-bold text-white">{t({ en: 'Race Lineup', it: 'Formazione Gara', fr: 'Alignement course', de: 'Renn-Lineup', es: 'Alineación Carrera', ru: 'Состав на гонку', zh: '正赛阵容', ar: 'تشكيل السباق', ja: 'レースラインナップ' })}</h1>
 
             {data.team.driverIds.length < 5 ? (
               <div className="p-8 border-2 border-dashed border-slate-700 rounded-lg text-center text-slate-500">
-                {t({ en: 'Pick 5 drivers in Market to unlock Lineup.', it: 'Scegli 5 piloti nel Mercato per sbloccare la formazione.', fr: 'Choisissez 5 pilotes pour dÃƒÂ©bloquer.', de: 'WÃƒÂ¤hle 5 Fahrer im Markt.', es: 'Elige 5 pilotos para desbloquear.', ru: 'Ãâ€™Ã‘â€¹ÃÂ±ÃÂµÃ‘â‚¬ÃÂ¸Ã‘â€šÃÂµ 5 ÃÂ¿ÃÂ¸ÃÂ»ÃÂ¾Ã‘â€šÃÂ¾ÃÂ².', zh: 'Ã¥Å“Â¨Ã¥Â¸â€šÃ¥Å“ÂºÃ©â‚¬â€°Ã¦â€¹Â©5Ã¥ÂÂÃ¨Â½Â¦Ã¦â€°â€¹Ã¨Â§Â£Ã©â€ÂÃ£â‚¬â€š', ar: 'Ã˜Â§Ã˜Â®Ã˜ÂªÃ˜Â± 5 Ã˜Â³Ã˜Â§Ã˜Â¦Ã™â€šÃ™Å Ã™â€  Ã™â€žÃ™ÂÃ˜ÂªÃ˜Â­ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â´Ã™Æ’Ã™Å Ã™â€ž.', ja: 'Ã£Æ’Å¾Ã£Æ’Â¼Ã£â€šÂ±Ã£Æ’Æ’Ã£Æ’Ë†Ã£ÂÂ§5Ã¤ÂºÂºÃ©ÂÂ¸Ã£â€šâ€œÃ£ÂÂ§Ã£ÂÂÃ£Â Ã£Ââ€¢Ã£Ââ€žÃ£â‚¬â€š' })}
+                {t({ en: 'Pick 5 drivers in Market to unlock Lineup.', it: 'Scegli 5 piloti nel Mercato per sbloccare la formazione.', fr: 'Choisissez 5 pilotes pour débloquer.', de: 'Wähle 5 Fahrer im Markt.', es: 'Elige 5 pilotos para desbloquear.', ru: 'Выберите 5 пилотов.', zh: '在市场选择5名车手解锁。', ar: 'اختر 5 سائقين لفتح التشكيل.', ja: 'マーケットで5人選んでください。' })}
               </div>
             ) : (
               <div className="space-y-2">
@@ -1100,14 +1284,14 @@ const App: React.FC = () => {
         if (swapCandidate) {
           return (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-white">{t({ en: 'Swap Driver', it: 'Scambia Pilota', fr: 'Ãƒâ€°changer Pilote', de: 'Fahrer tauschen', es: 'Cambiar Piloto', ru: 'Ãâ€”ÃÂ°ÃÂ¼ÃÂµÃÂ½ÃÂ¸Ã‘â€šÃ‘Å’ ÃÂ¿ÃÂ¸ÃÂ»ÃÂ¾Ã‘â€šÃÂ°', zh: 'Ã¤ÂºÂ¤Ã¦ÂÂ¢Ã¨Â½Â¦Ã¦â€°â€¹', ar: 'Ã˜ÂªÃ˜Â¨Ã˜Â¯Ã™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â§Ã˜Â¦Ã™â€š', ja: 'Ã£Æ’â€°Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’ÂÃ£Æ’Â¼Ã¤ÂºÂ¤Ã¦Ââ€º' })}</h2>
+              <h2 className="text-xl font-bold text-white">{t({ en: 'Swap Driver', it: 'Scambia Pilota', fr: 'Échanger Pilote', de: 'Fahrer tauschen', es: 'Cambiar Piloto', ru: 'Заменить пилота', zh: '交换车手', ar: 'تبديل السائق', ja: 'ドライバー交換' })}</h2>
               <div className="bg-slate-800 p-4 rounded-lg border border-slate-600 mb-4">
-                <p className="text-slate-400 text-sm">{t({ en: 'Target', it: 'Obiettivo', fr: 'Cible', de: 'Ziel', es: 'Objetivo', ru: 'ÃÂ¦ÃÂµÃÂ»Ã‘Å’', zh: 'Ã§â€ºÂ®Ã¦ â€¡', ar: 'Ã˜Â§Ã™â€žÃ™â€¡Ã˜Â¯Ã™Â', ja: 'Ã£â€šÂ¿Ã£Æ’Â¼Ã£â€šÂ²Ã£Æ’Æ’Ã£Æ’Ë†' })}</p>
+                <p className="text-slate-400 text-sm">{t({ en: 'Target', it: 'Obiettivo', fr: 'Cible', de: 'Ziel', es: 'Objetivo', ru: 'Цель', zh: '目标', ar: 'الهدف', ja: 'ターゲット' })}</p>
                 <div className="text-xl font-bold text-white">{swapCandidate.name}</div>
                 <div className="text-blue-400 font-mono">${swapCandidate.price}M</div>
               </div>
 
-              <h3 className="text-lg text-slate-300">{t({ en: 'Select a driver to release:', it: 'Seleziona un pilota da rilasciare:', fr: 'SÃƒÂ©lectionnez un pilote ÃƒÂ  libÃƒÂ©rer :', de: 'WÃƒÂ¤hle einen Fahrer zum Freigeben:', es: 'Selecciona un piloto para liberar:', ru: 'Ãâ€™ÃÂ²ÃÂµÃÂ´ÃÂ¸Ã‘â€šÃÂµ ÃÂ¿ÃÂ¸ÃÂ»ÃÂ¾Ã‘â€šÃÂ° ÃÂ´ÃÂ»Ã‘Â ÃÂ·ÃÂ°ÃÂ¼ÃÂµÃÂ½Ã‘â€¹:', zh: 'Ã©â‚¬â€°Ã¦â€¹Â©Ã¨Â¦ÂÃ©â€¡Å Ã¦â€Â¾Ã§Å¡â€žÃ¨Â½Â¦Ã¦â€°â€¹Ã¯Â¼Å¡', ar: 'Ã˜Â§Ã˜Â®Ã˜ÂªÃ˜Â± Ã˜Â³Ã˜Â§Ã˜Â¦Ã™â€šÃ˜Â§Ã™â€¹ Ã™â€žÃ™â€žÃ˜Â§Ã˜Â³Ã˜ÂªÃ˜Â¨Ã˜Â¯Ã˜Â§Ã™â€ž:', ja: 'Ã¦â€Â¾Ã¥â€¡ÂºÃ£Ââ„¢Ã£â€šâ€¹Ã£Æ’â€°Ã£Æ’Â©Ã£â€šÂ¤Ã£Æ’ÂÃ£Æ’Â¼Ã£â€šâ€™Ã©ÂÂ¸Ã¦Å Å¾:' })}</h3>
+              <h3 className="text-lg text-slate-300">{t({ en: 'Select a driver to release:', it: 'Seleziona un pilota da rilasciare:', fr: 'Sélectionnez un pilote à libérer :', de: 'Wähle einen Fahrer zum Freigeben:', es: 'Selecciona un piloto para liberar:', ru: 'Введите пилота для замены:', zh: '选择要释放的车手：', ar: 'اختر سائقاً للاستبدال:', ja: '放出するドライバーを選択:' })}</h3>
               <div className="space-y-2">
                 {data.team.driverIds.map(id => {
                   const d = fetchedDrivers.find(drv => drv.id === id);
@@ -1127,11 +1311,11 @@ const App: React.FC = () => {
                     >
                       <div className="text-left">
                         <div className="text-white font-medium">{d.name}</div>
-                        <div className="text-xs text-slate-400">{t({ en: 'Sell for', it: 'Vendi per', fr: 'Vendre pour', de: 'Verkaufen fÃƒÂ¼r', es: 'Vender por', ru: 'ÃÅ¸Ã‘â‚¬ÃÂ¾ÃÂ´ÃÂ°Ã‘â€šÃ‘Å’ ÃÂ·ÃÂ°', zh: 'Ã¥â€¡ÂºÃ¥â€Â®Ã¤Â»Â·Ã¦ Â¼', ar: 'Ã˜Â¨Ã™Å Ã˜Â¹ Ã˜Â¨Ã™â‚¬', ja: 'Ã¥Â£Â²Ã¥ÂÂ´Ã©Â¡Â' })} ${d.price}M</div>
+                        <div className="text-xs text-slate-400">{t({ en: 'Sell for', it: 'Vendi per', fr: 'Vendre pour', de: 'Verkaufen für', es: 'Vender por', ru: 'Продать за', zh: '出售价格', ar: 'بيع بـ', ja: '売却額' })} ${d.price}M</div>
                       </div>
                       <div className="text-right">
                         <div className={`font-mono ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
-                          {t({ en: 'New Budget', it: 'Nuovo Budget', fr: 'Nouveau Budget', de: 'Neues Budget', es: 'Nuevo Presupuesto', ru: 'ÃÂÃÂ¾ÃÂ²Ã‘â€¹ÃÂ¹ ÃÂ±Ã‘Å½ÃÂ´ÃÂ¶ÃÂµÃ‘â€š', zh: 'Ã¦â€“Â°Ã©Â¢â€žÃ§Â®â€”', ar: 'Ã˜Â§Ã™â€žÃ™â€¦Ã™Å Ã˜Â²Ã˜Â§Ã™â€ Ã™Å Ã˜Â© Ã˜Â§Ã™â€žÃ˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©', ja: 'Ã¦â€“Â°Ã¤ÂºË†Ã§Â®â€”' })}: ${diff.toFixed(1)}M
+                          {t({ en: 'New Budget', it: 'Nuovo Budget', fr: 'Nouveau Budget', de: 'Neues Budget', es: 'Nuevo Presupuesto', ru: 'Новый бюджет', zh: '新预算', ar: 'الميزانية الجديدة', ja: '新予算' })}: ${diff.toFixed(1)}M
                         </div>
                       </div>
                     </button>
@@ -1142,7 +1326,7 @@ const App: React.FC = () => {
                 onClick={() => setSwapCandidate(null)}
                 className="w-full mt-4 bg-slate-700 text-white py-3 rounded hover:bg-slate-600"
               >
-                {t({ en: 'Cancel Swap', it: 'Annulla Scambio', fr: "Annuler l'ÃƒÂ©change", de: 'Tausch abbrechen', es: 'Cancelar Cambio', ru: 'ÃÅ¾Ã‘â€šÃÂ¼ÃÂµÃÂ½ÃÂ¸Ã‘â€šÃ‘Å’ ÃÂ¾ÃÂ±ÃÂ¼ÃÂµÃÂ½', zh: 'Ã¥Ââ€“Ã¦Â¶Ë†Ã¤ÂºÂ¤Ã¦ÂÂ¢', ar: 'Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¨Ã˜Â¯Ã™Å Ã™â€ž', ja: 'Ã¤ÂºÂ¤Ã¦Ââ€ºÃ£â€šÂ­Ã£Æ’Â£Ã£Æ’Â³Ã£â€šÂ»Ã£Æ’Â«' })}
+                {t({ en: 'Cancel Swap', it: 'Annulla Scambio', fr: "Annuler l'échange", de: 'Tausch abbrechen', es: 'Cancelar Cambio', ru: 'Отменить обмен', zh: '取消交换', ar: 'إلغاء التبديل', ja: '交換キャンセル' })}
               </button>
             </div>
           );
@@ -1152,11 +1336,11 @@ const App: React.FC = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg sticky top-0 z-10 shadow-lg border-b border-slate-700">
               <div>
-                <div className="text-xs text-slate-400 uppercase">{t({ en: 'Budget', it: 'Budget', fr: 'Budget', de: 'Budget', es: 'Presupuesto', ru: 'Ãâ€˜Ã‘Å½ÃÂ´ÃÂ¶ÃÂµÃ‘â€š', zh: 'Ã©Â¢â€žÃ§Â®â€”', ar: 'Ã˜Â§Ã™â€žÃ™â€¦Ã™Å Ã˜Â²Ã˜Â§Ã™â€ Ã™Å Ã˜Â©', ja: 'Ã¤ÂºË†Ã§Â®â€”' })}</div>
+                <div className="text-xs text-slate-400 uppercase">{t({ en: 'Budget', it: 'Budget', fr: 'Budget', de: 'Budget', es: 'Presupuesto', ru: 'Бюджет', zh: '预算', ar: 'الميزانية', ja: '予算' })}</div>
                 <div className="text-xl font-mono text-white">${data.team.budget.toFixed(1)}M</div>
               </div>
               <div>
-                <div className="text-xs text-slate-400 uppercase text-right">{t({ en: 'Team', it: 'Team', fr: 'Ãƒâ€°quipe', de: 'Team', es: 'Equipo', ru: 'ÃÅ¡ÃÂ¾ÃÂ¼ÃÂ°ÃÂ½ÃÂ´ÃÂ°', zh: 'Ã¨Â½Â¦Ã©ËœÅ¸', ar: 'Ã˜Â§Ã™â€žÃ™ÂÃ˜Â±Ã™Å Ã™â€š', ja: 'Ã£Æ’ÂÃ£Æ’Â¼Ã£Æ’ ' })}</div>
+                <div className="text-xs text-slate-400 uppercase text-right">{t({ en: 'Team', it: 'Team', fr: 'Équipe', de: 'Team', es: 'Equipo', ru: 'Команда', zh: '车队', ar: 'الفريق', ja: 'チーム' })}</div>
                 <div className="text-xl font-mono text-white text-right">{data.team.driverIds.length}/5</div>
               </div>
             </div>
@@ -1181,14 +1365,14 @@ const App: React.FC = () => {
                       <div className="font-mono text-slate-200">${driver.price}M</div>
                       {isOwned ? (
                         <button disabled className="px-3 py-1 bg-slate-700 text-slate-400 text-xs rounded font-bold uppercase tracking-wider cursor-default">
-                          {t({ en: 'Owned', it: 'Posseduto', fr: 'PossÃƒÂ©dÃƒÂ©', de: 'Im Besitz', es: 'En propiedad', ru: 'ÃÅ¡Ã‘Æ’ÃÂ¿ÃÂ»ÃÂµÃÂ½', zh: 'Ã¥Â·Â²Ã¦â€¹Â¥Ã¦Å“â€°', ar: 'Ã™â€¦Ã™â€¦Ã™â€žÃ™Ë†Ã™Æ’', ja: 'Ã¦â€°â‚¬Ã¦Å“â€°Ã¤Â¸Â­' })}
+                          {t({ en: 'Owned', it: 'Posseduto', fr: 'Possédé', de: 'Im Besitz', es: 'En propiedad', ru: 'Куплен', zh: '已拥有', ar: 'مملوك', ja: '所有中' })}
                         </button>
                       ) : isTeamFull ? (
                         <button
                           onClick={() => setSwapCandidate(driver)}
                           className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded font-bold uppercase tracking-wider transition-colors"
                         >
-                          {t({ en: 'Swap', it: 'Scambia', fr: 'Ãƒâ€°changer', de: 'Tauschen', es: 'Cambiar', ru: 'ÃÅ¾ÃÂ±ÃÂ¼ÃÂµÃÂ½', zh: 'Ã¤ÂºÂ¤Ã¦ÂÂ¢', ar: 'Ã˜ÂªÃ˜Â¨Ã˜Â¯Ã™Å Ã™â€ž', ja: 'Ã¤ÂºÂ¤Ã¦Ââ€º' })}
+                          {t({ en: 'Swap', it: 'Scambia', fr: 'Échanger', de: 'Tauschen', es: 'Cambiar', ru: 'Обмен', zh: '交换', ar: 'تبديل', ja: '交換' })}
                         </button>
                       ) : (
                         <button
@@ -1199,7 +1383,7 @@ const App: React.FC = () => {
                             : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                             }`}
                         >
-                          {t({ en: 'Add', it: 'Aggiungi', fr: 'Ajouter', de: 'HinzufÃƒÂ¼gen', es: 'AÃƒÂ±adir', ru: 'Ãâ€ÃÂ¾ÃÂ±ÃÂ°ÃÂ²ÃÂ¸Ã‘â€šÃ‘Å’', zh: 'Ã¦Â·Â»Ã¥Å  ', ar: 'Ã˜Â¥Ã˜Â¶Ã˜Â§Ã™ÂÃ˜Â©', ja: 'Ã¨Â¿Â½Ã¥Å  ' })}
+                          {t({ en: 'Add', it: 'Aggiungi', fr: 'Ajouter', de: 'Hinzufügen', es: 'Añadir', ru: 'Добавить', zh: '添加', ar: 'إضافة', ja: '追加' })}
                         </button>
                       )}
                     </div>
@@ -1213,35 +1397,35 @@ const App: React.FC = () => {
       case Tab.ADMIN:
         return (
           <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-white">{t({ en: 'Admin Controls', it: 'Controlli Admin', fr: 'ContrÃƒÂ´les Admin', de: 'Admin-Steuerung', es: 'Controles Admin', ru: 'ÃÂ£ÃÂ¿Ã‘â‚¬ÃÂ°ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ¸ÃÂµ', zh: 'Ã§Â®Â¡Ã§Ââ€ Ã¥â€˜ËœÃ¦Å½Â§Ã¥Ë†Â¶', ar: 'Ã˜ÂªÃ˜Â­Ã™Æ’Ã™â€¦ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã˜Â¤Ã™Ë†Ã™â€ž', ja: 'Ã§Â®Â¡Ã§Ââ€ Ã¨Â¨Â­Ã¥Â®Å¡' })}</h1>
+            <h1 className="text-2xl font-bold text-white">{t({ en: 'Admin Controls', it: 'Controlli Admin', fr: 'Contrôles Admin', de: 'Admin-Steuerung', es: 'Controles Admin', ru: 'Управление', zh: '管理员控制', ar: 'تحكم المسؤول', ja: '管理設定' })}</h1>
 
             {/* Race Config Card */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-2">{t({ en: 'Race Time Config', it: 'Config Orari Gara', fr: 'Config heures course', de: 'Rennzeit-Konfig', es: 'Config Horas Carrera', ru: 'ÃÅ¡ÃÂ¾ÃÂ½Ã‘â€žÃÂ¸ÃÂ³ ÃÂ²Ã‘â‚¬ÃÂµÃÂ¼ÃÂµÃÂ½ÃÂ¸ ÃÂ³ÃÂ¾ÃÂ½ÃÂºÃÂ¸', zh: 'Ã¨Âµâ€ºÃ¦â€”Â¶Ã©â€¦ÂÃ§Â½Â®', ar: 'Ã˜ÂªÃ™Æ’Ã™Ë†Ã™Å Ã™â€  Ã™Ë†Ã™â€šÃ˜Âª Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â¨Ã˜Â§Ã™â€š', ja: 'Ã£Æ’Â¬Ã£Æ’Â¼Ã£â€šÂ¹Ã¦â„¢â€šÃ©â€“â€œÃ¨Â¨Â­Ã¥Â®Å¡' })}</h3>
+              <h3 className="font-semibold text-white mb-2">{t({ en: 'Race Time Config', it: 'Config Orari Gara', fr: 'Config heures course', de: 'Rennzeit-Konfig', es: 'Config Horas Carrera', ru: 'Конфиг времени гонки', zh: '赛时配置', ar: 'تكوين وقت السباق', ja: 'レース時間設定' })}</h3>
               {/* Navigation */}
               <div className="flex justify-between items-center mb-4">
                 <button
                   onClick={() => setData({ ...data, currentRaceIndex: Math.max(0, data.currentRaceIndex - 1) })}
                   disabled={data.currentRaceIndex === 0}
                   className="p-2 bg-slate-700 rounded disabled:opacity-50 text-slate-200"
-                >{t({ en: 'Prev', it: 'Prec', fr: 'PrÃƒÂ©c', de: 'ZurÃƒÂ¼ck', es: 'Ant', ru: 'ÃÅ¸Ã‘â‚¬ÃÂµÃÂ´', zh: 'Ã¤Â¸Å Ã¤Â¸â‚¬Ã¤Â¸Âª', ar: 'Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â§Ã˜Â¨Ã™â€š', ja: 'Ã¥â€°ÂÃ£ÂÂ¸' })}</button>
+                >{t({ en: 'Prev', it: 'Prec', fr: 'Préc', de: 'Zurück', es: 'Ant', ru: 'Пред', zh: '上一个', ar: 'السابق', ja: '前へ' })}</button>
                 <div className="text-center">
-                  <div className="text-xs text-slate-400">{t({ en: 'Index', it: 'Indice', fr: 'Indice', de: 'Index', es: 'ÃƒÂndice', ru: 'ÃËœÃÂ½ÃÂ´ÃÂµÃÂºÃ‘Â', zh: 'Ã§Â´Â¢Ã¥Â¼â€¢', ar: 'Ã™ÂÃ™â€¡Ã˜Â±Ã˜Â³', ja: 'Ã£â€šÂ¤Ã£Æ’Â³Ã£Æ’â€¡Ã£Æ’Æ’Ã£â€šÂ¯Ã£â€šÂ¹' })} {data.currentRaceIndex}</div>
+                  <div className="text-xs text-slate-400">{t({ en: 'Index', it: 'Indice', fr: 'Indice', de: 'Index', es: 'Índice', ru: 'Индекс', zh: '索引', ar: 'فهرس', ja: 'インデックス' })} {data.currentRaceIndex}</div>
                   <div className="font-bold text-white text-sm">{currentRace.name}</div>
                 </div>
                 <button
                   onClick={() => setData({ ...data, currentRaceIndex: Math.min(races.length - 1, data.currentRaceIndex + 1) })}
                   disabled={data.currentRaceIndex === races.length - 1}
                   className="p-2 bg-slate-700 rounded disabled:opacity-50 text-slate-200"
-                >{t({ en: 'Next', it: 'Succ', fr: 'Suiv', de: 'Weiter', es: 'Sig', ru: 'ÃÂ¡ÃÂ»ÃÂµÃÂ´', zh: 'Ã¤Â¸â€¹Ã¤Â¸â‚¬Ã¤Â¸Âª', ar: 'Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â§Ã™â€žÃ™Å ', ja: 'Ã¦Â¬Â¡Ã£ÂÂ¸' })}</button>
+                >{t({ en: 'Next', it: 'Succ', fr: 'Suiv', de: 'Weiter', es: 'Sig', ru: 'След', zh: '下一个', ar: 'التالي', ja: '次へ' })}</button>
               </div>
 
               {/* Inputs */}
               <div className="space-y-3">
                 <div className={`p-2 rounded-lg border ${!currentRace.isSprint ? 'border-yellow-500 bg-yellow-900/20' : 'border-transparent'}`}>
                   <div className="flex justify-between">
-                    <label className="block text-xs text-slate-400 mb-1">{t({ en: 'Qualifying UTC (ISO)', it: 'Qualifiche UTC (ISO)', fr: 'Qualif UTC (ISO)', de: 'Quali UTC (ISO)', es: 'Clasif UTC (ISO)', ru: 'ÃÅ¡ÃÂ²ÃÂ°ÃÂ»ÃÂ¸Ã‘â€ž UTC', zh: 'Ã¦Å½â€™Ã¤Â½ÂÃ¨Âµâ€º UTC', ar: 'Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â§Ã˜Âª UTC', ja: 'Ã¤ÂºË†Ã©ÂÂ¸ UTC' })}</label>
-                    {!currentRace.isSprint && <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider">{t({ en: 'SETS LOCK', it: 'LOCK ATTIVO', fr: 'VERROUILLE', de: 'SETZT LOCK', es: 'FIJA LOCK', ru: 'Ãâ€˜Ãâ€ºÃÅ¾ÃÅ¡ÃËœÃ ÃÂ£Ãâ€¢ÃÂ¢', zh: 'Ã¨Â®Â¾Ã§Â½Â®Ã©â€ÂÃ¥Â®Å¡', ar: 'Ã™â€šÃ™ÂÃ™â€ž Ã™â€ Ã˜Â´Ã˜Â·', ja: 'Ã£Æ’Â­Ã£Æ’Æ’Ã£â€šÂ¯Ã¨Â¨Â­Ã¥Â®Å¡' })}</span>}
+                    <label className="block text-xs text-slate-400 mb-1">{t({ en: 'Qualifying UTC (ISO)', it: 'Qualifiche UTC (ISO)', fr: 'Qualif UTC (ISO)', de: 'Quali UTC (ISO)', es: 'Clasif UTC (ISO)', ru: 'Квалиф UTC', zh: '排位赛 UTC', ar: 'التصفيات UTC', ja: '予選 UTC' })}</label>
+                    {!currentRace.isSprint && <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider">{t({ en: 'SETS LOCK', it: 'LOCK ATTIVO', fr: 'VERROUILLE', de: 'SETZT LOCK', es: 'FIJA LOCK', ru: 'БЛОКИРУЕТ', zh: '设置锁定', ar: 'يقفل', ja: 'ロック設定' })}</span>}
                   </div>
                   <div className="flex gap-2">
                     <input
@@ -1256,7 +1440,7 @@ const App: React.FC = () => {
                       disabled={!isValidUtc(qualifyingUtcDraft)}
                       className={`px-3 rounded text-xs font-bold ${isValidUtc(qualifyingUtcDraft) ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
                     >
-                      {t({ en: 'SAVE', it: 'SALVA', fr: 'SAUVER', de: 'SPEICHERN', es: 'GUARDAR', ru: 'ÃÂ¡ÃÅ¾ÃÂ¥Ã ', zh: 'Ã¤Â¿ÂÃ¥Â­Ëœ', ar: 'Ã˜Â­Ã™ÂÃ˜Â¸', ja: 'Ã¤Â¿ÂÃ¥Â­Ëœ' })}
+                      {t({ en: 'SAVE', it: 'SALVA', fr: 'SAUVER', de: 'SPEICHERN', es: 'GUARDAR', ru: 'СОХР', zh: '保存', ar: 'حفظ', ja: '保存' })}
                     </button>
                   </div>
                 </div>
@@ -1264,8 +1448,8 @@ const App: React.FC = () => {
                 {currentRace.isSprint && (
                   <div className={`p-2 rounded-lg border ${currentRace.isSprint ? 'border-yellow-500 bg-yellow-900/20' : 'border-transparent'}`}>
                     <div className="flex justify-between">
-                      <label className="block text-xs text-slate-400 mb-1">{t({ en: 'Sprint Quali UTC (ISO)', it: 'Sprint Quali UTC (ISO)', fr: 'Sprint Qualif UTC', de: 'Sprint Quali UTC', es: 'Sprint Clasif UTC', ru: 'ÃÂ¡ÃÂ¿Ã‘â‚¬ÃÂ¸ÃÂ½Ã‘â€š ÃÅ¡ÃÂ²ÃÂ°ÃÂ» UTC', zh: 'Ã¥â€ Â²Ã¥Ë†ÂºÃ¨Âµâ€ºÃ¦Å½â€™Ã¤Â½Â UTC', ar: 'Ã˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â±Ã˜Â¹Ã˜Â© UTC', ja: 'Ã£â€šÂ¹Ã£Æ’â€”Ã£Æ’ÂªÃ£Æ’Â³Ã£Æ’Ë†Ã¤ÂºË†Ã©ÂÂ¸ UTC' })}</label>
-                      <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider">{t({ en: 'SETS LOCK', it: 'LOCK ATTIVO', fr: 'VERROUILLE', de: 'SETZT LOCK', es: 'FIJA LOCK', ru: 'Ãâ€˜Ãâ€ºÃÅ¾ÃÅ¡ÃËœÃ ÃÂ£Ãâ€¢ÃÂ¢', zh: 'Ã¨Â®Â¾Ã§Â½Â®Ã©â€ÂÃ¥Â®Å¡', ar: 'Ã™â€šÃ™ÂÃ™â€ž Ã™â€ Ã˜Â´Ã˜Â·', ja: 'Ã£Æ’Â­Ã£Æ’Æ’Ã£â€šÂ¯Ã¨Â¨Â­Ã¥Â®Å¡' })}</span>
+                      <label className="block text-xs text-slate-400 mb-1">{t({ en: 'Sprint Quali UTC (ISO)', it: 'Sprint Quali UTC (ISO)', fr: 'Sprint Qualif UTC', de: 'Sprint Quali UTC', es: 'Sprint Clasif UTC', ru: 'Спринт Квал UTC', zh: '冲刺排位 UTC', ar: 'تصفيات السرعة UTC', ja: 'スプリント予選 UTC' })}</label>
+                      <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider">{t({ en: 'SETS LOCK', it: 'LOCK ATTIVO', fr: 'VERROUILLE', de: 'SETZT LOCK', es: 'FIJA LOCK', ru: 'БЛОКИРУЕТ', zh: '设置锁定', ar: 'يقفل', ja: 'ロック設定' })}</span>
                     </div>
                     <div className="flex gap-2">
                       <input
@@ -1280,7 +1464,7 @@ const App: React.FC = () => {
                         disabled={!isValidUtc(sprintQualifyingUtcDraft)}
                         className={`px-3 rounded text-xs font-bold ${isValidUtc(sprintQualifyingUtcDraft) ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
                       >
-                        {t({ en: 'SAVE', it: 'SALVA', fr: 'SAUVER', de: 'SPEICHERN', es: 'GUARDAR', ru: 'ÃÂ¡ÃÅ¾ÃÂ¥Ã ', zh: 'Ã¤Â¿ÂÃ¥Â­Ëœ', ar: 'Ã˜Â­Ã™ÂÃ˜Â¸', ja: 'Ã¤Â¿ÂÃ¥Â­Ëœ' })}
+                        {t({ en: 'SAVE', it: 'SALVA', fr: 'SAUVER', de: 'SPEICHERN', es: 'GUARDAR', ru: 'СОХР', zh: '保存', ar: 'حفظ', ja: '保存' })}
                       </button>
                     </div>
                   </div>
@@ -1305,7 +1489,7 @@ const App: React.FC = () => {
 
             {/* Scoring Rules Config */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-4 border-b border-slate-700 pb-2">{t({ en: 'Scoring Rules Config', it: 'Config Punteggi', fr: 'Config Points', de: 'Punkte-Konfig', es: 'Config Puntos', ru: 'ÃÂÃÂ°Ã‘ÂÃ‘â€šÃ‘â‚¬ÃÂ¾ÃÂ¹ÃÂºÃÂ° ÃÂ¾Ã‘â€¡ÃÂºÃÂ¾ÃÂ²', zh: 'Ã¨Â®Â¡Ã¥Ë†â€ Ã¨Â§â€žÃ¥Ë†â„¢', ar: 'Ã˜ÂªÃ™Æ’Ã™Ë†Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€ Ã™â€šÃ˜Â§Ã˜Â·', ja: 'Ã£â€šÂ¹Ã£â€šÂ³Ã£â€šÂ¢Ã¨Â¨Â­Ã¥Â®Å¡' })}</h3>
+              <h3 className="font-semibold text-white mb-4 border-b border-slate-700 pb-2">{t({ en: 'Scoring Rules Config', it: 'Config Punteggi', fr: 'Config Points', de: 'Punkte-Konfig', es: 'Config Puntos', ru: 'Настройка очков', zh: '计分规则', ar: 'تكوين قواعد التسجيل', ja: 'スコア設定' })}</h3>
               <div className="grid grid-cols-2 gap-4">
 
                 {/* Race Points - Grid of 22 */}
@@ -1334,20 +1518,20 @@ const App: React.FC = () => {
                 <div><label className="text-xs text-slate-400">{t({ en: 'Pole Position', it: 'Pole Position', fr: 'Pole Position', de: 'Pole Position', es: 'Pole Position' })}</label><input type="number" value={data.rules.qualiPole} onChange={(e) => handleRuleChange('qualiPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
                 <div><label className="text-xs text-slate-400">{t({ en: 'Q3 Reached (1-10)', it: 'Accesso Q3 (1-10)', fr: 'Q3 Atteint (1-10)', de: 'Q3 Erreicht (1.-10.)', es: 'Q3 Alcanzada (1-10)' })}</label><input type="number" value={data.rules.qualiQ3Reached} onChange={(e) => handleRuleChange('qualiQ3Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
                 <div><label className="text-xs text-slate-400">{t({ en: 'Q2 Reached (11-16)', it: 'Accesso Q2 (11-16)', fr: 'Q2 Atteint (11-16)', de: 'Q2 Erreicht (11.-16.)', es: 'Q2 Alcanzada (11-16)' })}</label><input type="number" value={data.rules.qualiQ2Reached} onChange={(e) => handleRuleChange('qualiQ2Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q1 Elim (17-22)', it: 'Eliminato Q1 (17-22)', fr: 'Ãƒâ€°liminÃƒÂ© Q1 (17-22)', de: 'Q1 Ausgeschieden (17.-22.)', es: 'Eliminado Q1 (17-22)' })}</label><input type="number" value={data.rules.qualiQ1Eliminated} onChange={(e) => handleRuleChange('qualiQ1Eliminated', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Grid Penalty', it: 'PenalitÃƒÂ  Griglia', fr: 'PÃƒÂ©nalitÃƒÂ© Grille', de: 'Startplatzstrafe', es: 'PenalizaciÃƒÂ³n Parrilla' })}</label><input type="number" value={data.rules.qualiGridPenalty} onChange={(e) => handleRuleChange('qualiGridPenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q1 Elim (17-22)', it: 'Eliminato Q1 (17-22)', fr: 'Éliminé Q1 (17-22)', de: 'Q1 Ausgeschieden (17.-22.)', es: 'Eliminado Q1 (17-22)' })}</label><input type="number" value={data.rules.qualiQ1Eliminated} onChange={(e) => handleRuleChange('qualiQ1Eliminated', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Grid Penalty', it: 'Penalità Griglia', fr: 'Pénalité Grille', de: 'Startplatzstrafe', es: 'Penalización Parrilla' })}</label><input type="number" value={data.rules.qualiGridPenalty} onChange={(e) => handleRuleChange('qualiGridPenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Race Bonuses */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Last Place Malus', it: 'Malus Ultimo Posto', fr: 'Malus DerniÃƒÂ¨re Place', de: 'Malus Letzter Platz', es: 'Malus ÃƒÅ¡ltimo Lugar' })}</label><input type="number" value={data.rules.raceLastPlaceMalus} onChange={(e) => handleRuleChange('raceLastPlaceMalus', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'DNF / DNS / DSQ', it: 'Ritirato / Squalificato', fr: 'Abandon / DisqualifiÃƒÂ©', de: 'DNF / DNS / DSQ', es: 'Abandono / Descalificado' })}</label><input type="number" value={data.rules.raceDNF} onChange={(e) => handleRuleChange('raceDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Race Penalty', it: 'PenalitÃƒÂ  Gara', fr: 'PÃƒÂ©nalitÃƒÂ© Course', de: 'Rennstrafe', es: 'PenalizaciÃƒÂ³n Carrera' })}</label><input type="number" value={data.rules.racePenalty} onChange={(e) => handleRuleChange('racePenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Pos Gained (per pos)', it: 'Pos Guadagnate (per pos)', fr: 'Pos GagnÃƒÂ©es (par pos)', de: 'Pos Gewonnen (pro Pos)', es: 'Pos Ganadas (por pos)' })}</label><input type="number" value={data.rules.positionGained} onChange={(e) => handleRuleChange('positionGained', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Last Place Malus', it: 'Malus Ultimo Posto', fr: 'Malus Dernière Place', de: 'Malus Letzter Platz', es: 'Malus Último Lugar' })}</label><input type="number" value={data.rules.raceLastPlaceMalus} onChange={(e) => handleRuleChange('raceLastPlaceMalus', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'DNF / DNS / DSQ', it: 'Ritirato / Squalificato', fr: 'Abandon / Disqualifié', de: 'DNF / DNS / DSQ', es: 'Abandono / Descalificado' })}</label><input type="number" value={data.rules.raceDNF} onChange={(e) => handleRuleChange('raceDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Race Penalty', it: 'Penalità Gara', fr: 'Pénalité Course', de: 'Rennstrafe', es: 'Penalización Carrera' })}</label><input type="number" value={data.rules.racePenalty} onChange={(e) => handleRuleChange('racePenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Pos Gained (per pos)', it: 'Pos Guadagnate (per pos)', fr: 'Pos Gagnées (par pos)', de: 'Pos Gewonnen (pro Pos)', es: 'Pos Ganadas (por pos)' })}</label><input type="number" value={data.rules.positionGained} onChange={(e) => handleRuleChange('positionGained', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
                 <div><label className="text-xs text-slate-400">{t({ en: 'Pos Lost (per pos)', it: 'Pos Perse (per pos)', fr: 'Pos Perdues (par pos)', de: 'Pos Verloren (pro Pos)', es: 'Pos Perdidas (por pos)' })}</label><input type="number" value={data.rules.positionLost} onChange={(e) => handleRuleChange('positionLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Teammate */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Beat Teammate', it: 'Batte Compagno', fr: 'Bat CoÃƒÂ©quipier', de: 'Teamkollegen geschlagen', es: 'Vence CompaÃƒÂ±ero' })}</label><input type="number" value={data.rules.teammateBeat} onChange={(e) => handleRuleChange('teammateBeat', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Lost to Teammate', it: 'Perde vs Compagno', fr: 'Perd contre CoÃƒÂ©quipier', de: 'Verliert gegen Teamk.', es: 'Pierde vs CompaÃƒÂ±ero' })}</label><input type="number" value={data.rules.teammateLost} onChange={(e) => handleRuleChange('teammateLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Beat TM (TM DNF)', it: 'Batte Compagno (Ritirato)', fr: 'Bat CoÃƒÂ©quipier (Abandon)', de: 'Teamk. geschlagen (DNF)', es: 'Vence Comp. (Abandono)' })}</label><input type="number" value={data.rules.teammateBeatDNF} onChange={(e) => handleRuleChange('teammateBeatDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Beat Teammate', it: 'Batte Compagno', fr: 'Bat Coéquipier', de: 'Teamkollegen geschlagen', es: 'Vence Compañero' })}</label><input type="number" value={data.rules.teammateBeat} onChange={(e) => handleRuleChange('teammateBeat', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Lost to Teammate', it: 'Perde vs Compagno', fr: 'Perd contre Coéquipier', de: 'Verliert gegen Teamk.', es: 'Pierde vs Compañero' })}</label><input type="number" value={data.rules.teammateLost} onChange={(e) => handleRuleChange('teammateLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Beat TM (TM DNF)', it: 'Batte Compagno (Ritirato)', fr: 'Bat Coéquipier (Abandon)', de: 'Teamk. geschlagen (DNF)', es: 'Vence Comp. (Abandono)' })}</label><input type="number" value={data.rules.teammateBeatDNF} onChange={(e) => handleRuleChange('teammateBeatDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Sprint */}
                 <div className="col-span-2 mt-2">
@@ -1375,7 +1559,7 @@ const App: React.FC = () => {
 
             {/* Constructor Multipliers */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-4 border-b border-slate-700 pb-2">{t({ en: 'Constructor Multipliers', it: 'Coefficienti Scuderie', fr: 'Coefficients Ãƒâ€°quipes', de: 'Konstrukteurs-Multiplikatoren', es: 'Coeficientes Constructores', ru: 'ÃÅ¡ÃÂ¾Ã‘ÂÃ‘â€žÃ‘â€žÃÂ¸Ã‘â€ ÃÂ¸ÃÂµÃÂ½Ã‘â€šÃ‘â€¹ ÃÂºÃÂ¾ÃÂ½Ã‘ÂÃ‘â€šÃ‘â‚¬Ã‘Æ’ÃÂºÃ‘â€šÃÂ¾Ã‘â‚¬ÃÂ¾ÃÂ²', zh: 'Ã¨Â½Â¦Ã©ËœÅ¸Ã§Â³Â»Ã¦â€¢Â°', ar: 'Ã™â€¦Ã˜Â¹Ã˜Â§Ã™â€¦Ã™â€žÃ˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ™ÂÃ˜Â±Ã™â€š', ja: 'Ã£â€šÂ³Ã£Æ’Â³Ã£â€šÂ¹Ã£Æ’Ë†Ã£Æ’Â©Ã£â€šÂ¯Ã£â€šÂ¿Ã£Æ’Â¼Ã¤Â¿â€šÃ¦â€¢Â°' })}</h3>
+              <h3 className="font-semibold text-white mb-4 border-b border-slate-700 pb-2">{t({ en: 'Constructor Multipliers', it: 'Coefficienti Scuderie', fr: 'Coefficients Équipes', de: 'Konstrukteurs-Multiplikatoren', es: 'Coeficientes Constructores', ru: 'Коэффициенты конструкторов', zh: '车队系数', ar: 'معاملات الفرق', ja: 'コンストラクター係数' })}</h3>
               <div className="grid grid-cols-2 gap-3">
                 {data.constructors.map(c => (
                   <div key={c.id} className="flex items-center gap-2 bg-slate-900 p-2 rounded border border-slate-700">
@@ -1402,9 +1586,9 @@ const App: React.FC = () => {
                 <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded">OpenF1</span>
               </div>
               <p className="text-xs text-slate-400 mb-4">
-                {t({ 
-                  en: 'Fetch official results from OpenF1. This will automatically update driver points based on finishing positions.', 
-                  it: 'Scarica i risultati ufficiali da OpenF1. Questo aggiornerà automaticamente i punti dei piloti in base alle posizioni d\'arrivo.' 
+                {t({
+                  en: 'Fetch official results from OpenF1. This will automatically update driver points based on finishing positions.',
+                  it: 'Scarica i risultati ufficiali da OpenF1. Questo aggiornerà automaticamente i punti dei piloti in base alle posizioni d\'arrivo.'
                 })}
               </p>
               <button
@@ -1428,11 +1612,11 @@ const App: React.FC = () => {
 
             {/* Profile & Logout Card */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'ÃÅ¸Ã‘â‚¬ÃÂ¾Ã‘â€žÃÂ¸ÃÂ»Ã‘Å’', zh: 'Ã§â€Â¨Ã¦Ë†Â·Ã¨Âµâ€žÃ¦â€“â„¢', ar: 'Ã™â€¦Ã™â€žÃ™Â Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã˜ÂªÃ˜Â®Ã˜Â¯Ã™â€¦', ja: 'Ã£Æ’â€”Ã£Æ’Â­Ã£Æ’â€¢Ã£â€šÂ£Ã£Æ’Â¼Ã£Æ’Â«' })}</h3>
+              <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'Профиль', zh: '用户资料', ar: 'ملف المستخدم', ja: 'プロフィール' })}</h3>
               <div className="mb-4 text-sm text-slate-300">
-                <p><span className="text-slate-500">{t({ en: 'Name', it: 'Nome', fr: 'Nom', de: 'Name', es: 'Nombre', ru: 'ÃËœÃÂ¼Ã‘Â', zh: 'Ã¥ÂÂÃ¥Â­â€”', ar: 'Ã˜Â§Ã™â€žÃ˜Â§Ã˜Â³Ã™â€¦', ja: 'Ã¥ÂÂÃ¥â€°Â' })}:</span> {data.user?.name}</p>
-                <p><span className="text-slate-500">{t({ en: 'Role', it: 'Ruolo', fr: 'RÃƒÂ´le', de: 'Rolle', es: 'Rol', ru: 'Ã ÃÂ¾ÃÂ»Ã‘Å’', zh: 'Ã¨Â§â€™Ã¨â€°Â²', ar: 'Ã˜Â§Ã™â€žÃ˜Â¯Ã™Ë†Ã˜Â±', ja: 'Ã¥Â½Â¹Ã¥â€°Â²' })}:</span> {data.user?.isAdmin ? 'Admin' : 'Member'}</p>
-                <p><span className="text-slate-500">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'CÃƒÂ³digo Liga', ru: 'ÃÅ¡ÃÂ¾ÃÂ´ ÃÂ»ÃÂ¸ÃÂ³ÃÂ¸', zh: 'Ã¨Ââ€Ã§â€ºÅ¸Ã¤Â»Â£Ã§ Â', ar: 'Ã˜Â±Ã™â€¦Ã˜Â² Ã˜Â§Ã™â€žÃ˜Â¯Ã™Ë†Ã˜Â±Ã™Å ', ja: 'Ã£Æ’ÂªÃ£Æ’Â¼Ã£â€šÂ°Ã£â€šÂ³Ã£Æ’Â¼Ã£Æ’â€°' })}:</span> <span className="font-mono text-blue-400">{data.user?.leagueCode}</span></p>
+                <p><span className="text-slate-500">{t({ en: 'Name', it: 'Nome', fr: 'Nom', de: 'Name', es: 'Nombre', ru: 'Имя', zh: '名字', ar: 'الاسم', ja: '名前' })}:</span> {data.user?.name}</p>
+                <p><span className="text-slate-500">{t({ en: 'Role', it: 'Ruolo', fr: 'Rôle', de: 'Rolle', es: 'Rol', ru: 'Роль', zh: '角色', ar: 'الدور', ja: '役割' })}:</span> {data.user?.isAdmin ? 'Admin' : 'Member'}</p>
+                <p><span className="text-slate-500">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span> <span className="font-mono text-blue-400">{data.user?.leagueCode}</span></p>
               </div>
 
               <div className="flex flex-col gap-3 mt-4">
@@ -1440,23 +1624,23 @@ const App: React.FC = () => {
                   onClick={handleLogout}
                   className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded transition-colors"
                 >
-                  {t({ en: 'Logout', it: 'Esci', fr: 'DÃƒÂ©connexion', de: 'Abmelden', es: 'Salir', ru: 'Ãâ€™Ã‘â€¹ÃÂ¹Ã‘â€šÃÂ¸', zh: 'Ã§â„¢Â»Ã¥â€¡Âº', ar: 'Ã˜Â®Ã˜Â±Ã™Ë†Ã˜Â¬', ja: 'Ã£Æ’Â­Ã£â€šÂ°Ã£â€šÂ¢Ã£â€šÂ¦Ã£Æ’Ë†' })}
+                  {t({ en: 'Logout', it: 'Esci', fr: 'Déconnexion', de: 'Abmelden', es: 'Salir', ru: 'Выйти', zh: '登出', ar: 'خروج', ja: 'ログアウト' })}
                 </button>
                 {showResetConfirm ? (
                   <div className="bg-red-950/50 border border-red-500 p-4 rounded-lg animate-pulse">
-                    <p className="text-red-200 text-center mb-3 font-bold">{t({ en: 'Delete all local data?', it: 'Eliminare i dati locali?', fr: 'Supprimer donnÃƒÂ©es locales?', de: 'Lokale Daten lÃƒÂ¶schen?', es: 'Ã‚Â¿Borrar datos locales?', ru: 'ÃÂ£ÃÂ´ÃÂ°ÃÂ»ÃÂ¸Ã‘â€šÃ‘Å’ ÃÂ´ÃÂ°ÃÂ½ÃÂ½Ã‘â€¹ÃÂµ?', zh: 'Ã¥Ë† Ã©â„¢Â¤Ã¦Å“Â¬Ã¥Å“Â°Ã¦â€¢Â°Ã¦ÂÂ®Ã¯Â¼Å¸', ar: 'Ã˜Â­Ã˜Â°Ã™Â Ã˜Â§Ã™â€žÃ˜Â¨Ã™Å Ã˜Â§Ã™â€ Ã˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã™â€žÃ™Å Ã˜Â©Ã˜Å¸', ja: 'Ã¥â€¦Â¨Ã£Æ’â€¡Ã£Æ’Â¼Ã£â€šÂ¿Ã£â€šâ€™Ã¥â€°Å Ã©â„¢Â¤Ã£Ââ€”Ã£ÂÂ¾Ã£Ââ„¢Ã£Ââ€¹Ã¯Â¼Å¸' })}</p>
+                    <p className="text-red-200 text-center mb-3 font-bold">{t({ en: 'Delete all local data?', it: 'Eliminare i dati locali?', fr: 'Supprimer données locales?', de: 'Lokale Daten löschen?', es: '¿Borrar datos locales?', ru: 'Удалить данные?', zh: '删除本地数据？', ar: 'حذف البيانات المحلية؟', ja: '全データを削除しますか？' })}</p>
                     <div className="flex gap-3">
                       <button
                         onClick={() => setShowResetConfirm(false)}
                         className="flex-1 bg-slate-600 text-white py-2 rounded hover:bg-slate-500"
                       >
-                        {t({ en: 'Cancel', it: 'Annulla', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ru: 'ÃÅ¾Ã‘â€šÃÂ¼ÃÂµÃÂ½ÃÂ°', zh: 'Ã¥Ââ€“Ã¦Â¶Ë†', ar: 'Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡', ja: 'Ã£â€šÂ­Ã£Æ’Â£Ã£Æ’Â³Ã£â€šÂ»Ã£Æ’Â«' })}
+                        {t({ en: 'Cancel', it: 'Annulla', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ru: 'Отмена', zh: '取消', ar: 'إلغاء', ja: 'キャンセル' })}
                       </button>
                       <button
                         onClick={handleLogout}
                         className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-500"
                       >
-                        {t({ en: 'Confirm', it: 'Conferma', fr: 'Confirmer', de: 'BestÃƒÂ¤tigen', es: 'Confirmar', ru: 'ÃÅ¸ÃÂ¾ÃÂ´Ã‘â€šÃÂ²ÃÂµÃ‘â‚¬ÃÂ´ÃÂ¸Ã‘â€šÃ‘Å’', zh: 'Ã§Â¡Â®Ã¨Â®Â¤', ar: 'Ã˜ÂªÃ˜Â£Ã™Æ’Ã™Å Ã˜Â¯', ja: 'Ã§Â¢ÂºÃ¨ÂªÂ' })}
+                        {t({ en: 'Confirm', it: 'Conferma', fr: 'Confirmer', de: 'Bestätigen', es: 'Confirmar', ru: 'Подтвердить', zh: '确认', ar: 'تأكيد', ja: '確認' })}
                       </button>
                     </div>
                   </div>
@@ -1465,7 +1649,7 @@ const App: React.FC = () => {
                     onClick={() => setShowResetConfirm(true)}
                     className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-200 font-bold py-2 px-4 rounded transition-colors border border-red-900"
                   >
-                    {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'RÃƒÂ©initialiser (DÃƒÂ©connexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'ÃÂ¡ÃÂ±Ã‘â‚¬ÃÂ¾Ã‘Â (Ãâ€™Ã‘â€¹Ã‘â€¦ÃÂ¾ÃÂ´)', zh: 'Ã©â€¡ÂÃ§Â½Â®Ã¦â€°â‚¬Ã¦Å“â€°Ã¦â€¢Â°Ã¦ÂÂ®', ar: 'Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  (Ã˜Â®Ã˜Â±Ã™Ë†Ã˜Â¬)', ja: 'Ã£Æ’ÂªÃ£â€šÂ»Ã£Æ’Æ’Ã£Æ’Ë† (Ã£Æ’Â­Ã£â€šÂ°Ã£â€šÂ¢Ã£â€šÂ¦Ã£Æ’Ë†)' })}
+                    {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'Réinitialiser (Déconnexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'Сброс (Выход)', zh: '重置所有数据', ar: 'إعادة تعيين (خروج)', ja: 'リセット (ログアウト)' })}
                   </button>
                 )}
               </div>
@@ -1477,23 +1661,23 @@ const App: React.FC = () => {
                 onClick={() => setShowDebug(!showDebug)}
                 className="text-xs text-slate-500 hover:text-slate-300 underline"
               >
-                {showDebug ? t({ en: 'Hide Debug Info', it: 'Nascondi Debug', fr: 'Masquer Debug', de: 'Debug verbergen', es: 'Ocultar Debug', ru: 'ÃÂ¡ÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃ‘Å’ ÃÂ¾Ã‘â€šÃÂ»ÃÂ°ÃÂ´ÃÂºÃ‘Æ’', zh: 'Ã©Å¡ÂÃ¨â€”ÂÃ¨Â°Æ’Ã¨Â¯â€¢', ar: 'Ã˜Â¥Ã˜Â®Ã™ÂÃ˜Â§Ã˜Â¡ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ˜Â­Ã™Å Ã˜Â­', ja: 'Ã£Æ’â€¡Ã£Æ’ÂÃ£Æ’Æ’Ã£â€šÂ°Ã©ÂÅ¾Ã¨Â¡Â¨Ã§Â¤Âº' }) : t({ en: 'Show Debug Info', it: 'Mostra Debug', fr: 'Afficher Debug', de: 'Debug zeigen', es: 'Mostrar Debug', ru: 'ÃÅ¸ÃÂ¾ÃÂºÃÂ°ÃÂ·ÃÂ°Ã‘â€šÃ‘Å’ ÃÂ¾Ã‘â€šÃÂ»ÃÂ°ÃÂ´ÃÂºÃ‘Æ’', zh: 'Ã¦ËœÂ¾Ã§Â¤ÂºÃ¨Â°Æ’Ã¨Â¯â€¢', ar: 'Ã˜Â¥Ã˜Â¸Ã™â€¡Ã˜Â§Ã˜Â± Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ˜Â­Ã™Å Ã˜Â­', ja: 'Ã£Æ’â€¡Ã£Æ’ÂÃ£Æ’Æ’Ã£â€šÂ°Ã¨Â¡Â¨Ã§Â¤Âº' })}
+                {showDebug ? t({ en: 'Hide Debug Info', it: 'Nascondi Debug', fr: 'Masquer Debug', de: 'Debug verbergen', es: 'Ocultar Debug', ru: 'Скрыть отладку', zh: '隐藏调试', ar: 'إخفاء التصحيح', ja: 'デバッグ非表示' }) : t({ en: 'Show Debug Info', it: 'Mostra Debug', fr: 'Afficher Debug', de: 'Debug zeigen', es: 'Mostrar Debug', ru: 'Показать отладку', zh: '显示调试', ar: 'إظهار التصحيح', ja: 'デバッグ表示' })}
               </button>
             </div>
 
             {/* Debug Info (Collapsed) */}
             {showDebug && (
               <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700/50">
-                <h3 className="font-semibold text-white mb-2">{t({ en: 'Debug', it: 'Debug', fr: 'Debug', de: 'Debug', es: 'Debug', ru: 'ÃÅ¾Ã‘â€šÃÂ»ÃÂ°ÃÂ´ÃÂºÃÂ°', zh: 'Ã¨Â°Æ’Ã¨Â¯â€¢', ar: 'Ã˜ÂªÃ˜ÂµÃ˜Â­Ã™Å Ã˜Â­', ja: 'Ã£Æ’â€¡Ã£Æ’ÂÃ£Æ’Æ’Ã£â€šÂ°' })}</h3>
+                <h3 className="font-semibold text-white mb-2">{t({ en: 'Debug', it: 'Debug', fr: 'Debug', de: 'Debug', es: 'Debug', ru: 'Отладка', zh: '调试', ar: 'تصحيح', ja: 'デバッグ' })}</h3>
                 <div className="text-xs font-mono text-slate-400 bg-slate-950 p-2 rounded mb-4 overflow-x-auto border border-slate-800">
                   {JSON.stringify(data.team, null, 2)}
                 </div>
 
-                <h3 className="font-semibold text-white mb-2 mt-4">{t({ en: 'Race Lock Debug', it: 'Debug Blocco Gara', fr: 'Debug Verrouillage', de: 'Renn-Sperre Debug', es: 'Debug Bloqueo', ru: 'ÃÅ¾Ã‘â€šÃÂ»ÃÂ°ÃÂ´ÃÂºÃÂ° ÃÂ±ÃÂ»ÃÂ¾ÃÂºÃÂ¸Ã‘â‚¬ÃÂ¾ÃÂ²ÃÂºÃÂ¸', zh: 'Ã©â€ÂÃ¥Â®Å¡Ã¨Â°Æ’Ã¨Â¯â€¢', ar: 'Ã˜ÂªÃ˜ÂµÃ˜Â­Ã™Å Ã˜Â­ Ã™â€šÃ™ÂÃ™â€ž Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â¨Ã˜Â§Ã™â€š', ja: 'Ã£Æ’Â¬Ã£Æ’Â¼Ã£â€šÂ¹Ã£Æ’Â­Ã£Æ’Æ’Ã£â€šÂ¯Ã£Æ’â€¡Ã£Æ’ÂÃ£Æ’Æ’Ã£â€šÂ°' })}</h3>
+                <h3 className="font-semibold text-white mb-2 mt-4">{t({ en: 'Race Lock Debug', it: 'Debug Blocco Gara', fr: 'Debug Verrouillage', de: 'Renn-Sperre Debug', es: 'Debug Bloqueo', ru: 'Отладка блокировки', zh: '锁定调试', ar: 'تصحيح قفل السباق', ja: 'レースロックデバッグ' })}</h3>
                 <div className="text-xs font-mono text-slate-400 bg-slate-950 p-2 rounded mb-4 overflow-x-auto border border-slate-800">
                   <p>Race: {currentRace.name}</p>
                   <p>Status: <span className={getStatusColor(lockState.status)}>{lockState.status}</span></p>
-                  <p>Session: {currentRace.isSprint ? t({ en: 'Sprint Qualifying', it: 'Sprint Shootout', fr: 'Qualif Sprint', de: 'Sprint Quali', es: 'Sprint Clasif', ru: 'ÃÂ¡ÃÂ¿Ã‘â‚¬ÃÂ¸ÃÂ½Ã‘â€š ÃÅ¡ÃÂ²ÃÂ°ÃÂ»', zh: 'Ã¥â€ Â²Ã¥Ë†ÂºÃ¦Å½â€™Ã¤Â½Â', ar: 'Ã˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â±Ã˜Â¹Ã˜Â©', ja: 'Ã£â€šÂ¹Ã£Æ’â€”Ã£Æ’ÂªÃ£Æ’Â³Ã£Æ’Ë†Ã¤ÂºË†Ã©ÂÂ¸' }) : t({ en: 'Qualifying', it: 'Qualifiche', fr: 'Qualifications', de: 'Qualifying', es: 'ClasificaciÃƒÂ³n', ru: 'ÃÅ¡ÃÂ²ÃÂ°ÃÂ»ÃÂ¸Ã‘â€žÃÂ¸ÃÂºÃÂ°Ã‘â€ ÃÂ¸Ã‘Â', zh: 'Ã¦Å½â€™Ã¤Â½ÂÃ¨Âµâ€º', ar: 'Ã˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â§Ã˜Âª', ja: 'Ã¤ÂºË†Ã©ÂÂ¸' })}</p>
+                  <p>Session: {currentRace.isSprint ? t({ en: 'Sprint Qualifying', it: 'Sprint Shootout', fr: 'Qualif Sprint', de: 'Sprint Quali', es: 'Sprint Clasif', ru: 'Спринт Квал', zh: '冲刺排位', ar: 'تصفيات السرعة', ja: 'スプリント予選' }) : t({ en: 'Qualifying', it: 'Qualifiche', fr: 'Qualifications', de: 'Qualifying', es: 'Clasificación', ru: 'Квалификация', zh: '排位赛', ar: 'التصفيات', ja: '予選' })}</p>
                   <p>Target UTC: {lockState.targetSessionUtc || 'N/A'}</p>
                   <p>Lock UTC: {lockState.lockTimeUtc || 'N/A'}</p>
                   <p>Server Time: {new Date(now).toISOString()}</p>

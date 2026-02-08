@@ -31,6 +31,7 @@ model League {
 
   name      String
   joinCode  String   @unique
+  rules     Json?
 
   members   LeagueMember[]
   teams     Team[]
@@ -60,6 +61,7 @@ model Driver {
   points        Int      @default(0)
   
   teams         TeamDriver[]
+  teamResultDrivers TeamResultDriver[]
 }
 
 model Team {
@@ -71,6 +73,7 @@ model Team {
   userId    String
 
   budget    Float
+  totalPoints Float @default(0)
   captainId String?
   reserveId String?
 
@@ -78,6 +81,7 @@ model Team {
   league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
   drivers   TeamDriver[]
+  results   TeamResult[]
 
   @@unique([leagueId, userId])
   @@index([leagueId])
@@ -117,4 +121,41 @@ model Race {
   // --- NUOVI CAMPI AGGIUNTI ---
   date                DateTime
   isCompleted         Boolean  @default(false)
+
+  teamResults         TeamResult[]
+}
+
+model TeamResult {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  raceId    String
+  teamId    String
+  
+  points    Float    @default(0)
+  captainId String?
+  reserveId String?
+
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  
+  drivers   TeamResultDriver[]
+
+  @@unique([raceId, teamId])
+  @@index([raceId])
+  @@index([teamId])
+}
+
+model TeamResultDriver {
+  id           String @id @default(cuid())
+  teamResultId String
+  driverId     String
+  points       Int    @default(0)
+
+  teamResult   TeamResult @relation(fields: [teamResultId], references: [id], onDelete: Cascade)
+  driver       Driver     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([teamResultId, driverId])
+  @@index([teamResultId])
+  @@index([driverId])
 }

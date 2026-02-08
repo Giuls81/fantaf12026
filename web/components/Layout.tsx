@@ -18,6 +18,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
           [Tab.TEAM]: { en: 'Team', it: 'Squadra', fr: 'Équipe', de: 'Team', es: 'Equipo', ru: 'Команда', zh: '车队', ar: 'فريق', ja: 'チーム' },
           [Tab.LINEUP]: { en: 'Lineup', it: 'Formazione', fr: 'Alignement', de: 'Aufstellung', es: 'Alineación', ru: 'Состав', zh: '阵容', ar: 'التشكيلة', ja: 'ラインナップ' },
           [Tab.MARKET]: { en: 'Market', it: 'Mercato', fr: 'Marché', de: 'Markt', es: 'Mercado', ru: 'Рынок', zh: '市场', ar: 'سوق', ja: '市場' },
+          [Tab.STANDINGS]: { en: 'Standings', it: 'Classifica', fr: 'Classement', de: 'Rangliste', es: 'Clasificación', ru: 'Зачет', zh: '积分榜', ar: 'الترتيب', ja: '順位表' },
           [Tab.ADMIN]: { en: 'Admin', it: 'Admin', fr: 'Admin', de: 'Admin', es: 'Admin', ru: 'Админ', zh: '管理', ar: 'مسؤول', ja: '管理' },
       };
       return t(labels[tab]);
@@ -28,6 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
     { id: Tab.TEAM, label: getLabel(Tab.TEAM), icon: '🏎️' },
     { id: Tab.LINEUP, label: getLabel(Tab.LINEUP), icon: '📋' },
     { id: Tab.MARKET, label: getLabel(Tab.MARKET), icon: '💰' },
+    { id: Tab.STANDINGS, label: getLabel(Tab.STANDINGS), icon: '🏆' },
     { id: Tab.ADMIN, label: getLabel(Tab.ADMIN), icon: '⚙️' },
   ];
 

@@ -32,6 +32,9 @@ const REVERSE_DRIVER_MAP: Record<number, string> = Object.fromEntries(
   Object.entries(DRIVER_NUMBER_MAP).map(([id, num]) => [num, id])
 );
 
+const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const DEFAULT_SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
+
 export async function getOpenF1SessionKey(year: number, location: string, isSprint: boolean): Promise<number | null> {
   const sessionName = isSprint ? "Sprint" : "Race";
   const url = `${OPENF1_BASE}/sessions?year=${year}&location=${encodeURIComponent(location)}&session_name=${encodeURIComponent(sessionName)}`;
@@ -49,7 +52,6 @@ export async function getOpenF1SessionKey(year: number, location: string, isSpri
 }
 
 export async function getOpenF1Classification(sessionKey: number): Promise<Record<string, number>> {
-  // We get the final positions by looking at the last 'position' entry for each driver
   const url = `${OPENF1_BASE}/position?session_key=${sessionKey}`;
   
   try {
@@ -57,7 +59,6 @@ export async function getOpenF1Classification(sessionKey: number): Promise<Recor
     const data = await res.json();
     if (!Array.isArray(data)) return {};
 
-    // Group by driver and find the last record (latest timestamp)
     const latestPositions: Record<number, number> = {};
     const timestamps: Record<number, string> = {};
 
@@ -90,8 +91,6 @@ export async function syncRaceResults(prisma: PrismaClient, raceId: string) {
   const race = await prisma.race.findUnique({ where: { id: raceId } });
   if (!race) throw new Error("Race not found");
 
-  // For 2026, OpenF1 won't have data yet. We can test with 2024 data if location matches.
-  // Use race.country or race.city as location. OpenF1 location is often the city/track name (e.g. 'Spa-Francorchamps').
   const location = race.city || race.country || "";
   const sessionKey = await getOpenF1SessionKey(race.season || 2024, location, !!race.isSprint);
   
@@ -104,31 +103,73 @@ export async function syncRaceResults(prisma: PrismaClient, raceId: string) {
     throw new Error("No results found in OpenF1 for this session.");
   }
 
-  // Calculate points using a standard system (we can customize this later or fetch from league rules)
-  // For simplicity, let's update Driver.points directly for now (Global points)
-  // In a real multi-league system, points per race should be stored in a separate table.
-  // But our schema has 'points' on the Driver model.
-  
-  const updates = Object.entries(classification).map(([driverId, position]) => {
-    // Points logic: 25, 18, 15, 12, 10, 8, 6, 4, 2, 1
-    const pointsArray = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
-    let points = 0;
-    if (position >= 1 && position <= 10) {
-      points = pointsArray[position - 1] || 0;
-    }
-    
-    return prisma.driver.update({
-      where: { id: driverId },
-      data: { points: { increment: points } }
-    });
-  });
+  // Calculate Points per Driver
+  const driverRacePoints: Record<string, number> = {};
+  for (const [driverId, position] of Object.entries(classification)) {
+    const pointsArray = race.isSprint ? DEFAULT_SPRINT_POINTS : DEFAULT_RACE_POINTS;
+    const pts = (position >= 1 && position <= pointsArray.length) ? pointsArray[position - 1] : 0;
+    driverRacePoints[driverId] = pts;
+  }
 
-  await prisma.$transaction(updates);
-  
-  // Mark race as completed
-  await prisma.race.update({
-    where: { id: raceId },
-    data: { isCompleted: true }
+  await prisma.$transaction(async (tx: any) => {
+    // 1. Update Global Driver Points (Cumulative)
+    for (const [driverId, points] of Object.entries(driverRacePoints)) {
+      await tx.driver.update({
+        where: { id: driverId },
+        data: { points: { increment: points } }
+      });
+    }
+
+    // 2. Snapshot Results for all Teams
+    const teams = await tx.team.findMany({
+      include: { drivers: true }
+    });
+
+    for (const team of teams) {
+      let teamPoints = 0;
+      const resultDrivers = [];
+
+      for (const td of team.drivers) {
+        let pts = (driverRacePoints[td.driverId] as number) || 0;
+        
+        // Captain Bonus (2x)
+        if (team.captainId === td.driverId) {
+          pts *= 2;
+        }
+
+        teamPoints += pts;
+        resultDrivers.push({
+          driverId: td.driverId,
+          points: pts
+        });
+      }
+
+      // Create TeamResult snapshot
+      await tx.teamResult.create({
+        data: {
+          raceId: race.id,
+          teamId: team.id,
+          points: teamPoints,
+          captainId: team.captainId,
+          reserveId: team.reserveId,
+          drivers: {
+            create: resultDrivers
+          }
+        }
+      });
+
+      // Update Team Global Points
+      await tx.team.update({
+        where: { id: team.id },
+        data: { totalPoints: { increment: teamPoints } }
+      });
+    }
+
+    // 3. Mark race as completed
+    await tx.race.update({
+      where: { id: raceId },
+      data: { isCompleted: true }
+    });
   });
 
   return classification;

@@ -157,6 +157,64 @@ async function start() {
     return league;
   });
 
+  app.get("/leagues/:leagueId/standings", async (req, reply) => {
+    const { leagueId } = req.params as { leagueId: string };
+    
+    const teams = await (prisma.team as any).findMany({
+      where: { leagueId },
+      include: {
+        user: { select: { id: true, displayName: true } }
+      },
+      orderBy: { totalPoints: "desc" }
+    });
+
+    return teams.map((team: any, index: number) => ({
+      rank: index + 1,
+      userId: team.userId,
+      userName: team.user.displayName || `User ${team.userId.slice(0, 4)}`,
+      totalPoints: team.totalPoints
+    }));
+  });
+
+  app.get("/leagues/:leagueId/results/:raceId", async (req, reply) => {
+    const auth = await requireUser(req, reply);
+    if (!auth.ok) return auth.replied;
+
+    const { leagueId, raceId } = req.params as { leagueId: string, raceId: string };
+    
+    const race = await prisma.race.findUnique({ where: { id: raceId } });
+    if (!race) return reply.code(404).send({ error: "race_not_found" });
+
+    const results = await (prisma as any).teamResult.findMany({
+      where: { raceId, team: { leagueId } },
+      include: {
+        team: { include: { user: { select: { id: true, displayName: true } } } },
+        drivers: { include: { driver: true } }
+      },
+      orderBy: { points: "desc" }
+    });
+
+    // Privacy Logic: If race is not completed, Hide drivers for other users
+    return results.map((res: any) => {
+      const isOwner = res.team.userId === auth.user.id;
+      const shouldHide = !race.isCompleted && !isOwner;
+
+      return {
+        id: res.id,
+        userId: res.team.userId,
+        userName: res.team.user.displayName || `User ${res.team.userId.slice(0, 4)}`,
+        points: res.points,
+        captainId: shouldHide ? null : res.captainId,
+        reserveId: shouldHide ? null : res.reserveId,
+        drivers: shouldHide ? [] : res.drivers.map((d: any) => ({
+          id: d.driverId,
+          name: d.driver.name,
+          points: d.points
+        }))
+      };
+    });
+  });
+
   app.post("/leagues/join", async (req, reply) => {
     const auth = await requireUser(req, reply);
     if (!auth.ok) return auth.replied;

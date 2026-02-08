@@ -3,6 +3,7 @@ export enum Tab {
   TEAM = 'TEAM',
   LINEUP = 'LINEUP',
   MARKET = 'MARKET',
+  STANDINGS = 'STANDINGS',
   ADMIN = 'ADMIN',
 }
 
