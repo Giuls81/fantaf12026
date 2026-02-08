@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import crypto from "crypto";
+import { syncRaceResults } from "./services/openf1";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -346,6 +347,26 @@ async function start() {
     );
 
     return { ok: true };
+  });
+
+  app.post("/admin/sync-race", async (req, reply) => {
+    const auth = await requireUser(req, reply);
+    if (!auth.ok) return auth.replied;
+
+    const membership = await prisma.leagueMember.findFirst({
+      where: { userId: auth.user.id, role: "ADMIN" }
+    });
+    if (!membership) return reply.code(403).send({ error: "not_admin" });
+
+    const { raceId } = (req.body ?? {}) as { raceId: string };
+    if (!raceId) return reply.code(400).send({ error: "missing_raceId" });
+
+    try {
+      const classification = await syncRaceResults(prisma, raceId);
+      return { ok: true, classification };
+    } catch (e: any) {
+      return reply.code(500).send({ error: e.message });
+    }
   });
 
   const host = "0.0.0.0";

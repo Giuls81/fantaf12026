@@ -145,6 +145,7 @@ const App: React.FC = () => {
 
   // Admin Points Anti-NaN States
   const [pointsError, setPointsError] = useState<{ [key: string]: string }>({});
+  const [syncing, setSyncing] = useState(false);
 
   const [showDebug, setShowDebug] = useState(false);
 
@@ -594,6 +595,34 @@ const App: React.FC = () => {
       lockTimeUtc: lockDate.toISOString(),
       msToLock
     };
+  };
+
+  const handleSyncOpenF1 = async () => {
+    if (!data || !currentRace) return;
+    try {
+      setSyncing(true);
+      const res = await fetch(`${getApiUrl()}/admin/sync-race`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('fanta_token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ raceId: currentRace.id })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        alert(t({ en: 'Race synced successfully!', it: 'Gara sincronizzata con successo!' }));
+        // Refresh data
+        window.location.reload();
+      } else {
+        alert(t({ en: `Sync failed: ${result.error}`, it: `Sincronizzazione fallita: ${result.error}` }));
+      }
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: 'Network error during sync', it: 'Errore di rete durante la sincronizzazione' }));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const formatCountdown = (ms: number) => {
@@ -1364,6 +1393,37 @@ const App: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Race Results Automated Sync */}
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                <h3 className="font-semibold text-white">{t({ en: 'Race Results (Automated)', it: 'Risultati Gara (Automatico)' })}</h3>
+                <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded">OpenF1</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                {t({ 
+                  en: 'Fetch official results from OpenF1. This will automatically update driver points based on finishing positions.', 
+                  it: 'Scarica i risultati ufficiali da OpenF1. Questo aggiornerà automaticamente i punti dei piloti in base alle posizioni d\'arrivo.' 
+                })}
+              </p>
+              <button
+                onClick={handleSyncOpenF1}
+                disabled={syncing}
+                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${syncing ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-900/20'}`}
+              >
+                {syncing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                    {t({ en: 'Syncing...', it: 'Sincronizzazione...' })}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    {t({ en: 'Sync results with OpenF1', it: 'Sincronizza risultati OpenF1' })}
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Profile & Logout Card */}
