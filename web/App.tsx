@@ -144,8 +144,7 @@ const App: React.FC = () => {
   const [sprintQualifyingUtcDraft, setSprintQualifyingUtcDraft] = useState('');
 
   // Admin Points Anti-NaN States
-  const [sprintPointsInput, setSprintPointsInput] = useState('');
-  const [pointsError, setPointsError] = useState<{ sprint?: string }>({});
+  const [pointsError, setPointsError] = useState<{ [key: string]: string }>({});
 
   const [showDebug, setShowDebug] = useState(false);
 
@@ -299,9 +298,7 @@ const App: React.FC = () => {
       }
     }
     if (data && data.rules) {
-      // Initialize text inputs for points only if they are empty (first load)
-      // to avoid overwriting user typing if data updates in background (unlikely here but safe)
-      setSprintPointsInput(prev => prev || data.rules.sprintPositionPoints.join(', '));
+      // Logic for initializing text inputs removed (now using separate inputs)
     }
   }, [data?.currentRaceIndex, races, activeTab]);
   // Dependency on activeTab ensures re-sync when entering Admin
@@ -545,20 +542,17 @@ const App: React.FC = () => {
     handleRuleChange('racePositionPoints', newPoints);
   };
 
-  const handleSprintPointsChange = (input: string) => {
-    setSprintPointsInput(input);
-    // Robust split and validation
-    const parts = input.split(',').map(s => {
-      const trimmed = s.trim();
-      return trimmed === '' ? NaN : Number(trimmed);
-    });
+  const handleSprintSinglePointChange = (index: number, val: number) => {
+    if (!data) return;
+    if (!Number.isFinite(val)) return;
 
-    if (parts.length !== 8 || parts.some(n => !Number.isFinite(n))) {
-      setPointsError(prev => ({ ...prev, sprint: t({ en: 'Must be 8 numbers separated by commas', it: 'Devono essere 8 numeri separati da virgole' }) }));
-    } else {
-      setPointsError(prev => ({ ...prev, sprint: undefined }));
-      handleRuleChange('sprintPositionPoints', parts);
+    const newPoints = [...(data.rules.sprintPositionPoints || [8, 7, 6, 5, 4, 3, 2, 1])];
+    while (newPoints.length < 8) {
+      newPoints.push(0);
     }
+
+    newPoints[index] = val;
+    handleRuleChange('sprintPositionPoints', newPoints);
   };
 
   const handleConstructorMultiplierChange = (id: string, multiplier: number) => {
@@ -724,7 +718,7 @@ const App: React.FC = () => {
 
       <div className="flex flex-col items-center opacity-30">
         <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">Powered BY</span>
-        <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto grayscale brightness-200" />
+        <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
       </div>
       
       {startupError && (
@@ -853,7 +847,7 @@ const App: React.FC = () => {
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">Powered BY</span>
-            <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto grayscale brightness-200" />
+            <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
         </div>
       </div>
@@ -1328,14 +1322,23 @@ const App: React.FC = () => {
 
                 {/* Sprint */}
                 <div className="col-span-2 mt-2">
-                  <label className="text-xs text-slate-400 block mb-1">{t({ en: 'Sprint Points (1st - 8th)', it: 'Punti Sprint (1Ã‚Â°-8Ã‚Â°)', fr: 'Points Sprint (1-8)', de: 'Sprintpunkte (1.-8.)', es: 'Puntos Sprint (1Ã‚Âº-8Ã‚Âº)' })}</label>
-                  <input
-                    type="text"
-                    value={sprintPointsInput}
-                    onChange={(e) => handleSprintPointsChange(e.target.value)}
-                    className={`w-full bg-slate-900 border ${pointsError.sprint ? 'border-red-500' : 'border-slate-600'} rounded p-2 text-sm text-white`}
-                  />
-                  {pointsError.sprint && <p className="text-red-500 text-xs mt-1">{pointsError.sprint}</p>}
+                  <label className="text-xs text-slate-400 block mb-2">{t({ en: 'Sprint Points (1st - 8th)', it: 'Punti Sprint (1°-8°)', fr: 'Points Sprint (1-8)' })}</label>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                    {Array.from({ length: 8 }).map((_, index) => {
+                      const val = (data.rules.sprintPositionPoints && data.rules.sprintPositionPoints[index]) || 0;
+                      return (
+                        <div key={index} className="flex flex-col items-center">
+                          <label className="text-[10px] text-slate-500 font-bold">#{index + 1}</label>
+                          <input
+                            type="number"
+                            value={val}
+                            onChange={(e) => handleSprintSinglePointChange(index, Number(e.target.value))}
+                            className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-center text-sm text-white focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div><label className="text-xs text-slate-400">{t({ en: 'Sprint Quali Pole', it: 'Pole Sprint Quali', fr: 'Pole Qualif Sprint', de: 'Sprint Quali Pole', es: 'Pole Sprint Clasif' })}</label><input type="number" value={data.rules.sprintPole} onChange={(e) => handleRuleChange('sprintPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
               </div>

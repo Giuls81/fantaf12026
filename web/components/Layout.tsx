@@ -42,7 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
         {/* Powered By Branding */}
         <div className="mt-8 mb-4 flex flex-col items-center opacity-40 hover:opacity-100 transition-opacity">
           <span className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">Powered BY</span>
-          <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-4 w-auto grayscale brightness-200" />
+          <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-4 w-auto" />
         </div>
       </main>
 
