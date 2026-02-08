@@ -1687,6 +1687,9 @@ const App: React.FC = () => {
           </div>
         );
 
+      case Tab.STANDINGS:
+        return renderStandings();
+
       case Tab.ADMIN:
         return renderAdmin();
 
