@@ -83,9 +83,9 @@ const sanitizeTeamRoles = (team: UserTeam): UserTeam => {
 
 // Helper to find next race index
 const getNextRaceIndex = (races: Race[]) => {
+  if (races.length === 0) return 0; // Never return -1
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // API returns ISO strings (YYYY-MM-DDTHH:mm:ss.sssZ) - new Date() parses them correctly
   const idx = races.findIndex(r => new Date(r.date) >= today);
   return idx === -1 ? races.length - 1 : idx;
 };
@@ -259,11 +259,13 @@ const App: React.FC = () => {
       try {
         const parsed = JSON.parse(storedData);
         // Robustness checks
-        if (typeof parsed.currentRaceIndex !== 'number') {
+        if (typeof parsed.currentRaceIndex !== 'number' || parsed.currentRaceIndex < 0) {
           parsed.currentRaceIndex = getNextRaceIndex(races);
         } else {
-          if (parsed.currentRaceIndex < 0) parsed.currentRaceIndex = 0;
-          if (parsed.currentRaceIndex >= races.length) parsed.currentRaceIndex = races.length - 1;
+          // Re-validate against current races length
+          if (races.length > 0 && parsed.currentRaceIndex >= races.length) {
+            parsed.currentRaceIndex = races.length - 1;
+          }
         }
         // Migration for constructors if missing
         if (!parsed.constructors) {
@@ -290,9 +292,11 @@ const App: React.FC = () => {
   // Sync Drafts with current race and rules when entering Admin or when data changes
   useEffect(() => {
     if (data && races.length > 0) {
-      const race = races[data.currentRaceIndex];
-      setQualifyingUtcDraft(race.qualifyingUtc || '');
-      setSprintQualifyingUtcDraft(race.sprintQualifyingUtc || '');
+      const race = races[data.currentRaceIndex] || races[0];
+      if (race) {
+        setQualifyingUtcDraft(race.qualifyingUtc || '');
+        setSprintQualifyingUtcDraft(race.sprintQualifyingUtc || '');
+      }
     }
     if (data && data.rules) {
       // Initialize text inputs for points only if they are empty (first load)
