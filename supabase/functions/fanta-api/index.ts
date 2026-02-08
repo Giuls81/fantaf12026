@@ -120,57 +120,72 @@ app.get("/drivers", async (c) => {
 });
 
 app.post("/leagues", requireUser, async (c) => {
-  const user = c.get("user");
-  const { name } = await c.req.json();
-  const leagueName = (name?.trim() || "League").slice(0, 64);
-  const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  try {
+    const user = c.get("user");
+    const { name } = await c.req.json();
+    const leagueName = (name?.trim() || "League").slice(0, 64);
+    const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  const [league] = await sql.begin(async (sql) => {
-    const [l] = await sql`
-      INSERT INTO "League" (name, "joinCode") 
-      VALUES (${leagueName}, ${joinCode}) 
-      RETURNING id, name, "joinCode"
-    `;
-    
-    await sql`
-      INSERT INTO "LeagueMember" ("userId", "leagueId", role)
-      VALUES (${user.id}, ${l.id}, 'ADMIN')
-    `;
-    
-    await sql`
-      INSERT INTO "Team" ("userId", "leagueId", budget)
-      VALUES (${user.id}, ${l.id}, 100.0)
-    `;
-    
-    return [l];
-  });
+    const [league] = await sql.begin(async (sql) => {
+      const now = new Date().toISOString();
+      const leagueId = crypto.randomUUID();
+      const [l] = await sql`
+        INSERT INTO "League" (id, name, "joinCode", "updatedAt") 
+        VALUES (${leagueId}, ${leagueName}, ${joinCode}, ${now}) 
+        RETURNING id, name, "joinCode"
+      `;
+      
+      const memberId = crypto.randomUUID();
+      await sql`
+        INSERT INTO "LeagueMember" (id, "userId", "leagueId", role, "createdAt")
+        VALUES (${memberId}, ${user.id}, ${l.id}, 'ADMIN', ${now})
+      `;
+      
+      const teamId = crypto.randomUUID();
+      await sql`
+        INSERT INTO "Team" (id, "userId", "leagueId", budget, "createdAt", "updatedAt")
+        VALUES (${teamId}, ${user.id}, ${l.id}, 100.0, ${now}, ${now})
+      `;
+      
+      return [l];
+    });
 
-  return c.json(league);
+    return c.json(league);
+  } catch (e: any) {
+    return c.json({ error: e.message, type: "create_league_error" }, 500);
+  }
 });
 
 app.post("/leagues/join", requireUser, async (c) => {
-  const user = c.get("user");
-  const { joinCode } = await c.req.json();
-  const code = (joinCode || "").trim().toUpperCase();
+  try {
+    const user = c.get("user");
+    const { joinCode } = await c.req.json();
+    const code = (joinCode || "").trim().toUpperCase();
 
-  const [league] = await sql`SELECT id, name, "joinCode" FROM "League" WHERE "joinCode" = ${code}`;
-  if (!league) return c.json({ error: "league_not_found" }, 404);
+    const [league] = await sql`SELECT id, name, "joinCode" FROM "League" WHERE "joinCode" = ${code}`;
+    if (!league) return c.json({ error: "league_not_found" }, 404);
 
-  await sql.begin(async (sql) => {
-    await sql`
-      INSERT INTO "LeagueMember" ("userId", "leagueId", role)
-      VALUES (${user.id}, ${league.id}, 'MEMBER')
-      ON CONFLICT ("userId", "leagueId") DO NOTHING
-    `;
-    
-    await sql`
-      INSERT INTO "Team" ("userId", "leagueId", budget)
-      VALUES (${user.id}, ${league.id}, 100.0)
-      ON CONFLICT ("userId", "leagueId") DO NOTHING
-    `;
-  });
+    await sql.begin(async (sql) => {
+      const now = new Date().toISOString();
+      const memberId = crypto.randomUUID();
+      await sql`
+        INSERT INTO "LeagueMember" (id, "userId", "leagueId", role, "createdAt")
+        VALUES (${memberId}, ${user.id}, ${league.id}, 'MEMBER', ${now})
+        ON CONFLICT ("userId", "leagueId") DO NOTHING
+      `;
+      
+      const teamId = crypto.randomUUID();
+      await sql`
+        INSERT INTO "Team" (id, "userId", "leagueId", budget, "createdAt", "updatedAt")
+        VALUES (${teamId}, ${user.id}, ${league.id}, 100.0, ${now}, ${now})
+        ON CONFLICT ("userId", "leagueId") DO NOTHING
+      `;
+    });
 
-  return c.json({ leagueId: league.id, name: league.name, joinCode: league.joinCode });
+    return c.json({ leagueId: league.id, name: league.name, joinCode: league.joinCode });
+  } catch (e: any) {
+    return c.json({ error: e.message, type: "join_league_error" }, 500);
+  }
 });
 
 app.post("/team/market", requireUser, async (c) => {
