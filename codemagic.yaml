@@ -12,9 +12,15 @@ workflows:
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.fantaf1.app"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
-      ios_signing:
+    ios_signing:
         distribution_type: app_store
         bundle_identifier: com.fantaf1.app
+    triggering:
+      events:
+        - push
+      branch_filter:
+        include:
+          - main
     scripts:
       - name: Install deps
         script: npm ci
@@ -111,6 +117,12 @@ workflows:
       vars:
         ANDROID_DIR: "android"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
+    triggering:
+      events:
+        - push
+      branch_filter:
+        include:
+          - main
     scripts:
       - name: Install deps
         script: npm ci
