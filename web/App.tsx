@@ -177,6 +177,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const token = localStorage.getItem('fantaF1AuthToken');
     if (!token) return;
+    
+    // CRITICAL FIX: Do not attempt restore until races are loaded
+    // Otherwise we calculate index based on empty array -> -1 -> Crash
+    if (races.length === 0) {
+      setLoadingStatus("Waiting for Races...");
+      return; 
+    }
 
     (async () => {
       try {
@@ -692,7 +699,8 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded boader border-slate-800 break-all max-w-xs mb-4">
         API: {getApiUrl()}<br/>
-        Build: 44<br/>
+        API: {getApiUrl()}<br/>
+        Build: 45 (Fix Race Cond)<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - (window as any)._mountTime) / 1000).toFixed(1)}s
       </div>
@@ -810,7 +818,9 @@ const App: React.FC = () => {
   }
 
   // Main App Content (Only rendered if logged in)
-  const currentRace = races[data.currentRaceIndex];
+  const currentRace = races[data.currentRaceIndex] || races[0]; // Fallback to avoid crash
+  if (!currentRace) return <div>Error: No Race Data</div>; // Should never happen due to check above
+  
   const lockState = getLockStatus(currentRace, now);
   // Use constructors from data (editable) fallback to constant if needed
   const activeConstructors = data.constructors || CONSTRUCTORS;
