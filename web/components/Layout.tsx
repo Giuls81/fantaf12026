@@ -36,8 +36,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
   return (
     <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-slate-900 shadow-2xl overflow-hidden">
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24 pt-[calc(1rem+env(safe-area-inset-top,0px))]">
+      <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-32 pt-[calc(1rem+env(safe-area-inset-top,0px))]">
         {children}
+        
+        {/* Powered By Branding */}
+        <div className="mt-8 mb-4 flex flex-col items-center opacity-40 hover:opacity-100 transition-opacity">
+          <span className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">Powered BY</span>
+          <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-4 w-auto grayscale brightness-200" />
+        </div>
       </main>
 
       {/* Bottom Navigation */}

@@ -715,11 +715,16 @@ const App: React.FC = () => {
       <div className="text-xl font-bold text-white mb-2">Loading Paddock...</div>
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-6"></div>
       
-      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-4">
+      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 50 (Global Lang + UI Fix)<br/>
+        Build: 51 (Branding + UI)<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
+      </div>
+
+      <div className="flex flex-col items-center opacity-30">
+        <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">Powered BY</span>
+        <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto grayscale brightness-200" />
       </div>
       
       {startupError && (
