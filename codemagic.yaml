@@ -39,11 +39,18 @@ workflows:
       - name: Build IPA (signed) + Upload to TestFlight
         script: |
           cd "$IOS_DIR"
+          
+          echo "Clearing SPM cache and resolving dependencies..."
+          rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts
+          
           if [ -d "App.xcworkspace" ]; then
             BUILD_TARGET="-workspace App.xcworkspace"
           else
             BUILD_TARGET="-project App.xcodeproj"
           fi
+          
+          xcodebuild $BUILD_TARGET -scheme "$XCODE_SCHEME" -resolvePackageDependencies
+          
           xcodebuild \
             $BUILD_TARGET \
             -scheme "$XCODE_SCHEME" \
