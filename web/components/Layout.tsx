@@ -33,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
     { id: Tab.ADMIN, label: getLabel(Tab.ADMIN), icon: '⚙️' },
   ];
 
-  const visibleTabs = showAdmin ? tabs : tabs.filter(t => t.id !== Tab.ADMIN);
+  const visibleTabs = tabs;
 
   return (
     <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-slate-900 shadow-2xl overflow-hidden">
@@ -43,7 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
         
         {/* Powered By Branding */}
         <div className="mt-8 mb-4 flex flex-col items-center opacity-40 hover:opacity-100 transition-opacity">
-          <span className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">Powered BY</span>
+          <span className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
           <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-4 w-auto" />
         </div>
       </main>

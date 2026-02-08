@@ -919,7 +919,7 @@ const App: React.FC = () => {
   // Allow render if data exists (even if races empty, though UI might break elsewhere)
   if (!data || races.length === 0) return (
     <div className="flex flex-col h-screen items-center justify-center bg-slate-900 text-slate-400 p-6 text-center">
-      <div className="text-xl font-bold text-white mb-2">Loading Paddock...</div>
+      <div className="text-xl font-bold text-white mb-2">{t({ en: 'Loading Paddock...', it: 'Caricamento Paddock...', fr: 'Chargement du Paddock...', de: 'Lade Paddock...', es: 'Cargando Paddock...', ru: 'Загрузка паддока...', zh: '正在加载围场...', ar: 'تحميل بادوك...', ja: 'パドック読み込み中...' })}</div>
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-6"></div>
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
@@ -930,7 +930,7 @@ const App: React.FC = () => {
       </div>
 
       <div className="flex flex-col items-center opacity-30">
-        <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">Powered BY</span>
+        <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
         <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
       </div>
       
@@ -945,7 +945,7 @@ const App: React.FC = () => {
           onClick={() => location.reload()}
           className="text-xs text-blue-400 hover:text-blue-300 underline"
         >
-          Retry Connection
+          {t({ en: 'Retry Connection', it: 'Riprova Connessione', fr: 'Réessayer Connexion', de: 'Verbindung wiederholen', es: 'Reintentar Conexión', ru: 'Повторить соединение', zh: '重试连接', ar: 'إعادة الاتصال', ja: '接続を再試行' })}
         </button>
 
         <button 
@@ -963,7 +963,7 @@ const App: React.FC = () => {
           }}
           className="text-xs text-green-400 hover:text-green-300 underline"
         >
-          Force Fetch Races
+          {t({ en: 'Force Fetch Races', it: 'Forza Aggiornamento Gare', fr: 'Forcer Récup. Courses', de: 'Rennen laden erzwingen', es: 'Forzar Obtención Carreras', ru: 'Обновить гонки', zh: '强制获取比赛', ar: 'فرض جلب السباقات', ja: 'レース強制取得' })}
         </button>
 
         {(now - ((window as any)._mountTime || now)) > 5000 && (
@@ -976,7 +976,7 @@ const App: React.FC = () => {
             }}
             className="text-xs text-red-400 hover:text-red-300 underline"
           >
-            Force Reset App
+            {t({ en: 'Force Reset App', it: 'Forza Reset App', fr: 'Forcer Réinit. App', de: 'App-Reset erzwingen', es: 'Forzar Reinicio App', ru: 'Сброс приложения', zh: '强制重置应用', ar: 'فرض إعادة تعيين التطبيق', ja: 'アプリ強制リセット' })}
           </button>
         )}
       </div>
@@ -990,7 +990,7 @@ const App: React.FC = () => {
         <h1 className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-red-500">
           FantaF1
         </h1>
-        <p className="text-slate-400 mb-8">2026 Season Manager</p>
+        <p className="text-slate-400 mb-8">{t({ en: '2026 Season Manager', it: 'Manager Stagione 2026', fr: 'Manager Saison 2026', de: 'Saisonmanager 2026', es: 'Gestor Temporada 2026', ru: 'Менеджер сезона 2026', zh: '2026赛季经理', ar: 'مدير موسم 2026', ja: '2026シーズンマネージャー' })}</p>
 
         <div className="w-full max-w-sm bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
 
@@ -1059,7 +1059,8 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">Powered BY</span>
+            <span className="text-[10px] text-slate-600">Build: 58</span>
+            <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
         </div>
@@ -1110,7 +1111,7 @@ const App: React.FC = () => {
                 <div className="mt-3 bg-slate-900/50 p-2 rounded text-center border border-slate-600">
                   <span className="text-xs text-slate-400 uppercase mr-2">{t({ en: 'Lineup Locks In', it: 'Chiude tra', fr: 'Verrouillage dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '阵容锁定于', ar: 'يغلق التشكيل في', ja: 'ラインナップ固定まで' })}</span>
                   <span className={`font-mono font-bold ${lockState.status === 'locked' ? 'text-red-400' : 'text-green-400'}`}>
-                    {lockState.status === 'locked' ? 'LOCKED' : formatCountdown(lockState.msToLock || 0)}
+                    {lockState.status === 'locked' ? t({ en: 'LOCKED', it: 'BLOCCATO', fr: 'VERROUILLÉ', de: 'GESPERRT', es: 'BLOQUEADO', ru: 'ЗАБЛОКИРОВАНО', zh: '已锁定', ar: 'مغلق', ja: 'ロック済' }) : formatCountdown(lockState.msToLock || 0)}
                   </span>
                 </div>
               )}
@@ -1186,8 +1187,8 @@ const App: React.FC = () => {
                   <div className="text-xs text-green-200">{t({ en: 'Locks in', it: 'Chiude tra', fr: 'Verrouille dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '锁定于', ar: 'يغلق في', ja: '固定まで' })} {formatCountdown(lockState.msToLock)}</div>
                 )}
                 <div className="mt-2 text-[10px] font-mono text-green-200 opacity-80 border-t border-green-700/50 pt-1">
-                  <div>Session UTC: {lockState.targetSessionUtc || 'N/A'}</div>
-                  <div>Lock UTC: {lockState.lockTimeUtc || 'N/A'}</div>
+                  <div>{t({ en: 'Session UTC', it: 'Sessione UTC', fr: 'Séance UTC', de: 'Sitzung UTC', es: 'Sesión UTC', ru: 'Сессия UTC', zh: '会话UTC', ar: 'الجلسة UTC', ja: 'セッションUTC' })}: {lockState.targetSessionUtc || 'N/A'}</div>
+                  <div>{t({ en: 'Lock UTC', it: 'Blocco UTC', fr: 'Verrouillage UTC', de: 'Sperre UTC', es: 'Cierre UTC', ru: 'Блок. UTC', zh: '锁定UTC', ar: 'القفل UTC', ja: 'ロックUTC' })}: {lockState.lockTimeUtc || 'N/A'}</div>
                 </div>
               </div>
             )}
@@ -1198,8 +1199,8 @@ const App: React.FC = () => {
                   <div className="text-xs text-orange-200">{t({ en: 'Locks in', it: 'Chiude tra', fr: 'Verrouille dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '锁定于', ar: 'يغلق في', ja: '固定まで' })} {formatCountdown(lockState.msToLock)}</div>
                 )}
                 <div className="mt-2 text-[10px] font-mono text-orange-200 opacity-80 border-t border-orange-700/50 pt-1">
-                  <div>Session UTC: {lockState.targetSessionUtc || 'N/A'}</div>
-                  <div>Lock UTC: {lockState.lockTimeUtc || 'N/A'}</div>
+                  <div>{t({ en: 'Session UTC', it: 'Sessione UTC', fr: 'Séance UTC', de: 'Sitzung UTC', es: 'Sesión UTC', ru: 'Сессия UTC', zh: '会话UTC', ar: 'الجلسة UTC', ja: 'セッションUTC' })}: {lockState.targetSessionUtc || 'N/A'}</div>
+                  <div>{t({ en: 'Lock UTC', it: 'Blocco UTC', fr: 'Verrouillage UTC', de: 'Sperre UTC', es: 'Cierre UTC', ru: 'Блок. UTC', zh: '锁定UTC', ar: 'القفل UTC', ja: 'ロックUTC' })}: {lockState.lockTimeUtc || 'N/A'}</div>
                 </div>
               </div>
             )}
@@ -1240,8 +1241,8 @@ const App: React.FC = () => {
                         <div>
                           <div className="text-white font-medium flex items-center gap-2">
                             {d?.name}
-                            {isCaptain && <span className="text-[10px] bg-yellow-500 text-black font-bold px-1 rounded">CPT</span>}
-                            {isReserve && <span className="text-[10px] bg-green-500 text-black font-bold px-1 rounded">RES</span>}
+                            {isCaptain && <span className="text-[10px] bg-yellow-500 text-black font-bold px-1 rounded">{t({ en: 'CPT', it: 'CAP', fr: 'CAP', de: 'KPT', es: 'CAP', ru: 'КЭП', zh: '队长', ar: 'كابتن', ja: 'CPT' })}</span>}
+                            {isReserve && <span className="text-[10px] bg-green-500 text-black font-bold px-1 rounded">{t({ en: 'RES', it: 'RIS', fr: 'RES', de: 'ERS', es: 'RES', ru: 'РЕЗ', zh: '替补', ar: 'احتياطي', ja: 'RES' })}</span>}
                           </div>
                           <div className="text-xs text-slate-400">{c?.name}</div>
                         </div>
@@ -1391,12 +1392,62 @@ const App: React.FC = () => {
                 );
               })}
             </div>
+
+            {/* Profile & Logout Card (Moved to Home) */}
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'Профиль', zh: '用户资料', ar: 'ملف المستخدم', ja: 'プロフィール' })}</h3>
+              <div className="mb-4 text-sm text-slate-300">
+                <p><span className="text-slate-500">{t({ en: 'Name', it: 'Nome', fr: 'Nom', de: 'Name', es: 'Nombre', ru: 'Имя', zh: '名字', ar: 'الاسم', ja: '名前' })}:</span> {data.user?.name}</p>
+                <p><span className="text-slate-500">{t({ en: 'Role', it: 'Ruolo', fr: 'Rôle', de: 'Rolle', es: 'Rol', ru: 'Роль', zh: '角色', ar: 'الدور', ja: '役割' })}:</span> {data.user?.isAdmin ? 'Admin' : 'Member'}</p>
+                <p><span className="text-slate-500">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span> <span className="font-mono text-blue-400">{data.user?.leagueCode}</span></p>
+              </div>
+
+              <div className="flex flex-col gap-3 mt-4">
+                <button
+                  onClick={handleLogout}
+                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded transition-colors"
+                >
+                  {t({ en: 'Logout', it: 'Esci', fr: 'Déconnexion', de: 'Abmelden', es: 'Salir', ru: 'Выйти', zh: '登出', ar: 'خروج', ja: 'ログアウト' })}
+                </button>
+                {showResetConfirm ? (
+                  <div className="bg-red-950/50 border border-red-500 p-4 rounded-lg animate-pulse">
+                    <p className="text-red-200 text-center mb-3 font-bold">{t({ en: 'Delete all local data?', it: 'Eliminare i dati locali?', fr: 'Supprimer données locales?', de: 'Lokale Daten löschen?', es: '¿Borrar datos locales?', ru: 'Удалить данные?', zh: '删除本地数据？', ar: 'حذف البيانات المحلية؟', ja: '全データを削除しますか？' })}</p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowResetConfirm(false)}
+                        className="flex-1 bg-slate-600 text-white py-2 rounded hover:bg-slate-500"
+                      >
+                        {t({ en: 'Cancel', it: 'Annulla', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ru: 'Отмена', zh: '取消', ar: 'إلغاء', ja: 'キャンセル' })}
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-500"
+                      >
+                        {t({ en: 'Confirm', it: 'Conferma', fr: 'Confirmer', de: 'Bestätigen', es: 'Confirmar', ru: 'Подтвердить', zh: '确认', ar: 'تأكيد', ja: '確認' })}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowResetConfirm(true)}
+                    className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-200 font-bold py-2 px-4 rounded transition-colors border border-red-900"
+                  >
+                    {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'Réinitialiser (Déconnexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'Сброс (Выход)', zh: '重置所有数据', ar: 'إعادة تعيين (خروج)', ja: 'リセット (ログアウト)' })}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         );
 
       case Tab.ADMIN:
         return (
-          <div className="space-y-6">
+          <fieldset className="space-y-6 border-none p-0 m-0 min-w-0" disabled={!data.user?.isAdmin}>
+            {!data.user?.isAdmin && (
+              <div className="bg-yellow-900/50 text-yellow-200 p-2 rounded text-center text-xs font-bold border border-yellow-700">
+                {t({ en: 'READ ONLY MODE (Guest)', it: 'MODALITÀ SOLA LETTURA (Ospite)', fr: 'MODE LECTURE SEULE (Invité)', de: 'LESEMODUS (Gast)', es: 'MODO LECTURA (Invitado)', ru: 'ТОЛЬКО ЧТЕНИЕ (Гость)', zh: '只读模式（访客）', ar: 'وضع القراءة فقط (ضيف)', ja: '読み取り専用モード（ゲスト）' })}
+              </div>
+            )}
             <h1 className="text-2xl font-bold text-white">{t({ en: 'Admin Controls', it: 'Controlli Admin', fr: 'Contrôles Admin', de: 'Admin-Steuerung', es: 'Controles Admin', ru: 'Управление', zh: '管理员控制', ar: 'تحكم المسؤول', ja: '管理設定' })}</h1>
 
             {/* Race Config Card */}
@@ -1474,14 +1525,14 @@ const App: React.FC = () => {
 
             {/* Debug Time Tooling */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-2">{t({ en: 'Debug Time', it: 'Debug Tempo' })}</h3>
+              <h3 className="font-semibold text-white mb-2">{t({ en: 'Debug Time', it: 'Debug Tempo', fr: 'Temps Debug', de: 'Debug-Zeit', es: 'Tiempo Debug', ru: 'Отладка времени', zh: '调试时间', ar: 'وقت التصحيح', ja: 'デバッグ時間' })}</h3>
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => handleTestTime(120, false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">Quali +2h</button>
-                <button onClick={() => handleTestTime(10, false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">Quali +10m</button>
+                <button onClick={() => handleTestTime(120, false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Quali +2h', it: 'Qualifiche +2h', fr: 'Qualif +2h', de: 'Quali +2h', es: 'Clasif +2h', ru: 'Квал +2ч', zh: '排位 +2小时', ar: 'التصفيات +2س', ja: '予選 +2時間' })}</button>
+                <button onClick={() => handleTestTime(10, false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Quali +10m', it: 'Qualifiche +10m', fr: 'Qualif +10m', de: 'Quali +10m', es: 'Clasif +10m', ru: 'Квал +10м', zh: '排位 +10分', ar: 'التصفيات +10د', ja: '予選 +10分' })}</button>
                 {currentRace.isSprint && (
                   <>
-                    <button onClick={() => handleTestTime(120, true)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">Sprint +2h</button>
-                    <button onClick={() => handleTestTime(10, true)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">Sprint +10m</button>
+                    <button onClick={() => handleTestTime(120, true)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Sprint +2h', it: 'Sprint +2h', fr: 'Sprint +2h', de: 'Sprint +2h', es: 'Sprint +2h', ru: 'Спринт +2ч', zh: '冲刺 +2小时', ar: 'السرعة +2س', ja: 'スプリント +2時間' })}</button>
+                    <button onClick={() => handleTestTime(10, true)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Sprint +10m', it: 'Sprint +10m', fr: 'Sprint +10m', de: 'Sprint +10m', es: 'Sprint +10m', ru: 'Спринт +10м', zh: '冲刺 +10分', ar: 'السرعة +10د', ja: 'スプリント +10分' })}</button>
                   </>
                 )}
               </div>
@@ -1494,7 +1545,7 @@ const App: React.FC = () => {
 
                 {/* Race Points - Grid of 22 */}
                 <div className="col-span-2">
-                  <label className="text-xs text-slate-400 block mb-2">{t({ en: 'Race Points (1-22)', it: 'Punti Gara (1-22)', fr: 'Points Course (1-22)' })}</label>
+                  <label className="text-xs text-slate-400 block mb-2">{t({ en: 'Race Points (1-22)', it: 'Punti Gara (1-22)', fr: 'Points Course (1-22)', de: 'Rennpunkte (1-22)', es: 'Puntos Carrera (1-22)', ru: 'Очки за гонку (1-22)', zh: '比赛积分 (1-22)', ar: 'نقاط السباق (1-22)', ja: 'レースポイント (1-22)' })}</label>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                     {Array.from({ length: 22 }).map((_, index) => {
                       // Safely get existing point, default to 0 if out of bounds or undefined
@@ -1515,27 +1566,27 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Quali */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Pole Position', it: 'Pole Position', fr: 'Pole Position', de: 'Pole Position', es: 'Pole Position' })}</label><input type="number" value={data.rules.qualiPole} onChange={(e) => handleRuleChange('qualiPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q3 Reached (1-10)', it: 'Accesso Q3 (1-10)', fr: 'Q3 Atteint (1-10)', de: 'Q3 Erreicht (1.-10.)', es: 'Q3 Alcanzada (1-10)' })}</label><input type="number" value={data.rules.qualiQ3Reached} onChange={(e) => handleRuleChange('qualiQ3Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q2 Reached (11-16)', it: 'Accesso Q2 (11-16)', fr: 'Q2 Atteint (11-16)', de: 'Q2 Erreicht (11.-16.)', es: 'Q2 Alcanzada (11-16)' })}</label><input type="number" value={data.rules.qualiQ2Reached} onChange={(e) => handleRuleChange('qualiQ2Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q1 Elim (17-22)', it: 'Eliminato Q1 (17-22)', fr: 'Éliminé Q1 (17-22)', de: 'Q1 Ausgeschieden (17.-22.)', es: 'Eliminado Q1 (17-22)' })}</label><input type="number" value={data.rules.qualiQ1Eliminated} onChange={(e) => handleRuleChange('qualiQ1Eliminated', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Grid Penalty', it: 'Penalità Griglia', fr: 'Pénalité Grille', de: 'Startplatzstrafe', es: 'Penalización Parrilla' })}</label><input type="number" value={data.rules.qualiGridPenalty} onChange={(e) => handleRuleChange('qualiGridPenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Pole Position', it: 'Pole Position', fr: 'Pole Position', de: 'Pole Position', es: 'Pole Position', ru: 'Поул-позиция', zh: '杆位', ar: 'قطب الانطلاق', ja: 'ポールポジション' })}</label><input type="number" value={data.rules.qualiPole} onChange={(e) => handleRuleChange('qualiPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q3 Reached (1-10)', it: 'Accesso Q3 (1-10)', fr: 'Q3 Atteint (1-10)', de: 'Q3 Erreicht (1.-10.)', es: 'Q3 Alcanzada (1-10)', ru: 'Q3 Достигнут (1-10)', zh: '进入Q3 (1-10)', ar: 'الوصول لـ Q3 (1-10)', ja: 'Q3進出 (1-10)' })}</label><input type="number" value={data.rules.qualiQ3Reached} onChange={(e) => handleRuleChange('qualiQ3Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q2 Reached (11-16)', it: 'Accesso Q2 (11-16)', fr: 'Q2 Atteint (11-16)', de: 'Q2 Erreicht (11.-16.)', es: 'Q2 Alcanzada (11-16)', ru: 'Q2 Достигнут (11-16)', zh: '进入Q2 (11-16)', ar: 'الوصول لـ Q2 (11-16)', ja: 'Q2進出 (11-16)' })}</label><input type="number" value={data.rules.qualiQ2Reached} onChange={(e) => handleRuleChange('qualiQ2Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q1 Elim (17-22)', it: 'Eliminato Q1 (17-22)', fr: 'Éliminé Q1 (17-22)', de: 'Q1 Ausgeschieden (17.-22.)', es: 'Eliminado Q1 (17-22)', ru: 'Выбыл в Q1 (17-22)', zh: 'Q1淘汰 (17-22)', ar: 'إقصاء Q1 (17-22)', ja: 'Q1敗退 (17-22)' })}</label><input type="number" value={data.rules.qualiQ1Eliminated} onChange={(e) => handleRuleChange('qualiQ1Eliminated', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Grid Penalty', it: 'Penalità Griglia', fr: 'Pénalité Grille', de: 'Startplatzstrafe', es: 'Penalización Parrilla', ru: 'Штраф на решетке', zh: '发车位处罚', ar: 'عقوبة الشبكة', ja: 'グリッド降格' })}</label><input type="number" value={data.rules.qualiGridPenalty} onChange={(e) => handleRuleChange('qualiGridPenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Race Bonuses */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Last Place Malus', it: 'Malus Ultimo Posto', fr: 'Malus Dernière Place', de: 'Malus Letzter Platz', es: 'Malus Último Lugar' })}</label><input type="number" value={data.rules.raceLastPlaceMalus} onChange={(e) => handleRuleChange('raceLastPlaceMalus', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'DNF / DNS / DSQ', it: 'Ritirato / Squalificato', fr: 'Abandon / Disqualifié', de: 'DNF / DNS / DSQ', es: 'Abandono / Descalificado' })}</label><input type="number" value={data.rules.raceDNF} onChange={(e) => handleRuleChange('raceDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Race Penalty', it: 'Penalità Gara', fr: 'Pénalité Course', de: 'Rennstrafe', es: 'Penalización Carrera' })}</label><input type="number" value={data.rules.racePenalty} onChange={(e) => handleRuleChange('racePenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Pos Gained (per pos)', it: 'Pos Guadagnate (per pos)', fr: 'Pos Gagnées (par pos)', de: 'Pos Gewonnen (pro Pos)', es: 'Pos Ganadas (por pos)' })}</label><input type="number" value={data.rules.positionGained} onChange={(e) => handleRuleChange('positionGained', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Pos Lost (per pos)', it: 'Pos Perse (per pos)', fr: 'Pos Perdues (par pos)', de: 'Pos Verloren (pro Pos)', es: 'Pos Perdidas (por pos)' })}</label><input type="number" value={data.rules.positionLost} onChange={(e) => handleRuleChange('positionLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Last Place Malus', it: 'Malus Ultimo Posto', fr: 'Malus Dernière Place', de: 'Malus Letzter Platz', es: 'Malus Último Lugar', ru: 'Штраф за посл. место', zh: '倒数第一惩罚', ar: 'عقوبة المركز الأخير', ja: '最下位ペナルティ' })}</label><input type="number" value={data.rules.raceLastPlaceMalus} onChange={(e) => handleRuleChange('raceLastPlaceMalus', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'DNF / DNS / DSQ', it: 'Ritirato / Squalificato', fr: 'Abandon / Disqualifié', de: 'DNF / DNS / DSQ', es: 'Abandono / Descalificado', ru: 'Сход / Дисквал.', zh: '未完赛/取消资格', ar: 'انسحاب / إقصاء', ja: 'リタイア / 失格' })}</label><input type="number" value={data.rules.raceDNF} onChange={(e) => handleRuleChange('raceDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Race Penalty', it: 'Penalità Gara', fr: 'Pénalité Course', de: 'Rennstrafe', es: 'Penalización Carrera', ru: 'Штраф в гонке', zh: '正赛惩罚', ar: 'عقوبة السباق', ja: 'レースペナルティ' })}</label><input type="number" value={data.rules.racePenalty} onChange={(e) => handleRuleChange('racePenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Pos Gained (per pos)', it: 'Pos Guadagnate (per pos)', fr: 'Pos Gagnées (par pos)', de: 'Pos Gewonnen (pro Pos)', es: 'Pos Ganadas (por pos)', ru: 'Позиций выиграно', zh: '位置上升 (每位)', ar: 'مراكز مكتسبة (لكل مركز)', ja: '順位アップ (1つ毎)' })}</label><input type="number" value={data.rules.positionGained} onChange={(e) => handleRuleChange('positionGained', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Pos Lost (per pos)', it: 'Pos Perse (per pos)', fr: 'Pos Perdues (par pos)', de: 'Pos Verloren (pro Pos)', es: 'Pos Perdidas (por pos)', ru: 'Позиций потеряно', zh: '位置下降 (每位)', ar: 'مراكز مفقودة (لكل مركز)', ja: '順位ダウン (1つ毎)' })}</label><input type="number" value={data.rules.positionLost} onChange={(e) => handleRuleChange('positionLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Teammate */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Beat Teammate', it: 'Batte Compagno', fr: 'Bat Coéquipier', de: 'Teamkollegen geschlagen', es: 'Vence Compañero' })}</label><input type="number" value={data.rules.teammateBeat} onChange={(e) => handleRuleChange('teammateBeat', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Lost to Teammate', it: 'Perde vs Compagno', fr: 'Perd contre Coéquipier', de: 'Verliert gegen Teamk.', es: 'Pierde vs Compañero' })}</label><input type="number" value={data.rules.teammateLost} onChange={(e) => handleRuleChange('teammateLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Beat TM (TM DNF)', it: 'Batte Compagno (Ritirato)', fr: 'Bat Coéquipier (Abandon)', de: 'Teamk. geschlagen (DNF)', es: 'Vence Comp. (Abandono)' })}</label><input type="number" value={data.rules.teammateBeatDNF} onChange={(e) => handleRuleChange('teammateBeatDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Beat Teammate', it: 'Batte Compagno', fr: 'Bat Coéquipier', de: 'Teamkollegen geschlagen', es: 'Vence Compañero', ru: 'Опередил напарника', zh: '击败队友', ar: 'تغلب على الزميل', ja: 'チームメイトに勝利' })}</label><input type="number" value={data.rules.teammateBeat} onChange={(e) => handleRuleChange('teammateBeat', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Lost to Teammate', it: 'Perde vs Compagno', fr: 'Perd contre Coéquipier', de: 'Verliert gegen Teamk.', es: 'Pierde vs Compañero', ru: 'Проиграл напарнику', zh: '输给队友', ar: 'خسر أمام الزميل', ja: 'チームメイトに敗北' })}</label><input type="number" value={data.rules.teammateLost} onChange={(e) => handleRuleChange('teammateLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Beat TM (TM DNF)', it: 'Batte Compagno (Ritirato)', fr: 'Bat Coéquipier (Abandon)', de: 'Teamk. geschlagen (DNF)', es: 'Vence Comp. (Abandono)', ru: 'Опередил (напарник сошел)', zh: '击败队友 (队友退赛)', ar: 'تغلب (انسحاب الزميل)', ja: '勝利 (僚機リタイア)' })}</label><input type="number" value={data.rules.teammateBeatDNF} onChange={(e) => handleRuleChange('teammateBeatDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Sprint */}
                 <div className="col-span-2 mt-2">
-                  <label className="text-xs text-slate-400 block mb-2">{t({ en: 'Sprint Points (1st - 8th)', it: 'Punti Sprint (1°-8°)', fr: 'Points Sprint (1-8)' })}</label>
+                  <label className="text-xs text-slate-400 block mb-2">{t({ en: 'Sprint Points (1st - 8th)', it: 'Punti Sprint (1°-8°)', fr: 'Points Sprint (1-8)', de: 'Sprint-Punkte (1.-8.)', es: 'Puntos Sprint (1-8)', ru: 'Очки за спринт (1-8)', zh: '冲刺赛积分 (1-8)', ar: 'نقاط السرعة (1-8)', ja: 'スプリントポイント (1-8)' })}</label>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                     {Array.from({ length: 8 }).map((_, index) => {
                       const val = (data.rules.sprintPositionPoints && data.rules.sprintPositionPoints[index]) || 0;
@@ -1553,7 +1604,7 @@ const App: React.FC = () => {
                     })}
                   </div>
                 </div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Sprint Quali Pole', it: 'Pole Sprint Quali', fr: 'Pole Qualif Sprint', de: 'Sprint Quali Pole', es: 'Pole Sprint Clasif' })}</label><input type="number" value={data.rules.sprintPole} onChange={(e) => handleRuleChange('sprintPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Sprint Quali Pole', it: 'Pole Sprint Quali', fr: 'Pole Qualif Sprint', de: 'Sprint Quali Pole', es: 'Pole Sprint Clasif', ru: 'Поул спринт-квал.', zh: '冲刺排位杆位', ar: 'قطب تصفيات السرعة', ja: 'S予選ポール' })}</label><input type="number" value={data.rules.sprintPole} onChange={(e) => handleRuleChange('sprintPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
               </div>
             </div>
 
@@ -1582,13 +1633,20 @@ const App: React.FC = () => {
             {/* Race Results Automated Sync */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
               <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-                <h3 className="font-semibold text-white">{t({ en: 'Race Results (Automated)', it: 'Risultati Gara (Automatico)' })}</h3>
+                <h3 className="font-semibold text-white">{t({ en: 'Race Results (Automated)', it: 'Risultati Gara (Automatico)', fr: 'Résultats Course (Auto)', de: 'Rennergebnisse (Auto)', es: 'Resultados Carrera (Auto)', ru: 'Результаты гонки (Авто)', zh: '比赛结果 (自动)', ar: 'نتائج السباق (تلقائي)', ja: 'レース結果 (自動)' })}</h3>
                 <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded">OpenF1</span>
               </div>
               <p className="text-xs text-slate-400 mb-4">
                 {t({
                   en: 'Fetch official results from OpenF1. This will automatically update driver points based on finishing positions.',
-                  it: 'Scarica i risultati ufficiali da OpenF1. Questo aggiornerà automaticamente i punti dei piloti in base alle posizioni d\'arrivo.'
+                  it: 'Scarica i risultati ufficiali da OpenF1. Questo aggiornerà automaticamente i punti dei piloti in base alle posizioni d\'arrivo.',
+                  fr: 'Récupérer résultats officiels OpenF1. Met à jour les points pilotes automatiquement.',
+                  de: 'Offizielle Ergebnisse von OpenF1 laden. Aktualisiert Fahrerpunkte automatisch.',
+                  es: 'Obtener resultados oficiales de OpenF1. Actualiza puntos automáticamente.',
+                  ru: 'Получить официальные результаты из OpenF1. Автоматически обновляет очки пилотов.',
+                  zh: '从OpenF1获取官方结果。将根据完赛位置自动更新车手积分。',
+                  ar: 'جلب النتائج الرسمية من OpenF1. سيتم تحديث نقاط السائقين تلقائياً.',
+                  ja: 'OpenF1から公式結果を取得。順位に基づいてドライバーポイントを自動更新します。'
                 })}
               </p>
               <button
@@ -1599,61 +1657,19 @@ const App: React.FC = () => {
                 {syncing ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                    {t({ en: 'Syncing...', it: 'Sincronizzazione...' })}
+                    {t({ en: 'Syncing...', it: 'Sincronizzazione...', fr: 'Sync...', de: 'Sync...', es: 'Sincronizando...', ru: 'Синхронизация...', zh: '同步中...', ar: 'مزامنة...', ja: '同期中...' })}
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    {t({ en: 'Sync results with OpenF1', it: 'Sincronizza risultati OpenF1' })}
+                    {t({ en: 'Sync results with OpenF1', it: 'Sincronizza risultati OpenF1', fr: 'Sync résultats avec OpenF1', de: 'Ergebnisse mit OpenF1 sync.', es: 'Sincronizar resultados OpenF1', ru: 'Синхр. результаты OpenF1', zh: '同步OpenF1结果', ar: 'مزامنة نتائج OpenF1', ja: 'OpenF1と同期' })}
                   </>
                 )}
               </button>
             </div>
 
-            {/* Profile & Logout Card */}
-            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'Профиль', zh: '用户资料', ar: 'ملف المستخدم', ja: 'プロフィール' })}</h3>
-              <div className="mb-4 text-sm text-slate-300">
-                <p><span className="text-slate-500">{t({ en: 'Name', it: 'Nome', fr: 'Nom', de: 'Name', es: 'Nombre', ru: 'Имя', zh: '名字', ar: 'الاسم', ja: '名前' })}:</span> {data.user?.name}</p>
-                <p><span className="text-slate-500">{t({ en: 'Role', it: 'Ruolo', fr: 'Rôle', de: 'Rolle', es: 'Rol', ru: 'Роль', zh: '角色', ar: 'الدور', ja: '役割' })}:</span> {data.user?.isAdmin ? 'Admin' : 'Member'}</p>
-                <p><span className="text-slate-500">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span> <span className="font-mono text-blue-400">{data.user?.leagueCode}</span></p>
-              </div>
-
-              <div className="flex flex-col gap-3 mt-4">
-                <button
-                  onClick={handleLogout}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded transition-colors"
-                >
-                  {t({ en: 'Logout', it: 'Esci', fr: 'Déconnexion', de: 'Abmelden', es: 'Salir', ru: 'Выйти', zh: '登出', ar: 'خروج', ja: 'ログアウト' })}
-                </button>
-                {showResetConfirm ? (
-                  <div className="bg-red-950/50 border border-red-500 p-4 rounded-lg animate-pulse">
-                    <p className="text-red-200 text-center mb-3 font-bold">{t({ en: 'Delete all local data?', it: 'Eliminare i dati locali?', fr: 'Supprimer données locales?', de: 'Lokale Daten löschen?', es: '¿Borrar datos locales?', ru: 'Удалить данные?', zh: '删除本地数据？', ar: 'حذف البيانات المحلية؟', ja: '全データを削除しますか？' })}</p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowResetConfirm(false)}
-                        className="flex-1 bg-slate-600 text-white py-2 rounded hover:bg-slate-500"
-                      >
-                        {t({ en: 'Cancel', it: 'Annulla', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ru: 'Отмена', zh: '取消', ar: 'إلغاء', ja: 'キャンセル' })}
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-500"
-                      >
-                        {t({ en: 'Confirm', it: 'Conferma', fr: 'Confirmer', de: 'Bestätigen', es: 'Confirmar', ru: 'Подтвердить', zh: '确认', ar: 'تأكيد', ja: '確認' })}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowResetConfirm(true)}
-                    className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-200 font-bold py-2 px-4 rounded transition-colors border border-red-900"
-                  >
-                    {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'Réinitialiser (Déconnexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'Сброс (Выход)', zh: '重置所有数据', ar: 'إعادة تعيين (خروج)', ja: 'リセット (ログアウト)' })}
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* Admin Driver Config (Merged) */}
+            {renderAdmin()}
 
             {/* Toggle Debug */}
             <div className="flex justify-center">
@@ -1684,14 +1700,12 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </fieldset>
         );
 
       case Tab.STANDINGS:
         return renderStandings();
 
-      case Tab.ADMIN:
-        return renderAdmin();
 
       default:
         return <div>Tab not found</div>;
@@ -1730,18 +1744,18 @@ const App: React.FC = () => {
       <div className="space-y-6">
         <header>
           <h1 className="text-2xl font-bold text-white">{t({ en: 'Administrator', it: 'Amministratore' })}</h1>
-          <p className="text-slate-400 text-sm">{t({ en: 'Manage drivers prices and points.', it: 'Gestisci quotazioni e punteggi.' })}</p>
+          <p className="text-slate-400 text-sm">{t({ en: 'Manage drivers prices and points.', it: 'Gestisci quotazioni e punteggi.', fr: 'Gérer prix et points pilotes.', de: 'Fahrerpreise und Punkte verwalten.', es: 'Gestionar precios y puntos.', ru: 'Управление ценами и очками.', zh: '管理车手价格和积分。', ar: 'إدارة أسعار ونقاط السائقين.', ja: 'ドライバー価格とポイント管理。' })}</p>
         </header>
 
         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-4">
           <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-             <h2 className="text-lg font-bold text-white uppercase tracking-wider">{t({ en: 'Drivers List', it: 'Lista Piloti' })}</h2>
+             <h2 className="text-lg font-bold text-white uppercase tracking-wider">{t({ en: 'Drivers List', it: 'Lista Piloti', fr: 'Liste Pilotes', de: 'Fahrerliste', es: 'Lista Pilotos', ru: 'Список пилотов', zh: '车手列表', ar: 'قائمة السائقين', ja: 'ドライバー一覧' })}</h2>
              <button 
                 onClick={saveAdminUpdates}
                 disabled={Object.keys(adminUpdates).length === 0}
                 className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white text-xs font-bold py-2 px-4 rounded transition-all"
              >
-                {t({ en: 'SAVE ALL', it: 'SALVA TUTTO' })}
+                {t({ en: 'SAVE ALL', it: 'SALVA TUTTO', fr: 'TOUT SAUVER', de: 'ALLE SPEICHERN', es: 'GUARDAR TODO', ru: 'СОХР ВСЕ', zh: '全部保存', ar: 'حفظ الكل', ja: '全て保存' })}
              </button>
           </div>
 
@@ -1760,7 +1774,7 @@ const App: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                          <div>
-                            <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">Price ($M)</label>
+                            <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">{t({ en: 'Price ($M)', it: 'Prezzo ($M)', fr: 'Prix ($M)', de: 'Preis ($M)', es: 'Precio ($M)', ru: 'Цена ($M)', zh: '价格 ($M)', ar: 'السعر ($M)', ja: '価格 ($M)' })}</label>
                             <input 
                                type="number" 
                                step="0.1" 
@@ -1770,7 +1784,7 @@ const App: React.FC = () => {
                             />
                          </div>
                          <div>
-                            <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">Total Pts</label>
+                            <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">{t({ en: 'Total Pts', it: 'Punti Tot.', fr: 'Pts Tot.', de: 'Punkte Ges.', es: 'Pts Tot.', ru: 'Всего Очк.', zh: '总分', ar: 'مجموع النقاط', ja: '合計Pt' })}</label>
                             <input 
                                type="number" 
                                value={points}
