@@ -3,6 +3,8 @@ workflows:
     name: iOS Release (Capacitor) - TestFlight
     max_build_duration: 90
     environment:
+      groups:
+        - ios
       node: 22
       xcode: latest
       vars:
