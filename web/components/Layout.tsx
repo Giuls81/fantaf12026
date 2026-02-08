@@ -36,7 +36,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
   return (
     <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-slate-900 shadow-2xl overflow-hidden">
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24">
+      <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-24 pt-[calc(1rem+env(safe-area-inset-top,0px))]">
         {children}
       </main>
 

@@ -683,7 +683,7 @@ const App: React.FC = () => {
   // --------------------------------------------------------------------------------
 
   const LangMenu = (
-    <div className="fixed top-4 right-4 z-50 flex flex-col items-end">
+    <div className="fixed top-0 right-4 z-50 flex flex-col items-end pt-[env(safe-area-inset-top,1rem)]">
       <button
         onClick={() => setShowLangMenu(!showLangMenu)}
         className="bg-slate-700/80 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold border border-slate-600 hover:bg-slate-600 shadow-lg"
@@ -717,7 +717,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-4">
         API: {getApiUrl()}<br/>
-        Build: 50 (Global Lang + Fix)<br/>
+        Build: 51 (Safe Area Fix)<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
       </div>
