@@ -82,7 +82,18 @@ workflows:
             KEY_ID="7XRTBU8623"
             ISSUER_ID="4c4f8539-f816-4f20-89ec-83b73e49eee0"
             mkdir -p ~/private_keys
-            echo "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" | base64 --decode > ~/private_keys/AuthKey_${KEY_ID}.p8
+            
+            if [ -n "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" ]; then
+              echo "Using APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY"
+              echo "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" | base64 --decode > ~/private_keys/AuthKey_${KEY_ID}.p8
+            elif [ -n "$_CONNECT_PUBLISHER_PRIVATE_KEY" ]; then
+              echo "Using _CONNECT_PUBLISHER_PRIVATE_KEY"
+              echo "$_CONNECT_PUBLISHER_PRIVATE_KEY" | base64 --decode > ~/private_keys/AuthKey_${KEY_ID}.p8
+            else
+              echo "ERROR: No private key variable found!"
+              exit 1
+            fi
+
             ls -l ~/private_keys/AuthKey_${KEY_ID}.p8
             xcrun altool --upload-app \
               --type ios \
