@@ -12,7 +12,7 @@ workflows:
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.fantaf1.app"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
-    ios_signing:
+      ios_signing:
         distribution_type: app_store
         bundle_identifier: com.fantaf1.app
     triggering:
