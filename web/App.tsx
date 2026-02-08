@@ -850,7 +850,11 @@ const App: React.FC = () => {
           >
             {loginMode === 'create' ? t({ en: 'Start Season', it: 'Inizia Stagione', fr: 'DÃƒÂ©marrer saison', de: 'Saison starten', es: 'Iniciar temporada', ru: 'ÃÂÃÂ°Ã‘â€¡ÃÂ°Ã‘â€šÃ‘Å’ Ã‘ÂÃÂµÃÂ·ÃÂ¾ÃÂ½', zh: 'Ã¥Â¼â‚¬Ã¥Â§â€¹Ã¨Âµâ€ºÃ¥Â­Â£', ar: 'Ã˜Â¨Ã˜Â¯Ã˜Â¡ Ã˜Â§Ã™â€žÃ™â€¦Ã™Ë†Ã˜Â³Ã™â€¦', ja: 'Ã£â€šÂ·Ã£Æ’Â¼Ã£â€šÂºÃ£Æ’Â³Ã©â€“â€¹Ã¥Â§â€¹' }) : t({ en: 'Join Season', it: 'Unisciti', fr: 'Rejoindre saison', de: 'Beitreten', es: 'Unirse', ru: 'ÃÅ¸Ã‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂµÃÂ´ÃÂ¸ÃÂ½ÃÂ¸Ã‘â€šÃ‘Å’Ã‘ÂÃ‘Â', zh: 'Ã¥Å  Ã¥â€¦Â¥Ã¨Âµâ€ºÃ¥Â­Â£', ar: 'Ã˜Â§Ã™â€ Ã˜Â¶Ã™â€¦Ã˜Â§Ã™â€¦ Ã™â€žÃ™â€žÃ™â€¦Ã™Ë†Ã˜Â³Ã™â€¦', ja: 'Ã£â€šÂ·Ã£Æ’Â¼Ã£â€šÂºÃ£Æ’Â³Ã¥Ââ€šÃ¥Å  ' })}
           </button>
-
+          
+          <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
+            <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">Powered BY</span>
+            <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto grayscale brightness-200" />
+          </div>
         </div>
       </div>
     );
