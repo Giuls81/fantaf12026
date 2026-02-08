@@ -674,7 +674,7 @@ const App: React.FC = () => {
   );
 
   // Allow render if data exists (even if races empty, though UI might break elsewhere)
-  if (!data) return (
+  if (!data || races.length === 0) return (
     <div className="flex flex-col h-screen items-center justify-center bg-slate-900 text-slate-400 p-6 text-center">
       <div className="text-xl font-bold text-white mb-2">Loading Paddock...</div>
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-6"></div>
