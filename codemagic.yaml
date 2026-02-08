@@ -18,9 +18,6 @@ workflows:
     triggering:
       events:
         - push
-      branch_filter:
-        include:
-          - main
     scripts:
       - name: Install deps
         script: npm ci
