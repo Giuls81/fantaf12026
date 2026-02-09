@@ -39,35 +39,46 @@ export const CONSTRUCTORS: Constructor[] = [
   { id: 'ast', name: 'Aston Martin', color: '#225941', multiplier: 1.0 },
   { id: 'alp', name: 'Alpine', color: '#2293D1', multiplier: 1.0 },
   { id: 'wil', name: 'Williams', color: '#37BEDD', multiplier: 1.0 },
-  { id: 'rb', name: 'RB', color: '#6692FF', multiplier: 1.0 },
-  { id: 'sau', name: 'Sauber', color: '#52E252', multiplier: 1.0 },
+  { id: 'rb', name: 'Racing Bulls', color: '#6692FF', multiplier: 1.0 },
   { id: 'haa', name: 'Haas', color: '#B6BABD', multiplier: 1.0 },
+  { id: 'sau', name: 'Audi', color: '#000000', multiplier: 1.0 },
   { id: 'cad', name: 'Cadillac', color: '#E5C25B', multiplier: 1.0 },
 ];
 
 export const DRIVERS: Driver[] = [
+  // Red Bull Racing
   { id: 'ver', name: 'Max Verstappen', constructorId: 'rbr', price: 30.0, points: 0 },
-  { id: 'per', name: 'Sergio Perez', constructorId: 'rbr', price: 18.0, points: 0 },
-  { id: 'ham', name: 'Lewis Hamilton', constructorId: 'fer', price: 28.0, points: 0 },
-  { id: 'lec', name: 'Charles Leclerc', constructorId: 'fer', price: 26.0, points: 0 },
+  { id: 'had', name: 'Isack Hadjar', constructorId: 'rbr', price: 14.0, points: 0 },
+  // Mercedes
   { id: 'rus', name: 'George Russell', constructorId: 'mer', price: 24.0, points: 0 },
-  { id: 'ant', name: 'Kimi Antonelli', constructorId: 'mer', price: 15.0, points: 0 },
+  { id: 'ant', name: 'Andrea Kimi Antonelli', constructorId: 'mer', price: 15.0, points: 0 },
+  // Ferrari
+  { id: 'lec', name: 'Charles Leclerc', constructorId: 'fer', price: 26.0, points: 0 },
+  { id: 'ham', name: 'Lewis Hamilton', constructorId: 'fer', price: 28.0, points: 0 },
+  // McLaren
   { id: 'nor', name: 'Lando Norris', constructorId: 'mcl', price: 27.0, points: 0 },
   { id: 'pia', name: 'Oscar Piastri', constructorId: 'mcl', price: 25.0, points: 0 },
+  // Aston Martin
   { id: 'alo', name: 'Fernando Alonso', constructorId: 'ast', price: 20.0, points: 0 },
   { id: 'str', name: 'Lance Stroll', constructorId: 'ast', price: 12.0, points: 0 },
-  { id: 'gas', name: 'Pierre Gasly', constructorId: 'alp', price: 14.0, points: 0 },
-  { id: 'doo', name: 'Jack Doohan', constructorId: 'cad', price: 10.0, points: 0 },
-  { id: 'alb', name: 'Alex Albon', constructorId: 'wil', price: 14.0, points: 0 },
-  { id: 'sai', name: 'Carlos Sainz', constructorId: 'wil', price: 22.0, points: 0 },
-  { id: 'tsu', name: 'Yuki Tsunoda', constructorId: 'rb', price: 12.0, points: 0 },
-  { id: 'law', name: 'Liam Lawson', constructorId: 'rb', price: 11.0, points: 0 },
-  { id: 'hul', name: 'Nico Hulkenberg', constructorId: 'sau', price: 13.0, points: 0 },
-  { id: 'bor', name: 'Gabriel Bortoleto', constructorId: 'sau', price: 10.0, points: 0 },
-  { id: 'oco', name: 'Esteban Ocon', constructorId: 'haa', price: 14.0, points: 0 },
-  { id: 'bea', name: 'Oliver Bearman', constructorId: 'haa', price: 11.0, points: 0 },
-  { id: 'bot', name: 'Valtteri Bottas', constructorId: 'cad', price: 13.5, points: 0 },
+  // Alpine
   { id: 'col', name: 'Franco Colapinto', constructorId: 'alp', price: 11.0, points: 0 },
+  { id: 'gas', name: 'Pierre Gasly', constructorId: 'alp', price: 14.0, points: 0 },
+  // Williams
+  { id: 'alb', name: 'Alexander Albon', constructorId: 'wil', price: 14.0, points: 0 },
+  { id: 'sai', name: 'Carlos Sainz', constructorId: 'wil', price: 22.0, points: 0 },
+  // Racing Bulls
+  { id: 'lin', name: 'Arvid Lindblad', constructorId: 'rb', price: 10.0, points: 0 },
+  { id: 'law', name: 'Liam Lawson', constructorId: 'rb', price: 11.0, points: 0 },
+  // Haas
+  { id: 'bea', name: 'Oliver Bearman', constructorId: 'haa', price: 11.0, points: 0 },
+  { id: 'oco', name: 'Esteban Ocon', constructorId: 'haa', price: 14.0, points: 0 },
+  // Audi
+  { id: 'bor', name: 'Gabriel Bortoleto', constructorId: 'sau', price: 10.0, points: 0 },
+  { id: 'hul', name: 'Nico Hülkenberg', constructorId: 'sau', price: 13.0, points: 0 },
+  // Cadillac
+  { id: 'per', name: 'Sergio Pérez', constructorId: 'cad', price: 16.0, points: 0 },
+  { id: 'bot', name: 'Valtteri Bottas', constructorId: 'cad', price: 13.5, points: 0 },
 ];
 
 export const RACES_2026: Race[] = [

@@ -30,10 +30,10 @@ export interface Race {
   isCompleted: boolean;
   
   // API Fields
-  country: string | null;
-  city: string | null;
-  season: number;
-  round: number;
+  country?: string | null;
+  city?: string | null;
+  season?: number;
+  round?: number;
 
   // Session Times (UTC ISO Strings)
   qualifyingUtc: string | null;

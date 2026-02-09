@@ -107,7 +107,7 @@ export async function syncRaceResults(prisma: PrismaClient, raceId: string) {
   const driverRacePoints: Record<string, number> = {};
   for (const [driverId, position] of Object.entries(classification)) {
     const pointsArray = race.isSprint ? DEFAULT_SPRINT_POINTS : DEFAULT_RACE_POINTS;
-    const pts = (position >= 1 && position <= pointsArray.length) ? pointsArray[position - 1] : 0;
+    const pts = (position >= 1 && position <= pointsArray.length) ? (pointsArray[position - 1] ?? 0) : 0;
     driverRacePoints[driverId] = pts;
   }
 
