@@ -367,12 +367,6 @@ const App: React.FC = () => {
   // Save races to localStorage (Updates when Admin edits or API loads)
 
   // NOTE: persistence of races to localStorage disabled (races are sourced from API)
-  // Redirect non-admins if they try to access Admin tab
-  useEffect(() => {
-    if (data?.user && !data.user.isAdmin && activeTab === Tab.ADMIN) {
-      setActiveTab(Tab.HOME);
-    }
-  }, [activeTab, data]);
 
   const handleLogin = async () => {
     if (!username.trim()) return alert(t({ en: "Please enter a username.", it: "Inserisci un nome utente." }));
