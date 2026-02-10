@@ -50,6 +50,16 @@ app.post("/auth/anon", async (c) => {
   try {
     const { name } = await c.req.json();
     const displayName = (name || "Player").slice(0, 32);
+
+    // Check if name exists
+    const [existing] = await sql`SELECT id FROM "User" WHERE "displayName" = ${displayName}`;
+    if (existing) {
+      return c.json({ 
+        error: "name_taken", 
+        message: "Questo nome è già in uso. Scegline un altro o contatta l'admin per recuperare l'account." 
+      }, 400); 
+    }
+
     const token = makeToken();
     const id = crypto.randomUUID();
     const [user] = await sql`
