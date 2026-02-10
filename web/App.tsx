@@ -5,7 +5,7 @@ import { initializeAdMob, showAppOpen } from './services/admob';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
-import { health, getRaces, getDrivers, createAnonUser, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, getApiUrl } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults } from "./api";
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -180,8 +180,32 @@ const App: React.FC = () => {
   const [loadingResults, setLoadingResults] = useState(false);
   const [viewingResult, setViewingResult] = useState<any | null>(null);
 
+  // Fetch Standings
+  useEffect(() => {
+    if (activeTab === Tab.STANDINGS && data?.user?.leagueId) {
+      setLoadingStandings(true);
+      getLeagueStandings(data.user.leagueId)
+        .then(setStandings)
+        .catch(e => console.error("Failed to load standings", e))
+        .finally(() => setLoadingStandings(false));
+    }
+  }, [activeTab, data?.user?.leagueId]);
+
+  // Fetch Race Results
+  useEffect(() => {
+    if (selectedRaceId && data?.user?.leagueId) {
+       setLoadingResults(true);
+       getRaceResults(data.user.leagueId, selectedRaceId)
+        .then(setRaceResults)
+        .catch(e => console.error("Failed to load results", e))
+        .finally(() => setLoadingResults(false));
+    }
+  }, [selectedRaceId, data?.user?.leagueId]);
+
   // Login Form State
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(true); // Toggle between Register and Login
   const [loginMode, setLoginMode] = useState<'create' | 'join'>('create');
   const [leagueName, setLeagueName] = useState('');
   const [leagueCodeInput, setLeagueCodeInput] = useState('');
@@ -191,7 +215,6 @@ const App: React.FC = () => {
   const [loadingStatus, setLoadingStatus] = useState("Initializing...");
   const [startupError, setStartupError] = useState("");
   
-  // Timer for countdown
   // Timer for countdown
   useEffect(() => {
     (window as any)._mountTime = Date.now();
@@ -221,7 +244,10 @@ const App: React.FC = () => {
   // Session Restoration (Auto-Login)
   useEffect(() => {
     const token = localStorage.getItem('fantaF1AuthToken');
-    if (!token) return;
+    if (!token) {
+       // Clear deprecated data if no token
+       return; 
+    }
     
     // CRITICAL FIX: Do not attempt restore until races are loaded
     // Otherwise we calculate index based on empty array -> -1 -> Crash
@@ -235,6 +261,14 @@ const App: React.FC = () => {
         setLoadingStatus("Restoring Session...");
         const { user, leagues } = await getMe();
           const firstLeague = leagues[0];
+          // If no league (e.g. user created but league creation failed), user needs to create/join one.
+          // For simplicity, we assume if they have a token they are good, but we might need a "No League" UI state.
+          // If leagues empty, we reset? Or show create league UI?
+          if (!firstLeague) {
+             console.warn("User has no leagues. Resetting to force login/league creation.");
+             throw new Error("no_leagues"); 
+          }
+
           const fullUser: User = {
             id: user.id,
             name: user.name || 'Player', 
@@ -280,7 +314,9 @@ const App: React.FC = () => {
     if (!data?.user?.leagueId) return;
     try {
       setLoadingStandings(true);
-      const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/standings`);
+      const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/standings`, {
+         headers: { 'Authorization': `Bearer ${localStorage.getItem('fantaF1AuthToken')}` }
+      });
       const list = await res.json();
       setStandings(Array.isArray(list) ? list : []);
     } catch (e) {
@@ -322,7 +358,6 @@ const App: React.FC = () => {
   // NOTE: The separate useEffect for loading races from localStorage has been removed
   // to avoid overwriting the API call in the main useEffect above.
 
-  // Load data from localStorage on mount
   // Load data from localStorage on mount (Wait for races to be loaded!)
   useEffect(() => {
     // If races failed to load, we still might want to show login or use empty races
@@ -365,7 +400,7 @@ const App: React.FC = () => {
     }
   }, [races]);
 
-  // Sync Drafts with current race and rules when entering Admin or when data changes
+  // Sync Drafts... (omitted for brevity, assume unchanged logic here)
   useEffect(() => {
     if (data && races.length > 0) {
       const race = races[data.currentRaceIndex] || races[0];
@@ -374,11 +409,7 @@ const App: React.FC = () => {
         setSprintQualifyingUtcDraft(race.sprintQualifyingUtc || '');
       }
     }
-    if (data && data.rules) {
-      // Logic for initializing text inputs removed (now using separate inputs)
-    }
   }, [data?.currentRaceIndex, races, activeTab]);
-  // Dependency on activeTab ensures re-sync when entering Admin
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
@@ -387,31 +418,50 @@ const App: React.FC = () => {
     }
   }, [data]);
 
-  // Save races to localStorage (Updates when Admin edits or API loads)
-
-  // NOTE: persistence of races to localStorage disabled (races are sourced from API)
-
-  const handleLogin = async () => {
+  const handleAuth = async () => {
     if (!username.trim()) return alert(t({ en: "Please enter a username.", it: "Inserisci un nome utente." }));
+    if (!password.trim()) return alert(t({ en: "Please enter a password.", it: "Inserisci una password." }));
 
     try {
-      // 1. Create User (Anon)
-      const { authToken } = await createAnonUser(username.trim());
-      localStorage.setItem('fantaF1AuthToken', authToken);
+      let authToken = '';
 
-      // 2. Create or Join League
-      if (loginMode === 'create') {
-         if (!leagueName.trim()) return alert(t({ en: "Please enter a league name.", it: "Inserisci il nome della lega." }));
-         await createLeague(leagueName.trim());
+      if (isRegistering) {
+         // 1. Register
+         const res = await import("./api").then(m => m.register(username.trim(), password));
+         authToken = res.authToken;
+         localStorage.setItem('fantaF1AuthToken', authToken);
+
+         // 2. Create or Join League
+         if (loginMode === 'create') {
+            if (!leagueName.trim()) return alert(t({ en: "Please enter a league name.", it: "Inserisci il nome della lega." }));
+            await createLeague(leagueName.trim());
+         } else {
+            if (!leagueCodeInput.trim() || leagueCodeInput.length < 6) return alert(t({ en: "Please enter a valid 6-character league code.", it: "Inserisci un codice lega valido di 6 caratteri." }));
+            await joinLeague(leagueCodeInput.trim().toUpperCase());
+         }
+
       } else {
-         if (!leagueCodeInput.trim() || leagueCodeInput.length < 6) return alert(t({ en: "Please enter a valid 6-character league code.", it: "Inserisci un codice lega valido di 6 caratteri." }));
-         await joinLeague(leagueCodeInput.trim().toUpperCase());
+         // 1. Login
+         const res = await import("./api").then(m => m.login(username.trim(), password));
+         authToken = res.authToken;
+         localStorage.setItem('fantaF1AuthToken', authToken);
+         // No need to create/join league, user should already have one. 
+         // But what if they don't? Logic below handles "Refresh Me".
       }
 
       // 3. Refresh Me (to get User object with League info)
       const { user, leagues } = await getMe();
       const myLeague = leagues[0];
       
+      if (!myLeague) {
+          // Edge case: User logged in but has no league? 
+          // We might need to handle this by keeping them on a "Join/Create League" screen.
+          // For now, assume data integrity.
+          alert(t({ en: "No league found for this user. Please register again.", it: "Nessuna lega trovata per questo utente. Registrati di nuovo." }));
+          localStorage.removeItem('fantaF1AuthToken');
+          return;
+      }
+
       const newUser: User = {
         id: user.id,
         name: username.trim(), 
@@ -443,20 +493,23 @@ const App: React.FC = () => {
 
     } catch (e: any) {
       console.error(e);
-      let msg = t({ en: "Login failed.", it: "Login fallito." });
+      let msg = t({ en: "Authentication failed.", it: "Autenticazione fallita." });
       
-      if (e.message && e.message.includes("league_not_found")) {
+      if (e.message && e.message.includes("name_taken")) {
+        msg = t({ en: "Name already taken. Log in instead?", it: "Nome già in uso. Prova il Login." });
+      } else if (e.message && e.message.includes("invalid_credentials")) {
+         msg = t({ en: "Invalid username or password.", it: "Nome utente o password errati." });
+      } else if (e.message && e.message.includes("league_not_found")) {
         msg = t({ en: "League not found. Check the code.", it: "Lega non trovata. Controlla il codice." });
-      } else if (e.message && e.message.includes("404")) {
-         msg = t({ en: "League not found.", it: "Lega non trovata." });
-      } else {
-         // Verbose debug for mobile
-         msg += `\nError: ${e.message || String(e)}`;
-         msg += `\nAPI: ${getApiUrl()}`;
-      }
-
+      } else if (e.message && e.message.includes("weak_password")) {
+         msg = t({ en: "Password too short (min 3 chars).", it: "Password troppo corta (min 3 caratteri)." });
+      } 
+      
       alert(msg);
-      localStorage.removeItem('fantaF1AuthToken');
+      // Clean up token if partial failure
+      if (localStorage.getItem('fantaF1AuthToken')) {
+          // localStorage.removeItem('fantaF1AuthToken'); // Maybe don't clear immediate, user might want to retry league code
+      }
     }
   };
 
@@ -469,9 +522,11 @@ const App: React.FC = () => {
     setActiveTab(Tab.HOME);
     // Reset form state
     setUsername('');
+    setPassword('');
     setLeagueName('');
     setLeagueCodeInput('');
     setLoginMode('create');
+    setIsRegistering(true);
     setShowResetConfirm(false);
     setShowDebug(false);
   };
@@ -641,20 +696,12 @@ const App: React.FC = () => {
     
     try {
       setSyncing(true);
-      const res = await fetch(`${getApiUrl()}/admin/sync-race`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('fantaF1AuthToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ raceId: currentRace.id })
-      });
-      const result = await res.json();
+      const result = await syncRaceResults(currentRace.id);
       if (result.ok) {
         alert(t({ en: 'Race synced successfully!', it: 'Gara sincronizzata con successo!' }));
         window.location.reload();
       } else {
-        alert(t({ en: `Sync failed: ${result.error}`, it: `Sincronizzazione fallita: ${result.error}` }));
+        alert(t({ en: `Sync failed`, it: `Sincronizzazione fallita` }));
       }
     } catch (e) {
       console.error(e);
@@ -698,7 +745,7 @@ const App: React.FC = () => {
                       </div>
                    </div>
                 ))}
-                {standings.length === 0 && <div className="p-8 text-center text-slate-500 italic">No users found in this league.</div>}
+                {standings.length === 0 && <div className="p-8 text-center text-slate-500 italic">{t({ en: 'No users found in this league.', it: 'Nessun utente trovato in questa lega.' })}</div>}
              </div>
            )}
         </div>
@@ -757,7 +804,7 @@ const App: React.FC = () => {
                          </div>
                       </div>
                     ))}
-                    {raceResults.length === 0 && !loadingResults && <div className="p-8 text-center text-slate-500 italic">No results stored for this race yet.</div>}
+                    {raceResults.length === 0 && !loadingResults && <div className="p-8 text-center text-slate-500 italic">{t({ en: 'No results stored for this race yet.', it: 'Nessun risultato salvato per questa gara.' })}</div>}
                  </div>
               </div>
            )}
@@ -1011,72 +1058,105 @@ const App: React.FC = () => {
 
         <div className="w-full max-w-sm bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
 
-          {/* Mode Toggle */}
+          {/* Auth Mode Toggle */}
           <div className="flex bg-slate-900 rounded-lg p-1 mb-6">
             <button
-              onClick={() => setLoginMode('create')}
-              className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${loginMode === 'create' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => setIsRegistering(true)}
+              className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${isRegistering ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              {t({ en: 'Create League', it: 'Crea Lega', fr: 'Créer ligue', de: 'Liga erstellen', es: 'Crear liga', ru: 'Создать лигу', zh: '创建联盟', ar: 'إنشاء دوري', ja: 'リーグ作成' })}
+              {t({ en: 'Register', it: 'Registrati', fr: 'S\'inscrire', de: 'Registrieren', es: 'Registrarse', ru: 'Регистрация', zh: '注册', ar: 'تسجيل', ja: '登録' })}
             </button>
             <button
-              onClick={() => setLoginMode('join')}
-              className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${loginMode === 'join' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => setIsRegistering(false)}
+              className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${!isRegistering ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              {t({ en: 'Join League', it: 'Unisciti', fr: 'Rejoindre', de: 'Beitreten', es: 'Unirse', ru: 'Войти', zh: '加入联盟', ar: 'انضمام', ja: '参加' })}
+              {t({ en: 'Login', it: 'Accedi', fr: 'Connexion', de: 'Login', es: 'Entrar', ru: 'Вход', zh: '登录', ar: 'دخول', ja: 'ログイン' })}
             </button>
           </div>
 
-          {/* Common Input */}
-          <div className="mb-4">
-            <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'Username', it: 'Nome Utente', fr: "Nom d'utilisateur", de: 'Benutzername', es: 'Usuario', ru: 'Имя пользователя', zh: '用户名', ar: 'اسم المستخدم', ja: 'ユーザー名' })}</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={t({ en: 'Enter your name', it: 'Inserisci nome', fr: 'Entrez votre nom', de: 'Name eingeben', es: 'Ingresa tu nombre', ru: 'Введите имя', zh: '输入名字', ar: 'أدخل اسمك', ja: '名前を入力' })}
-              className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
-            />
+          {/* Common Inputs */}
+          <div className="space-y-4 mb-6">
+            <div>
+                <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'Username', it: 'Nome Utente', fr: "Nom d'utilisateur", de: 'Benutzername', es: 'Usuario', ru: 'Имя пользователя', zh: '用户名', ar: 'اسم المستخدم', ja: 'ユーザー名' })}</label>
+                <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={t({ en: 'Enter your name', it: 'Inserisci nome', fr: 'Entrez votre nom', de: 'Name eingeben', es: 'Ingresa tu nombre', ru: 'Введите имя', zh: '输入名字', ar: 'أدخل اسمك', ja: '名前を入力' })}
+                className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
+                />
+            </div>
+            <div>
+                <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'Password', it: 'Password' })}</label>
+                <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t({ en: 'Min 3 chars', it: 'Min 3 caratteri' })}
+                className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
+                />
+            </div>
           </div>
 
-          {/* Create Fields */}
-          {loginMode === 'create' && (
-            <div className="mb-6">
-              <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Name', it: 'Nome Lega', fr: 'Nom de la ligue', de: 'Liganame', es: 'Nombre Liga', ru: 'Название лиги', zh: '联盟名称', ar: 'اسم الدوري', ja: 'リーグ名' })}</label>
-              <input
-                type="text"
-                value={leagueName}
-                onChange={(e) => setLeagueName(e.target.value)}
-                placeholder={t({ en: 'e.g. Sunday Racing Club', it: 'es. Racing Club', fr: 'ex. Racing Club', de: 'z.B. Racing Club', es: 'ej. Racing Club', ru: 'напр. Клуб', zh: '例如：周日赛车', ar: 'مثال: نادي السباق', ja: '例: レーシングクラブ' })}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          )}
+          {/* Registration Only: League Options */}
+          {isRegistering && (
+            <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="flex bg-slate-900 rounded-lg p-1 mb-4">
+                    <button
+                    onClick={() => setLoginMode('create')}
+                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${loginMode === 'create' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                    {t({ en: 'Create League', it: 'Crea Lega', fr: 'Créer ligue', de: 'Liga erstellen', es: 'Crear liga', ru: 'Создать лигу', zh: '创建联盟', ar: 'إنشاء دوري', ja: 'リーグ作成' })}
+                    </button>
+                    <button
+                    onClick={() => setLoginMode('join')}
+                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${loginMode === 'join' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                    {t({ en: 'Join League', it: 'Unisciti', fr: 'Rejoindre', de: 'Beitreten', es: 'Unirse', ru: 'Войти', zh: '加入联盟', ar: 'انضمام', ja: '参加' })}
+                    </button>
+                </div>
 
-          {/* Join Fields */}
-          {loginMode === 'join' && (
-            <div className="mb-6">
-              <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}</label>
-              <input
-                type="text"
-                value={leagueCodeInput}
-                onChange={(e) => setLeagueCodeInput(e.target.value.toUpperCase())}
-                placeholder={t({ en: '6-Digit Code', it: 'Codice 6 cifre', fr: 'Code 6 chiffres', de: '6-stelliger Code', es: 'Código 6 dígitos', ru: '6 цифр', zh: '6位代码', ar: 'رمز من 6 أرقام', ja: '6桁コード' })}
-                maxLength={6}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 font-mono tracking-widest uppercase"
-              />
+                {loginMode === 'create' && (
+                    <div className="mb-6">
+                    <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Name', it: 'Nome Lega', fr: 'Nom de la ligue', de: 'Liganame', es: 'Nombre Liga', ru: 'Название лиги', zh: '联盟名称', ar: 'اسم الدوري', ja: 'リーグ名' })}</label>
+                    <input
+                        type="text"
+                        value={leagueName}
+                        onChange={(e) => setLeagueName(e.target.value)}
+                        placeholder={t({ en: 'e.g. Sunday Racing Club', it: 'es. Racing Club', fr: 'ex. Racing Club', de: 'z.B. Racing Club', es: 'ej. Racing Club', ru: 'напр. Клуб', zh: '例如：周日赛车', ar: 'مثال: نادي السباق', ja: '例: レーシングクラブ' })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500"
+                    />
+                    </div>
+                )}
+
+                {loginMode === 'join' && (
+                    <div className="mb-6">
+                    <label className="block text-xs uppercase text-slate-400 font-bold mb-1">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}</label>
+                    <input
+                        type="text"
+                        value={leagueCodeInput}
+                        onChange={(e) => setLeagueCodeInput(e.target.value.toUpperCase())}
+                        placeholder={t({ en: '6-Digit Code', it: 'Codice 6 cifre', fr: 'Code 6 chiffres', de: '6-stelliger Code', es: 'Código 6 dígitos', ru: '6 цифр', zh: '6位代码', ar: 'رمز من 6 أرقام', ja: '6桁コード' })}
+                        maxLength={6}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 font-mono tracking-widest uppercase"
+                    />
+                    </div>
+                )}
             </div>
           )}
 
           <button
-            onClick={handleLogin}
+            onClick={handleAuth}
             className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded transition-all shadow-lg transform hover:scale-[1.02]"
           >
-            {loginMode === 'create' ? t({ en: 'Start Season', it: 'Inizia Stagione', fr: 'Démarrer saison', de: 'Saison starten', es: 'Iniciar temporada', ru: 'Начать сезон', zh: '开始赛季', ar: 'بدء الموسم', ja: 'シーズン開始' }) : t({ en: 'Join Season', it: 'Unisciti', fr: 'Rejoindre saison', de: 'Beitreten', es: 'Unirse', ru: 'Присоединиться', zh: '加入赛季', ar: 'انضمام للموسم', ja: 'シーズン参加' })}
+            {isRegistering 
+                ? (loginMode === 'create' ? t({ en: 'Register & Start', it: 'Registrati e Inizia' }) : t({ en: 'Register & Join', it: 'Registrati e Unisciti' }))
+                : t({ en: 'Login', it: 'Accedi' })
+            }
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 58</span>
+            <span className="text-[10px] text-slate-600">Build: 64</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>

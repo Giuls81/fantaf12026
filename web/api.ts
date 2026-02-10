@@ -81,8 +81,12 @@ export async function getDrivers(): Promise<Driver[]> {
 
 // --- Auth & League ---
 
-export async function createAnonUser(name: string) {
-  return apiPost<{ id: string; authToken: string; displayName: string }>("/auth/anon", { name });
+export async function register(name: string, password: string) {
+  return apiPost<{ id: string; authToken: string; displayName: string }>("/auth/register", { name, password });
+}
+
+export async function login(name: string, password: string) {
+  return apiPost<{ id: string; authToken: string; displayName: string }>("/auth/login", { name, password });
 }
 
 export async function getMe() {
@@ -124,4 +128,16 @@ export async function updateLineup(leagueId: string, captainId?: string | null, 
 
 export async function updateDriverInfo(updates: { id: string; price?: number; points?: number }[]) {
   return apiPost<{ ok: true }>("/admin/drivers", { updates });
+}
+
+export async function syncRaceResults(raceId: string) {
+  return apiPost<{ ok: true; classification: Record<string, number>; points: Record<string, number> }>("/admin/sync-race", { raceId });
+}
+
+export async function getLeagueStandings(leagueId: string) {
+  return apiGet<{ userId: string; userName: string; totalPoints: number; rank: number }[]>(`/leagues/${leagueId}/standings`);
+}
+
+export async function getRaceResults(leagueId: string, raceId: string) {
+  return apiGet<{ userId: string; userName: string; points: number; captainId: string; reserveId: string; drivers: { id: string; name: string; points: number }[] }[]>(`/leagues/${leagueId}/results/${raceId}`);
 }

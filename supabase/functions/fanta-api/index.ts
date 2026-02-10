@@ -46,30 +46,81 @@ app.get("/health", async (c) => {
   }
 });
 
-app.post("/auth/anon", async (c) => {
+// Helper: Hash Password
+async function hashPassword(password: string) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+app.post("/auth/register", async (c) => {
   try {
-    const { name } = await c.req.json();
+    const { name, password } = await c.req.json();
     const displayName = (name || "Player").slice(0, 32);
+
+    if (!password || password.length < 3) {
+      return c.json({ error: "weak_password", message: "Password must be at least 3 characters." }, 400);
+    }
 
     // Check if name exists
     const [existing] = await sql`SELECT id FROM "User" WHERE "displayName" = ${displayName}`;
     if (existing) {
       return c.json({ 
         error: "name_taken", 
-        message: "Questo nome è già in uso. Scegline un altro o contatta l'admin per recuperare l'account." 
+        message: "Questo nome è già in uso. Scegline un altro o fai il Login." 
       }, 400); 
     }
 
+    const passwordHash = await hashPassword(password);
     const token = makeToken();
     const id = crypto.randomUUID();
+    
     const [user] = await sql`
-      INSERT INTO "User" (id, "authToken", "displayName", "updatedAt") 
-      VALUES (${id}, ${token}, ${displayName}, ${new Date().toISOString()}) 
+      INSERT INTO "User" (id, "authToken", "displayName", "password", "updatedAt") 
+      VALUES (${id}, ${token}, ${displayName}, ${passwordHash}, ${new Date().toISOString()}) 
       RETURNING id, "authToken", "displayName"
     `;
     return c.json(user);
   } catch (e: any) {
-    return c.json({ error: e.message, type: "auth_anon_error" }, 500);
+    return c.json({ error: e.message, type: "auth_register_error" }, 500);
+  }
+});
+
+// Alias for backward compatibility (if needed) but we rely on new frontend flow
+// app.post("/auth/anon", ... ) -> Removed/Redirected
+
+app.post("/auth/login", async (c) => {
+  try {
+    const { name, password } = await c.req.json();
+    if (!name || !password) return c.json({ error: "missing_credentials" }, 400);
+
+    const [user] = await sql`SELECT id, "authToken", "password", "displayName" FROM "User" WHERE "displayName" = ${name}`;
+    
+    if (!user) {
+      return c.json({ error: "invalid_credentials", message: "Utente non trovato." }, 404);
+    }
+
+    // Passwords created before this update might be null. 
+    // But since we wiped DB, all new users should have password.
+    if (!user.password) {
+       // Allow legacy login??? No, we wiped DB.
+       return c.json({ error: "legacy_user", message: "Account vecchio senza password. Contatta admin." }, 403);
+    }
+
+    const inputHash = await hashPassword(password);
+    if (inputHash !== user.password) {
+      return c.json({ error: "invalid_credentials", message: "Password errata." }, 401);
+    }
+
+    return c.json({ 
+      id: user.id, 
+      authToken: user.authToken, 
+      displayName: user.displayName 
+    });
+
+  } catch (e: any) {
+    return c.json({ error: e.message, type: "auth_login_error" }, 500);
   }
 });
 
@@ -340,6 +391,144 @@ app.post("/admin/drivers", requireUser, async (c) => {
   });
 
   return c.json({ ok: true });
+});
+
+// Helper constants for Sync
+const OPENF1_BASE = "https://api.openf1.org/v1";
+const DRIVER_NUMBER_MAP: Record<string, number> = {
+  'ver': 1, 'per': 11, 'ham': 44, 'lec': 16, 'rus': 63, 'ant': 12, 'nor': 4,
+  'pia': 81, 'alo': 14, 'str': 18, 'gas': 10, 'doo': 7, 'alb': 23, 'sai': 55,
+  'tsu': 22, 'law': 30, 'hul': 27, 'bor': 59, 'oco': 31, 'bea': 87, 'bot': 77, 'col': 43
+};
+const REVERSE_DRIVER_MAP: Record<number, string> = Object.fromEntries(
+  Object.entries(DRIVER_NUMBER_MAP).map(([id, num]) => [num, id])
+);
+const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const DEFAULT_SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
+
+async function getOpenF1SessionKey(year: number, location: string, isSprint: boolean): Promise<number | null> {
+  const sessionName = isSprint ? "Sprint" : "Race";
+  const url = `${OPENF1_BASE}/sessions?year=${year}&location=${encodeURIComponent(location)}&session_name=${encodeURIComponent(sessionName)}`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) return data[0].session_key;
+  } catch (e) { console.error(e); }
+  return null;
+}
+
+async function getOpenF1Classification(sessionKey: number): Promise<Record<string, number>> {
+  const url = `${OPENF1_BASE}/position?session_key=${sessionKey}`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!Array.isArray(data)) return {};
+
+    const latestPositions: Record<number, number> = {};
+    const timestamps: Record<number, string> = {};
+
+    for (const record of data) {
+      const num = record.driver_number;
+      const pos = record.position;
+      const ts = record.date;
+      if (!timestamps[num] || ts > timestamps[num]) {
+        timestamps[num] = ts;
+        latestPositions[num] = pos;
+      }
+    }
+    const results: Record<string, number> = {};
+    for (const [num, pos] of Object.entries(latestPositions)) {
+      const driverId = REVERSE_DRIVER_MAP[Number(num)];
+      if (driverId) results[driverId] = pos;
+    }
+    return results;
+  } catch (e) { return {}; }
+}
+
+app.post("/admin/sync-race", requireUser, async (c) => {
+  const user = c.get("user");
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+
+  const { raceId } = await c.req.json();
+  if (!raceId) return c.json({ error: "missing_raceId" }, 400);
+
+  try {
+    // 1. Get Race Info
+    const [race] = await sql`SELECT * FROM "Race" WHERE id = ${raceId}`;
+    if (!race) return c.json({ error: "race_not_found" }, 404);
+
+    // 2. Fetch OpenF1 Data
+    const location = race.city || race.country || "";
+    const sessionKey = await getOpenF1SessionKey(race.season || 2026, location, !!race.isSprint);
+    
+    if (!sessionKey) return c.json({ error: "openf1_session_not_found", location, season: race.season }, 404);
+
+    const classification = await getOpenF1Classification(sessionKey);
+    if (Object.keys(classification).length === 0) return c.json({ error: "no_classification_data" }, 404);
+
+    // 3. Calculate Points
+    const pointsArray = race.isSprint ? DEFAULT_SPRINT_POINTS : DEFAULT_RACE_POINTS;
+    const driverRacePoints: Record<string, number> = {};
+    
+    for (const [driverId, position] of Object.entries(classification)) {
+      const pts = (position >= 1 && position <= pointsArray.length) ? (pointsArray[position - 1] ?? 0) : 0;
+      driverRacePoints[driverId] = pts;
+    }
+
+    // 4. Transactional Update
+    await sql.begin(async (sql) => {
+       // A. Update Driver Points
+       for (const [driverId, points] of Object.entries(driverRacePoints)) {
+         await sql`UPDATE "Driver" SET points = points + ${points} WHERE id = ${driverId}`;
+       }
+
+       // B. Snapshot Teams
+       const teams = await sql`SELECT id, "userId", "captainId", "reserveId" FROM "Team"`;
+       
+       for (const team of teams) {
+          // Get Team Drivers
+          const teamDrivers = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${team.id}`;
+          
+          let teamPoints = 0;
+          const resultDrivers = [];
+
+          for (const td of teamDrivers) {
+             let pts = (driverRacePoints[td.driverId] as number) || 0;
+             if (team.captainId === td.driverId) pts *= 2;
+             teamPoints += pts;
+             resultDrivers.push({ driverId: td.driverId, points: pts });
+          }
+
+          // Create TeamResult
+          const trId = crypto.randomUUID();
+          await sql`
+            INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt")
+            VALUES (${trId}, ${race.id}, ${team.id}, ${teamPoints}, ${team.captainId}, ${team.reserveId}, ${new Date().toISOString()})
+          `;
+
+          // Create TeamResultDrivers
+          for (const rd of resultDrivers) {
+             const trdId = crypto.randomUUID();
+             await sql`
+                INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points)
+                VALUES (${trdId}, ${trId}, ${rd.driverId}, ${rd.points})
+             `;
+          }
+
+          // Update Team Total Points
+          await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${teamPoints} WHERE id = ${team.id}`;
+       }
+
+       // C. Mark Race Completed
+       await sql`UPDATE "Race" SET "isCompleted" = true WHERE id = ${raceId}`;
+    });
+
+    return c.json({ ok: true, classification, points: driverRacePoints });
+
+  } catch (e: any) {
+    return c.json({ error: e.message, type: "sync_race_error" }, 500);
+  }
 });
 
 serve(app.fetch);
