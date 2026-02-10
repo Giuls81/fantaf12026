@@ -1,6 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
+import { initializeAdMob, showAppOpen } from './services/admob';
+import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
 import { health, getRaces, getDrivers, createAnonUser, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, getApiUrl } from "./api";
@@ -94,12 +96,33 @@ type LangCode = 'en' | 'it' | 'fr' | 'de' | 'es' | 'ru' | 'zh' | 'ar' | 'ja';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
+  const [isPremium, setIsPremium] = useState(false); // Premium State
   const [data, setData] = useState<AppData | null>(null);
   const [swapCandidate, setSwapCandidate] = useState<Driver | null>(null);
   const [now, setNow] = useState(Date.now());
   const [races, setRaces] = useState<Race[]>([]);
   const [fetchedDrivers, setFetchedDrivers] = useState<Driver[]>([]);
   const [adminUpdates, setAdminUpdates] = useState<Record<string, { price: number; points: number }>>({});
+
+  // Initial AdMob & Premium Check
+  useEffect(() => {
+    (async () => {
+      try {
+        await initializeAdMob();
+        const savedPremium = localStorage.getItem('fantaF1Premium');
+        if (savedPremium === 'true') {
+           setIsPremium(true);
+        } else {
+           setTimeout(() => showAppOpen(), 2000);
+        }
+      } catch (e) { console.error(e); }
+    })();
+  }, []);
+
+  // Save Premium State
+  useEffect(() => {
+    localStorage.setItem('fantaF1Premium', String(isPremium));
+  }, [isPremium]);
 
   // 1. Initial Load (races + drivers)
   useEffect(() => {
@@ -1089,12 +1112,10 @@ const App: React.FC = () => {
               <p className="text-slate-400">
                 {data.user?.isAdmin ? `${t({ en: 'Admin of', it: 'Admin di', fr: 'Admin de', de: 'Admin von', es: 'Admin de', ru: 'Админ', zh: '管理员', ar: 'مسؤول عن', ja: '管理者' })} ${data.user.leagueName}` : t({ en: 'Member', it: 'Membro', fr: 'Membre', de: 'Mitglied', es: 'Miembro', ru: 'Участник', zh: '成员', ar: 'عضو', ja: 'メンバー' })}
               </p>
-              {data.user?.isAdmin && (
-                <div className="mt-2 inline-block bg-blue-900/50 border border-blue-500/30 rounded px-3 py-1">
-                  <span className="text-slate-400 text-xs mr-2">{t({ en: 'LEAGUE CODE', it: 'CODICE LEGA', fr: 'CODE LIGUE', de: 'LIGA-CODE', es: 'CÓDIGO LIGA', ru: 'КОД ЛИГИ', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span>
-                  <span className="font-mono font-bold text-blue-300">{data.user.leagueCode}</span>
-                </div>
-              )}
+              <div className="mt-2 inline-block bg-blue-900/50 border border-blue-500/30 rounded px-3 py-1">
+                <span className="text-slate-400 text-xs mr-2">{t({ en: 'LEAGUE CODE', it: 'CODICE LEGA', fr: 'CODE LIGUE', de: 'LIGA-CODE', es: 'CÓDIGO LIGA', ru: 'КОД ЛИГИ', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span>
+                <span className="font-mono font-bold text-blue-300">{data.user.leagueCode}</span>
+              </div>
             </header>
 
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -1120,6 +1141,78 @@ const App: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-slate-300">{t({ en: 'Drivers Signed', it: 'Piloti', fr: 'Pilotes', de: 'Fahrer', es: 'Pilotos', ru: 'Пилоты', zh: '车手', ar: 'السائقين', ja: '契約ドライバー' })}</span>
                 <span className="font-mono text-white text-lg">{data.team.driverIds.length}/5</span>
+              </div>
+            </div>
+
+            {/* Profile & Logout Card (Added to Home) */}
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+              <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'Профиль', zh: '用户资料', ar: 'ملف المستخدم', ja: 'プロフィール' })}</h3>
+              <div className="mb-4 text-sm text-slate-300">
+                <p><span className="text-slate-500">{t({ en: 'Name', it: 'Nome', fr: 'Nom', de: 'Name', es: 'Nombre', ru: 'Имя', zh: '名字', ar: 'الاسم', ja: '名前' })}:</span> {data.user?.name}</p>
+                <p><span className="text-slate-500">{t({ en: 'Role', it: 'Ruolo', fr: 'Rôle', de: 'Rolle', es: 'Rol', ru: 'Роль', zh: '角色', ar: 'الدور', ja: '役割' })}:</span> {data.user?.isAdmin ? 'Admin' : 'Member'}</p>
+                <p><span className="text-slate-500">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span> <span className="font-mono text-blue-400">{data.user?.leagueCode}</span></p>
+              </div>
+
+              <div className="flex flex-col gap-3 mt-4">
+                {/* Premium / Remove Ads */}
+                <div className="border border-slate-700/50 bg-slate-900/50 rounded-lg p-3 mb-2">
+                  <h4 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">{t({ en: 'Premium', it: 'Premium' })}</h4>
+                  {isPremium ? (
+                    <div className="flex items-center gap-3 text-yellow-400">
+                       <span className="text-xl">👑</span>
+                       <div>
+                         <div className="font-bold text-sm">{t({ en: 'Premium Active', it: 'Premium Attivo' })}</div>
+                         <div className="text-[10px] opacity-80">{t({ en: 'No Ads enabled', it: 'Pubblicità rimosse' })}</div>
+                       </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        // Simulation of purchase
+                        if (confirm(t({ en: "Buy Premium for 4.99€? (Simulation)", it: "Comprare Premium per 4.99€? (Simulazione)" }))) {
+                           setIsPremium(true);
+                           alert(t({ en: "Thanks for your purchase! Ads removed.", it: "Grazie per l'acquisto! Pubblicità rimosse." }));
+                        }
+                      }}
+                      className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold py-2 px-3 rounded-lg shadow-lg border border-yellow-500/50 transition-all flex items-center justify-center gap-2 text-sm"
+                    >
+                      <span>👑</span>
+                      {t({ en: 'Remove Ads (4.99€)', it: 'Rimuovi Pubblicità (4.99€)' })}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded transition-colors"
+                >
+                  {t({ en: 'Logout', it: 'Esci', fr: 'Déconnexion', de: 'Abmelden', es: 'Salir', ru: 'Выйти', zh: '登出', ar: 'خروج', ja: 'ログアウト' })}
+                </button>
+                {showResetConfirm ? (
+                  <div className="bg-red-950/50 border border-red-500 p-4 rounded-lg animate-pulse">
+                    <p className="text-red-200 text-center mb-3 font-bold">{t({ en: 'Delete all local data?', it: 'Eliminare i dati locali?', fr: 'Supprimer données locales?', de: 'Lokale Daten löschen?', es: '¿Borrar datos locales?', ru: 'Удалить данные?', zh: '删除本地数据？', ar: 'حذف البيانات المحلية؟', ja: '全データを削除しますか？' })}</p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowResetConfirm(false)}
+                        className="flex-1 bg-slate-600 text-white py-2 rounded hover:bg-slate-500"
+                      >
+                        {t({ en: 'Cancel', it: 'Annulla', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ru: 'Отмена', zh: '取消', ar: 'إلغاء', ja: 'キャンセル' })}
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-500"
+                      >
+                        {t({ en: 'Confirm', it: 'Conferma', fr: 'Confirmer', de: 'Bestätigen', es: 'Confirmar', ru: 'Подтвердить', zh: '确认', ar: 'تأكيد', ja: '確認' })}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowResetConfirm(true)}
+                    className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-200 font-bold py-2 px-4 rounded transition-colors border border-red-900"
+                  >
+                    {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'Réinitialiser (Déconnexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'Сброс (Выход)', zh: '重置所有数据', ar: 'إعادة تعيين (خروج)', ja: 'リセット (ログアウト)' })}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1387,50 +1480,7 @@ const App: React.FC = () => {
               })}
             </div>
 
-            {/* Profile & Logout Card (Moved to Home) */}
-            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'Профиль', zh: '用户资料', ar: 'ملف المستخدم', ja: 'プロフィール' })}</h3>
-              <div className="mb-4 text-sm text-slate-300">
-                <p><span className="text-slate-500">{t({ en: 'Name', it: 'Nome', fr: 'Nom', de: 'Name', es: 'Nombre', ru: 'Имя', zh: '名字', ar: 'الاسم', ja: '名前' })}:</span> {data.user?.name}</p>
-                <p><span className="text-slate-500">{t({ en: 'Role', it: 'Ruolo', fr: 'Rôle', de: 'Rolle', es: 'Rol', ru: 'Роль', zh: '角色', ar: 'الدور', ja: '役割' })}:</span> {data.user?.isAdmin ? 'Admin' : 'Member'}</p>
-                <p><span className="text-slate-500">{t({ en: 'League Code', it: 'Codice Lega', fr: 'Code Ligue', de: 'Liga-Code', es: 'Código Liga', ru: 'Код лиги', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span> <span className="font-mono text-blue-400">{data.user?.leagueCode}</span></p>
-              </div>
-
-              <div className="flex flex-col gap-3 mt-4">
-                <button
-                  onClick={handleLogout}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded transition-colors"
-                >
-                  {t({ en: 'Logout', it: 'Esci', fr: 'Déconnexion', de: 'Abmelden', es: 'Salir', ru: 'Выйти', zh: '登出', ar: 'خروج', ja: 'ログアウト' })}
-                </button>
-                {showResetConfirm ? (
-                  <div className="bg-red-950/50 border border-red-500 p-4 rounded-lg animate-pulse">
-                    <p className="text-red-200 text-center mb-3 font-bold">{t({ en: 'Delete all local data?', it: 'Eliminare i dati locali?', fr: 'Supprimer données locales?', de: 'Lokale Daten löschen?', es: '¿Borrar datos locales?', ru: 'Удалить данные?', zh: '删除本地数据？', ar: 'حذف البيانات المحلية؟', ja: '全データを削除しますか？' })}</p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowResetConfirm(false)}
-                        className="flex-1 bg-slate-600 text-white py-2 rounded hover:bg-slate-500"
-                      >
-                        {t({ en: 'Cancel', it: 'Annulla', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ru: 'Отмена', zh: '取消', ar: 'إلغاء', ja: 'キャンセル' })}
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-500"
-                      >
-                        {t({ en: 'Confirm', it: 'Conferma', fr: 'Confirmer', de: 'Bestätigen', es: 'Confirmar', ru: 'Подтвердить', zh: '确认', ar: 'تأكيد', ja: '確認' })}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowResetConfirm(true)}
-                    className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-200 font-bold py-2 px-4 rounded transition-colors border border-red-900"
-                  >
-                    {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'Réinitialiser (Déconnexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'Сброс (Выход)', zh: '重置所有数据', ar: 'إعادة تعيين (خروج)', ja: 'リセット (ログアウト)' })}
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* Profile & Logout Card Moved to Home */}
           </div>
         );
 
@@ -1803,10 +1853,11 @@ const App: React.FC = () => {
         <Layout
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          showAdmin={data.user.isAdmin}
+          showAdmin={data?.user?.isAdmin}
           lang={language}
           t={t}
-        >
+        > 
+          <AdBanner isPremium={isPremium} />
           {renderContent()}
         </Layout>
       </ErrorBoundary>

@@ -33,7 +33,7 @@
 	<string>1.0.0</string>
 
 	<key>CFBundleVersion</key>
-	<string>59</string>
+	<string>60</string>
 
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -66,5 +66,7 @@
 
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-6238898129897806~YYYYYYYYYY</string>
 </dict>
 </plist>
