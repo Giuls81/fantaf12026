@@ -149,9 +149,10 @@ app.get("/me", requireUser, async (c) => {
     ` : [];
     
     const members = await sql`
-      SELECT lm."userId", u."displayName" as "userName", lm.role
+      SELECT lm."userId", u."displayName" as "userName", lm.role, t.id as "teamId"
       FROM "LeagueMember" lm
       JOIN "User" u ON lm."userId" = u.id
+      LEFT JOIN "Team" t ON t."userId" = lm."userId" AND t."leagueId" = ${m.id}
       WHERE lm."leagueId" = ${m.id}
     `;
 
@@ -445,18 +446,43 @@ app.post("/league/kick", requireUser, async (c) => {
   const user = c.get("user");
   const { leagueId, userId } = await c.req.json();
   
-  if (!leagueId || !userId) return c.json({ error: "missing_fields" }, 400);
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND "leagueId" = ${leagueId} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
 
-  // Check if requestor is ADMIN
-  const admins = await sql`SELECT role FROM "LeagueMember" WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id} AND role = 'ADMIN'`;
-  if (admins.length === 0) return c.json({ error: "not_admin" }, 403);
+  if (user.id === userId) return c.json({ error: "cannot_kick_self" }, 400);
 
-  if (userId === user.id) return c.json({ error: "cannot_kick_self" }, 400);
-
-  // Delete Member and Team
   await sql.begin(async sql => {
+      // Delete Team and Member
       await sql`DELETE FROM "Team" WHERE "leagueId" = ${leagueId} AND "userId" = ${userId}`;
       await sql`DELETE FROM "LeagueMember" WHERE "leagueId" = ${leagueId} AND "userId" = ${userId}`;
+  });
+
+  return c.json({ ok: true });
+});
+
+app.post("/league/penalty", requireUser, async (c) => {
+  const user = c.get("user");
+  const { leagueId, teamId, points, comment } = await c.req.json();
+
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND "leagueId" = ${leagueId} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+  
+  if (!teamId || points === undefined) return c.json({ error: "missing_fields" }, 400);
+
+  const penaltyId = crypto.randomUUID();
+  const pts = Number(points);
+
+  await sql.begin(async sql => {
+      await sql`
+        INSERT INTO "TeamPenalty" (id, "teamId", "leagueId", points, comment)
+        VALUES (${penaltyId}, ${teamId}, ${leagueId}, ${pts}, ${comment})
+      `;
+      
+      await sql`
+        UPDATE "Team" 
+        SET "totalPoints" = "totalPoints" + ${pts} 
+        WHERE id = ${teamId}
+      `;
   });
 
   return c.json({ ok: true });
@@ -794,6 +820,28 @@ app.post("/admin/sync-race", requireUser, async (c) => {
 
   } catch (e: any) {
     return c.json({ error: e.message, type: "sync_race_error" }, 500);
+  }
+});
+
+app.post("/admin/migrate-penalties", requireUser, async (c) => {
+  const user = c.get("user");
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS "TeamPenalty" (
+        id UUID PRIMARY KEY,
+        "teamId" UUID NOT NULL REFERENCES "Team"(id),
+        "leagueId" UUID NOT NULL,
+        points NUMERIC NOT NULL,
+        comment TEXT,
+        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    return c.json({ ok: true, message: "TeamPenalty table created" });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
   }
 });
 

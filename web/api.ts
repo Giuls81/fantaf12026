@@ -99,7 +99,7 @@ export async function getMe() {
       joinCode: string; 
       role: "ADMIN" | "MEMBER"; 
       isAdmin: boolean;
-      members: { userId: string; userName: string; role: "ADMIN" | "MEMBER" }[]; // Added
+      members: { userId: string; userName: string; role: "ADMIN" | "MEMBER"; teamId?: string }[]; // Added
       team: {
         id: string;
         name: string;
@@ -150,6 +150,10 @@ export async function kickMember(leagueId: string, userId: string) {
 
 export async function deleteLeague(leagueId: string) {
   return apiPost<{ ok: true }>("/league/delete", { leagueId });
+}
+
+export async function addPenalty(leagueId: string, teamId: string, points: number, comment: string) {
+  return apiPost<{ ok: true }>("/league/penalty", { leagueId, teamId, points, comment });
 }
 
 export async function getLeagueStandings(leagueId: string) {

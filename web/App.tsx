@@ -5,7 +5,7 @@ import { initializeAdMob, showAppOpen } from './services/admob';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty } from "./api";
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -1988,6 +1988,35 @@ const App: React.FC = () => {
       alert(t({ en: "Failed to delete league.", it: "Errore durante la cancellazione." }));
     }
   };
+  const handleAddPenalty = async (targetUserId: string, targetName: string, targetTeamId: string | undefined) => {
+     if (!targetTeamId) {
+        alert(t({ en: "User has no team yet.", it: "L'utente non ha ancora una squadra." }));
+        return;
+     }
+
+     const pointsStr = prompt(t({ en: `Enter penalty points for ${targetName} (e.g. -10 for penalty, 10 for bonus):`, it: `Inserisci punti penalità per ${targetName} (es. -10 per penalità, 10 per bonus):` }));
+     if (!pointsStr) return;
+     const points = parseFloat(pointsStr);
+     if (isNaN(points)) {
+        alert(t({ en: "Invalid number", it: "Numero non valido" }));
+        return;
+     }
+
+     const comment = prompt(t({ en: "Reason/Comment:", it: "Motivo/Commento:" })) || "Admin Penalty";
+
+     if (!data?.user?.leagueId) return;
+
+     try {
+        await addPenalty(data.user.leagueId, targetTeamId, points, comment);
+        alert(t({ en: "Penalty applied.", it: "Penalità applicata." }));
+        // Refresh
+        const { leagues } = await getMe();
+        if (leagues[0]?.members) setLeagueMembers(leagues[0].members);
+     } catch (e) {
+        console.error(e);
+        alert(t({ en: "Failed to apply penalty.", it: "Errore durante l'applicazione." }));
+     }
+  };
 
   const renderAdmin = () => {
     return (
@@ -2009,13 +2038,22 @@ const App: React.FC = () => {
                     <span className="ml-2 text-xs text-slate-500">{m.role}</span>
                  </div>
                  {m.userId !== data?.user?.id && (
-                    <button 
-                      onClick={() => handleKickMember(m.userId, m.userName)}
-                      className="text-red-400 hover:text-red-300 px-2"
-                      title="Kick User"
-                    >
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                    <div className="flex">
+                      <button 
+                        onClick={() => handleKickMember(m.userId, m.userName)}
+                        className="text-red-400 hover:text-red-300 px-2"
+                        title="Kick User"
+                      >
+                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                      <button 
+                        onClick={() => handleAddPenalty(m.userId, m.userName, m.teamId)}
+                        className="text-yellow-400 hover:text-yellow-300 px-2"
+                        title="Add Penalty/Bonus"
+                      >
+                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+                      </button>
+                    </div>
                  )}
               </div>
             ))}
