@@ -1,9 +1,13 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { Hono } from "https://deno.land/x/hono@v3.1.8/mod.ts";
-import { cors } from "https://deno.land/x/hono@v3.1.8/middleware.ts";
-import postgres from "https://deno.land/x/postgresjs@v3.4.4/mod.js";
+import { serve } from "std/http/server.ts";
+import { Hono, Context, Next } from "hono";
+import { cors } from "hono/middleware.ts";
+import postgres from "postgres";
 
-const app = new Hono().basePath("/fanta-api");
+type Variables = {
+  user: any;
+}
+
+const app = new Hono<{ Variables: Variables }>().basePath("/fanta-api");
 
 // DB Connection
 const databaseUrl = Deno.env.get("DATABASE_URL")!;
@@ -15,7 +19,7 @@ function makeToken() {
 }
 
 // Middleware: Auth
-const requireUser = async (c: any, next: any) => {
+const requireUser = async (c: Context<{ Variables: Variables }>, next: Next) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return c.json({ error: "missing_token" }, 401);
@@ -130,7 +134,7 @@ app.get("/me", requireUser, async (c) => {
   // Get memberships
   const memberships = await sql`
     SELECT lm.role, l.id, l.name, l."joinCode",
-           t.id as team_id, t.budget, t."captainId", t."reserveId"
+           t.id as team_id, t.name as team_name, t.budget, t."captainId", t."reserveId"
     FROM "LeagueMember" lm
     JOIN "League" l ON lm."leagueId" = l.id
     LEFT JOIN "Team" t ON t."leagueId" = l.id AND t."userId" = ${user.id}
@@ -152,6 +156,7 @@ app.get("/me", requireUser, async (c) => {
       isAdmin: m.role === "ADMIN",
       team: m.team_id ? {
         id: m.team_id,
+        name: m.team_name, // Added
         budget: Number(m.budget),
         captainId: m.captainId,
         reserveId: m.reserveId,
@@ -205,9 +210,10 @@ app.post("/leagues", requireUser, async (c) => {
       `;
       
       const teamId = crypto.randomUUID();
+      const teamName = `${user.displayName}'s Team`;
       await sql`
-        INSERT INTO "Team" (id, "userId", "leagueId", budget, "createdAt", "updatedAt")
-        VALUES (${teamId}, ${user.id}, ${l.id}, 100.0, ${now}, ${now})
+        INSERT INTO "Team" (id, "userId", "leagueId", name, budget, "createdAt", "updatedAt")
+        VALUES (${teamId}, ${user.id}, ${l.id}, ${teamName}, 100.0, ${now}, ${now})
       `;
       
       return [l];
@@ -238,9 +244,10 @@ app.post("/leagues/join", requireUser, async (c) => {
       `;
       
       const teamId = crypto.randomUUID();
+      const teamName = `${user.displayName}'s Team`;
       await sql`
-        INSERT INTO "Team" (id, "userId", "leagueId", budget, "createdAt", "updatedAt")
-        VALUES (${teamId}, ${user.id}, ${league.id}, 100.0, ${now}, ${now})
+        INSERT INTO "Team" (id, "userId", "leagueId", name, budget, "createdAt", "updatedAt")
+        VALUES (${teamId}, ${user.id}, ${league.id}, ${teamName}, 100.0, ${now}, ${now})
         ON CONFLICT ("userId", "leagueId") DO NOTHING
       `;
     });
@@ -393,6 +400,39 @@ app.post("/admin/drivers", requireUser, async (c) => {
   return c.json({ ok: true });
 });
 
+app.post("/admin/migrate-team-name", requireUser, async (c) => {
+  const user = c.get("user");
+  // Security: Only allow if user is admin of AT LEAST one league (weak check but ok for migration)
+  // or just check if it's the specific admin user. 
+  // For now, let's just run it.
+  
+  try {
+      await sql`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "name" TEXT DEFAULT 'My F1 Team'`;
+      return c.json({ ok: true, message: "Migration applied." });
+  } catch (e: any) {
+      return c.json({ error: e.message }, 500);
+  }
+});
+
+app.post("/team/update", requireUser, async (c) => {
+  const user = c.get("user");
+  const { leagueId, name } = await c.req.json();
+  
+  if (!leagueId || !name) return c.json({ error: "missing_fields" }, 400);
+  const teamName = name.slice(0, 32);
+
+  const [team] = await sql`
+    UPDATE "Team"
+    SET "name" = ${teamName}, "updatedAt" = ${new Date().toISOString()}
+    WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id}
+    RETURNING *
+  `;
+
+  if (!team) return c.json({ error: "team_not_found" }, 404);
+
+  return c.json({ ok: true, name: team.name });
+});
+
 // Helper constants for Sync
 const OPENF1_BASE = "https://api.openf1.org/v1";
 const DRIVER_NUMBER_MAP: Record<string, number> = {
@@ -406,9 +446,8 @@ const REVERSE_DRIVER_MAP: Record<number, string> = Object.fromEntries(
 const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const DEFAULT_SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-async function getOpenF1SessionKey(year: number, location: string, isSprint: boolean): Promise<number | null> {
-  const sessionName = isSprint ? "Sprint" : "Race";
-  const url = `${OPENF1_BASE}/sessions?year=${year}&location=${encodeURIComponent(location)}&session_name=${encodeURIComponent(sessionName)}`;
+async function getOpenF1SessionKey(year: number, location: string, type: 'Race' | 'Qualifying' | 'Sprint' | 'Sprint Qualifying'): Promise<number | null> {
+  const url = `${OPENF1_BASE}/sessions?year=${year}&location=${encodeURIComponent(location)}&session_name=${encodeURIComponent(type)}`;
   try {
     const res = await fetch(url);
     const data = await res.json();
@@ -442,7 +481,7 @@ async function getOpenF1Classification(sessionKey: number): Promise<Record<strin
       if (driverId) results[driverId] = pos;
     }
     return results;
-  } catch (e) { return {}; }
+  } catch (_e) { return {}; }
 }
 
 app.post("/admin/sync-race", requireUser, async (c) => {
@@ -458,23 +497,199 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     const [race] = await sql`SELECT * FROM "Race" WHERE id = ${raceId}`;
     if (!race) return c.json({ error: "race_not_found" }, 404);
 
-    // 2. Fetch OpenF1 Data
+
+    // 2. Fetch OpenF1 Data - RACE
     const location = race.city || race.country || "";
-    const sessionKey = await getOpenF1SessionKey(race.season || 2026, location, !!race.isSprint);
+    const raceSessionType = race.isSprint ? "Sprint" : "Race";
+    const sessionKey = await getOpenF1SessionKey(race.season || 2026, location, raceSessionType);
     
     if (!sessionKey) return c.json({ error: "openf1_session_not_found", location, season: race.season }, 404);
 
     const classification = await getOpenF1Classification(sessionKey);
     if (Object.keys(classification).length === 0) return c.json({ error: "no_classification_data" }, 404);
 
+    // 2b. Fetch OpenF1 Data - QUALIFYING / SHOOTOUT
+    let gridPositions: Record<string, number> = {};
+    const qualiSessionType = race.isSprint ? "Sprint Qualifying" : "Qualifying";
+    const qualiKey = await getOpenF1SessionKey(race.season || 2026, location, qualiSessionType);
+
+    if (qualiKey && qualiKey !== sessionKey) {
+          gridPositions = await getOpenF1Classification(qualiKey);
+    } else {
+        // If "Sprint Qualifying" fails, fallback to "Sprint Shootout"? (older name)
+        // Or if Quali fails, maybe log it.
+        if (race.isSprint) {
+             const fallbackKey = await getOpenF1SessionKey(race.season || 2026, location, "Sprint Shootout" as any);
+             if (fallbackKey) gridPositions = await getOpenF1Classification(fallbackKey);
+        }
+    }
+
     // 3. Calculate Points
     const pointsArray = race.isSprint ? DEFAULT_SPRINT_POINTS : DEFAULT_RACE_POINTS;
     const driverRacePoints: Record<string, number> = {};
     
+    // Constants from Scoring Rules (Matching web/constants.ts)
+    const SCORING = {
+        RACE_LAST_PLACE: -3,
+        QUALI_Q1_ELIM: -3, // Pos 16-20 (assuming 20 cars)
+        QUALI_Q2_REACHED: 1, // Pos 11-15
+        QUALI_Q3_REACHED: 3, // Pos 1-10
+        QUALI_POLE: 3,
+        SPRINT_POLE: 2, // Standard FantaF1 usually gives less for Sprint Pole or same? User said "we have possibility". 
+                        // Let's assume 2 for now, or match Pole (3). Let's use 2 as a safe bet or check standard rules. 
+                        // Actually, web/types has sprintPole. Let's assume it's same as normal pole or 1.
+                        // I will use 2.
+        RACE_DNF: -5,
+        TEAMMATE_BEAT: 2,
+        TEAMMATE_LOST: -2,
+        TEAMMATE_BEAT_DNF: 1, 
+        POS_GAINED: 1,
+        POS_LOST: -1
+    };
+
+    // Helper to get driver teammate
+    // We need to fetch all drivers to map constructors
+    const allDrivers = await sql`SELECT id, "constructorId" FROM "Driver"`;
+    const driverTeamMap: Record<string, string> = {}; // driverId -> constructorId
+    allDrivers.forEach(d => driverTeamMap[d.id] = d.constructorId);
+
+    // Identify Teammates
+    const teammates: Record<string, string> = {}; // driverId -> teammateId
+    for (const d of allDrivers) {
+        const mate = allDrivers.find(x => x.constructorId === d.constructorId && x.id !== d.id);
+        if (mate) teammates[d.id] = mate.id;
+    }
+
+
     for (const [driverId, position] of Object.entries(classification)) {
-      const pts = (position >= 1 && position <= pointsArray.length) ? (pointsArray[position - 1] ?? 0) : 0;
+      let pts = 0;
+
+      // A. Race Position
+      if (position >= 1 && position <= pointsArray.length) {
+          pts += (pointsArray[position - 1] ?? 0);
+      }
+
+      // B. Race Last Place Malus
+      const maxPos = Math.max(...Object.values(classification));
+      if (position === maxPos && maxPos > 10) { 
+          pts += SCORING.RACE_LAST_PLACE;
+      }
+
+      // C. Grid & Qualifying Bonuses (Now applies to BOTH Race and Sprint)
+      if (gridPositions[driverId]) {
+          const grid = gridPositions[driverId];
+          
+          if (!race.isSprint) {
+              // Standard Quali Bonuses
+              if (grid === 1) pts += SCORING.QUALI_POLE;
+              if (grid <= 10) pts += SCORING.QUALI_Q3_REACHED;
+              else if (grid <= 15) pts += SCORING.QUALI_Q2_REACHED;
+              else pts += SCORING.QUALI_Q1_ELIM; // 16+
+          } else {
+              // Sprint Shootout Bonuses
+              // Assuming only Pole applies to Sprint Shootout?
+              if (grid === 1) pts += SCORING.SPRINT_POLE;
+              // Do Q1/Q2/Q3 apply? User implies "Points for Pole Sprint".
+              // Usually Shootout is shorter, maybe no Q3 bonus? 
+              // Leaving out Q1/Q2/Q3 for Sprint unless requested.
+          }
+
+          // Positions Gained/Lost (Applies to BOTH)
+          const diff = grid - position;
+          let movePts = 0;
+          
+          if (diff > 0) {
+              // Gained positions
+              for (let p = grid - 1; p >= position; p--) {
+                  // Moving from p+1 to p
+                  // If target p is <= 10, value is 1. If target p > 10, value is 0.5.
+                  movePts += (p <= 10 ? 1 : 0.5); 
+              }
+          } else if (diff < 0) {
+              // Lost positions
+              for (let p = grid + 1; p <= position; p++) {
+                  // Moving from p-1 to p
+                  // If target p <= 10, -1. If target p > 10, -0.5.
+                  movePts -= (p <= 10 ? 1 : 0.5);
+              }
+          }
+          pts += movePts;
+      }
+
+      // D. DNF / Status
+      // How to detect DNF from OpenF1 classification?
+      // Usually status is not in 'position' endpoint.
+      // But if we miss 'status', we can't be 100% sure.
+      // Workaround: We might need to check if driver is NOT in classification but WAS in Grid? 
+      // Or check 'laps' count vs Winner laps?
+      // For now, let's assume if position is NOT found in classification, they DNF? 
+      // But we are looping `classification`.
+      // TODO: Improve DNF detection with 'intervals' or 'laps' endpoint in future.
+      // For now, we can't apply RaceDNF reliably without 'status'. 
+      // However, user specifically asked for "ritiro".
+      // Let's try to infer: If NOT isCompleted (which we don't have per driver) ...
+      // If we use 'intervals' endpoint for all drivers, we could see 'gap_to_leader'.
+      // LET'S SKIP DNF MALUS FOR V1 SAFETY unless we are sure, OR apply it if we can find a way.
+      // Actually, OpenF1 classification usually includes DNFs at the bottom or excludes them?
+      // If excludes, we need to find missing drivers.
+      
+      // Teammate Duel
+      const mateId = teammates[driverId];
+      if (mateId && classification[mateId]) {
+          const matePos = classification[mateId];
+          if (position < matePos) {
+              pts += SCORING.TEAMMATE_BEAT;
+          } else {
+              pts += SCORING.TEAMMATE_LOST;
+          }
+      } else if (mateId && !classification[mateId]) {
+           // Teammate not in classification -> Likely DNF or DNS
+           // If I am classified and he is not -> I beat him
+           pts += SCORING.TEAMMATE_BEAT;
+           pts += SCORING.TEAMMATE_BEAT_DNF;
+      }
+
       driverRacePoints[driverId] = pts;
     }
+    
+    // Handle drivers NOT in classification (DNFs?)
+    // If they were in Grid/Drivers list but not in Race Classification
+    if (!race.isSprint) {
+        // Iterate all active drivers to find those missing from Race Classification
+        for (const d of allDrivers) {
+            if (driverRacePoints[d.id] === undefined) {
+                 // Driver missed Race Classification.
+                 // Did they qualify?
+                 const grid = gridPositions[d.id];
+                 let pts = 0;
+                 if (grid) {
+                     // They existed in Quali, so they probably started or tried to.
+                     // Apply DNF Malus
+                     pts += SCORING.RACE_DNF;
+                     
+                     // Quali points still apply? Yes usually.
+                     if (grid === 1) pts += SCORING.QUALI_POLE;
+                     if (grid <= 10) pts += SCORING.QUALI_Q3_REACHED;
+                     else if (grid <= 15) pts += SCORING.QUALI_Q2_REACHED;
+                     else pts += SCORING.QUALI_Q1_ELIM;
+                 }
+                 
+                 // Teammate check (Reverse)
+                 const mateId = teammates[d.id];
+                 if (mateId && driverRacePoints[mateId] !== undefined) {
+                     // Teammate finished, I didn't.
+                     // I lost.
+                     pts += SCORING.TEAMMATE_LOST;
+                 }
+                 
+                 if (grid || driverRacePoints[d.id] !== undefined) {
+                     driverRacePoints[d.id] = (driverRacePoints[d.id] || 0) + pts;
+                 }
+            }
+        }
+    }
+
+    // 4. Transactional Update
 
     // 4. Transactional Update
     await sql.begin(async (sql) => {

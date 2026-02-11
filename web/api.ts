@@ -101,6 +101,7 @@ export async function getMe() {
       isAdmin: boolean;
       team: {
         id: string;
+        name: string; // Added
         budget: number;
         captainId: string | null;
         reserveId: string | null;
@@ -128,6 +129,14 @@ export async function updateLineup(leagueId: string, captainId?: string | null, 
 
 export async function updateDriverInfo(updates: { id: string; price?: number; points?: number }[]) {
   return apiPost<{ ok: true }>("/admin/drivers", { updates });
+}
+
+export async function updateTeamName(leagueId: string, name: string) {
+  return apiPost<{ ok: true; name: string }>("/team/update", { leagueId, name });
+}
+
+export async function migrateTeamName() {
+  return apiPost<{ ok: true; message: string }>("/admin/migrate-team-name", {});
 }
 
 export async function syncRaceResults(raceId: string) {

@@ -212,6 +212,8 @@ const App: React.FC = () => {
 
   // UI State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isEditingTeamName, setIsEditingTeamName] = useState(false);
+  const [teamNameEdit, setTeamNameEdit] = useState("");
   const [loadingStatus, setLoadingStatus] = useState("Initializing...");
   const [startupError, setStartupError] = useState("");
   
@@ -472,7 +474,7 @@ const App: React.FC = () => {
       };
 
       const serverTeam: UserTeam = myLeague.team ? {
-        name: 'My F1 Team',
+        name: myLeague.team.name || 'My F1 Team',
         driverIds: myLeague.team.driverIds,
         budget: myLeague.team.budget,
         captainId: myLeague.team.captainId,
@@ -949,9 +951,46 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSellDriver = async (driver: Driver) => {
+    if (!data?.user) return;
+    if (!confirm(t({ en: `Sell ${driver.name} for $${driver.price}M?`, it: `Vendere ${driver.name} per ${driver.price}M?` }))) return;
+
+    try {
+      await updateMarket(data.user.leagueId, undefined, driver.id);
+      const updatedData = await getMe();
+      const league = updatedData.leagues.find(l => l.id === data.user?.leagueId);
+      if (league?.team) {
+         setData({
+            ...data,
+            team: {
+               ...data.team,
+               budget: league.team.budget,
+               driverIds: league.team.driverIds,
+               captainId: league.team.captainId,
+               reserveDriverId: league.team.reserveId,
+               totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
+            }
+         });
+      }
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: 'Failed to sell driver.', it: 'Vendita pilota fallita.' }));
+    }
+  };
+
   // --------------------------------------------------------------------------------
   // RENDER
   // --------------------------------------------------------------------------------
+
+  // ... (omitted LangMenu) ...
+
+  // Inside Market Tab Render loop (approx line 1534 in original)
+  /* 
+     This replacement implementation assumes I can target the insertion point for handleSellDriver
+     and the UI button replacement in one go or separate.
+     Since I can't easily jump, I will insert the function first.
+  */
+
 
   const LangMenu = (
     <div className="fixed top-0 right-4 z-50 flex flex-col items-end pt-[env(safe-area-inset-top,1rem)]">
@@ -1051,6 +1090,7 @@ const App: React.FC = () => {
   if (!data.user) {
     return (
       <div className="flex flex-col h-screen bg-slate-900 text-white items-center justify-center p-6">
+        {LangMenu}
         <h1 className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-red-500">
           FantaF1
         </h1>
@@ -1302,9 +1342,38 @@ const App: React.FC = () => {
         return (
           <div className="space-y-4">
             <h1 className="text-2xl font-bold text-white mb-4">{t({ en: 'My Team', it: 'Il Mio Team', fr: 'Mon Équipe', de: 'Mein Team', es: 'Mi Equipo', ru: 'Моя Команда', zh: '我的车队', ar: 'فريقي', ja: 'マイチーム' })}</h1>
-            <div className="p-4 bg-slate-800 rounded-lg text-center border border-slate-700">
-              <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'équipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'Название команды', zh: '车队名称', ar: 'اسم الفريق', ja: 'チーム名' })}</p>
-              <h2 className="text-xl font-bold text-white">{data.team.name}</h2>
+            <div className="p-4 bg-slate-800 rounded-lg text-center border border-slate-700 relative">
+               <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'équipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'Название команды', zh: '车队名称', ar: 'اسم الفريق', ja: 'チーム名' })}</p>
+               {isEditingTeamName ? (
+                 <div className="flex items-center justify-center gap-2">
+                   <input 
+                     type="text" 
+                     value={teamNameEdit}
+                     onChange={(e) => setTeamNameEdit(e.target.value)}
+                     className="bg-slate-900 border border-slate-600 rounded p-1 text-white text-center font-bold"
+                   />
+                   <button 
+                     onClick={async () => {
+                        if (!teamNameEdit.trim()) return;
+                        try {
+                           await updateTeamName(data.user!.leagueId, teamNameEdit.trim());
+                           setData({
+                              ...data,
+                              team: { ...data.team, name: teamNameEdit.trim() }
+                           });
+                           setIsEditingTeamName(false);
+                        } catch(e) { console.error(e); alert("Failed"); }
+                     }}
+                     className="text-green-400 font-bold"
+                   >✓</button>
+                   <button onClick={() => setIsEditingTeamName(false)} className="text-red-400 font-bold">✕</button>
+                 </div>
+               ) : (
+                 <div className="flex items-center justify-center gap-2">
+                   <h2 className="text-xl font-bold text-white">{data.team.name}</h2>
+                   <button onClick={() => { setTeamNameEdit(data.team.name); setIsEditingTeamName(true); }} className="text-slate-500 hover:text-white text-xs">✏️</button>
+                 </div>
+               )}
             </div>
 
             <div className="space-y-2">
@@ -1532,8 +1601,11 @@ const App: React.FC = () => {
                     <div className="flex flex-col items-end gap-1">
                       <div className="font-mono text-slate-200">${driver.price}M</div>
                       {isOwned ? (
-                        <button disabled className="px-3 py-1 bg-slate-700 text-slate-400 text-xs rounded font-bold uppercase tracking-wider cursor-default">
-                          {t({ en: 'Owned', it: 'Posseduto', fr: 'Possédé', de: 'Im Besitz', es: 'En propiedad', ru: 'Куплен', zh: '已拥有', ar: 'مملوك', ja: '所有中' })}
+                        <button 
+                          onClick={() => handleSellDriver(driver)}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded font-bold uppercase tracking-wider transition-colors"
+                        >
+                          {t({ en: 'Sell', it: 'Vendi', fr: 'Vendre', de: 'Verkaufen', es: 'Vender', ru: 'Продать', zh: '卖', ar: 'بيع', ja: '売却' })}
                         </button>
                       ) : isTeamFull ? (
                         <button
@@ -1597,7 +1669,18 @@ const App: React.FC = () => {
 
               {/* Inputs */}
               <div className="space-y-3">
-                <div className={`p-2 rounded-lg border ${!currentRace.isSprint ? 'border-yellow-500 bg-yellow-900/20' : 'border-transparent'}`}>
+                 <button 
+                    onClick={async () => {
+                       if(confirm("Add 'name' column to Team table?")) {
+                          const res = await import("./api").then(m => m.migrateTeamName());
+                          alert(JSON.stringify(res));
+                       }
+                    }}
+                    className="w-full bg-indigo-900/50 border border-indigo-500 text-indigo-200 text-xs py-2 rounded"
+                 >
+                    Run DB Migration (Add Team Name)
+                 </button>
+                 <div className={`p-2 rounded-lg border ${!currentRace.isSprint ? 'border-yellow-500 bg-yellow-900/20' : 'border-transparent'}`}>
                   <div className="flex justify-between">
                     <label className="block text-xs text-slate-400 mb-1">{t({ en: 'Qualifying UTC (ISO)', it: 'Qualifiche UTC (ISO)', fr: 'Qualif UTC (ISO)', de: 'Quali UTC (ISO)', es: 'Clasif UTC (ISO)', ru: 'Квалиф UTC', zh: '排位赛 UTC', ar: 'التصفيات UTC', ja: '予選 UTC' })}</label>
                     {!currentRace.isSprint && <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider">{t({ en: 'SETS LOCK', it: 'LOCK ATTIVO', fr: 'VERROUILLE', de: 'SETZT LOCK', es: 'FIJA LOCK', ru: 'БЛОКИРУЕТ', zh: '设置锁定', ar: 'يقفل', ja: 'ロック設定' })}</span>}

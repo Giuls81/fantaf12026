@@ -7,8 +7,10 @@ export const initializeAdMob = async () => {
   if (Capacitor.getPlatform() === 'web') return;
 
   try {
+    // Request tracking authorization before initialization
+    await AdMob.requestTrackingAuthorization();
+
     await AdMob.initialize({
-      requestTrackingAuthorization: true,
       testingDevices: IS_TEST_MODE ? ['YOUR_DEVICE_ID'] : undefined, // Add test devices if needed
       initializeForTesting: IS_TEST_MODE,
     });
@@ -74,13 +76,14 @@ export const showInterstitial = async () => {
 
 export const prepareAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
-    const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.APP_OPEN : ADMOB_IDS.IOS.APP_OPEN;
+    // const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.APP_OPEN : ADMOB_IDS.IOS.APP_OPEN;
     
     try {
-        await AdMob.prepareAppOpenAd({
-            adId,
-            isTesting: IS_TEST_MODE
-        });
+        console.warn('App Open Ads are not supported in this version of @capacitor-community/admob');
+        // await AdMob.prepareAppOpenAd({
+        //     adId,
+        //     isTesting: IS_TEST_MODE
+        // });
     } catch (e) {
         console.error('Prepare App Open failed', e);
     }
@@ -89,7 +92,8 @@ export const prepareAppOpen = async () => {
 export const showAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     try {
-        await AdMob.showAppOpenAd();
+        console.warn('App Open Ads are not supported in this version of @capacitor-community/admob');
+        // await AdMob.showAppOpenAd();
     } catch (e) {
         console.error('Show App Open failed', e);
     }
