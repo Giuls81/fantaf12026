@@ -99,9 +99,10 @@ export async function getMe() {
       joinCode: string; 
       role: "ADMIN" | "MEMBER"; 
       isAdmin: boolean;
+      members: { userId: string; userName: string; role: "ADMIN" | "MEMBER" }[]; // Added
       team: {
         id: string;
-        name: string; // Added
+        name: string;
         budget: number;
         captainId: string | null;
         reserveId: string | null;
@@ -141,6 +142,14 @@ export async function migrateTeamName() {
 
 export async function syncRaceResults(raceId: string) {
   return apiPost<{ ok: true; classification: Record<string, number>; points: Record<string, number> }>("/admin/sync-race", { raceId });
+}
+
+export async function kickMember(leagueId: string, userId: string) {
+  return apiPost<{ ok: true }>("/league/kick", { leagueId, userId });
+}
+
+export async function deleteLeague(leagueId: string) {
+  return apiPost<{ ok: true }>("/league/delete", { leagueId });
 }
 
 export async function getLeagueStandings(leagueId: string) {

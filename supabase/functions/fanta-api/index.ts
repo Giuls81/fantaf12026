@@ -148,15 +148,23 @@ app.get("/me", requireUser, async (c) => {
       SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${m.team_id}
     ` : [];
     
+    const members = await sql`
+      SELECT lm."userId", u."displayName" as "userName", lm.role
+      FROM "LeagueMember" lm
+      JOIN "User" u ON lm."userId" = u.id
+      WHERE lm."leagueId" = ${m.id}
+    `;
+
     return {
       id: m.id,
       name: m.name,
       joinCode: m.joinCode,
       role: m.role,
       isAdmin: m.role === "ADMIN",
+      members, // Added
       team: m.team_id ? {
         id: m.team_id,
-        name: m.team_name, // Added
+        name: m.team_name,
         budget: Number(m.budget),
         captainId: m.captainId,
         reserveId: m.reserveId,
@@ -431,6 +439,49 @@ app.post("/team/update", requireUser, async (c) => {
   if (!team) return c.json({ error: "team_not_found" }, 404);
 
   return c.json({ ok: true, name: team.name });
+});
+
+app.post("/league/kick", requireUser, async (c) => {
+  const user = c.get("user");
+  const { leagueId, userId } = await c.req.json();
+  
+  if (!leagueId || !userId) return c.json({ error: "missing_fields" }, 400);
+
+  // Check if requestor is ADMIN
+  const admins = await sql`SELECT role FROM "LeagueMember" WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id} AND role = 'ADMIN'`;
+  if (admins.length === 0) return c.json({ error: "not_admin" }, 403);
+
+  if (userId === user.id) return c.json({ error: "cannot_kick_self" }, 400);
+
+  // Delete Member and Team
+  await sql.begin(async sql => {
+      await sql`DELETE FROM "Team" WHERE "leagueId" = ${leagueId} AND "userId" = ${userId}`;
+      await sql`DELETE FROM "LeagueMember" WHERE "leagueId" = ${leagueId} AND "userId" = ${userId}`;
+  });
+
+  return c.json({ ok: true });
+});
+
+app.post("/league/delete", requireUser, async (c) => {
+  const user = c.get("user");
+  const { leagueId } = await c.req.json();
+  
+  if (!leagueId) return c.json({ error: "missing_fields" }, 400);
+
+  // Check if requestor is ADMIN
+  const admins = await sql`SELECT role FROM "LeagueMember" WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id} AND role = 'ADMIN'`;
+  if (admins.length === 0) return c.json({ error: "not_admin" }, 403);
+
+  // Delete everything (Cascading manually to be safe)
+  await sql.begin(async sql => {
+      await sql`DELETE FROM "TeamResult" WHERE "leagueId" = ${leagueId}`;
+      await sql`DELETE FROM "Team" WHERE "leagueId" = ${leagueId}`;
+      await sql`DELETE FROM "LeagueMember" WHERE "leagueId" = ${leagueId}`;
+      await sql`DELETE FROM "Lineup" WHERE "leagueId" = ${leagueId}`; // Added Lineup
+      await sql`DELETE FROM "League" WHERE id = ${leagueId}`;
+  });
+
+  return c.json({ ok: true });
 });
 
 // Helper constants for Sync

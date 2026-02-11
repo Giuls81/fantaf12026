@@ -5,7 +5,7 @@ import { initializeAdMob, showAppOpen } from './services/admob';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague } from "./api";
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -102,6 +102,7 @@ const App: React.FC = () => {
   const [now, setNow] = useState(Date.now());
   const [races, setRaces] = useState<Race[]>([]);
   const [fetchedDrivers, setFetchedDrivers] = useState<Driver[]>([]);
+  const [leagueMembers, setLeagueMembers] = useState<any[]>([]); // Added for Admin
   const [adminUpdates, setAdminUpdates] = useState<Record<string, { price: number; points: number }>>({});
 
   // Initial AdMob & Premium Check
@@ -263,6 +264,11 @@ const App: React.FC = () => {
         setLoadingStatus("Restoring Session...");
         const { user, leagues } = await getMe();
           const firstLeague = leagues[0];
+          
+          if (firstLeague && firstLeague.members) {
+             setLeagueMembers(firstLeague.members);
+          }
+
           // If no league (e.g. user created but league creation failed), user needs to create/join one.
           // For simplicity, we assume if they have a token they are good, but we might need a "No League" UI state.
           // If leagues empty, we reset? Or show create league UI?
@@ -454,6 +460,10 @@ const App: React.FC = () => {
       // 3. Refresh Me (to get User object with League info)
       const { user, leagues } = await getMe();
       const myLeague = leagues[0];
+
+      if (myLeague && myLeague.members) {
+         setLeagueMembers(myLeague.members);
+      }
       
       if (!myLeague) {
           // Edge case: User logged in but has no league? 
@@ -1946,6 +1956,39 @@ const App: React.FC = () => {
     }
   };
 
+
+
+  const handleKickMember = async (targetUserId: string, targetName: string) => {
+    if (!confirm(t({ en: `Kick ${targetName}?`, it: `Espellere ${targetName}?` }))) return;
+    if (!data?.user?.leagueId) return;
+
+    try {
+      await kickMember(data.user.leagueId, targetUserId);
+      alert(t({ en: "User kicked.", it: "Utente espulso." }));
+      // Refresh
+      const { leagues } = await getMe();
+      if (leagues[0]?.members) setLeagueMembers(leagues[0].members);
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: "Failed to kick user.", it: "Errore durante l'espulsione." }));
+    }
+  };
+
+  const handleDeleteLeague = async () => {
+    if (!confirm(t({ en: "DELETE ENTIRE LEAGUE? This cannot be undone.", it: "CANCELLARE INTERA LEGA? Non si può annullare." }))) return;
+    if (!confirm(t({ en: "Are you really sure?", it: "Sei davvero sicuro?" }))) return;
+    if (!data?.user?.leagueId) return;
+
+    try {
+      await deleteLeague(data.user.leagueId);
+      alert(t({ en: "League deleted.", it: "Lega cancellata." }));
+      handleLogout();
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: "Failed to delete league.", it: "Errore durante la cancellazione." }));
+    }
+  };
+
   const renderAdmin = () => {
     return (
       <div className="space-y-6">
@@ -1953,6 +1996,41 @@ const App: React.FC = () => {
           <h1 className="text-2xl font-bold text-white">{t({ en: 'Administrator', it: 'Amministratore' })}</h1>
           <p className="text-slate-400 text-sm">{t({ en: 'Manage drivers prices and points.', it: 'Gestisci quotazioni e punteggi.', fr: 'Gérer prix et points pilotes.', de: 'Fahrerpreise und Punkte verwalten.', es: 'Gestionar precios y puntos.', ru: 'Управление ценами и очками.', zh: '管理车手价格和积分。', ar: 'إدارة أسعار ونقاط السائقين.', ja: 'ドライバー価格とポイント管理。' })}</p>
         </header>
+
+        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-4">
+          <h2 className="text-lg font-bold text-white uppercase tracking-wider border-b border-slate-700 pb-2">{t({ en: 'League Management', it: 'Gestione Lega' })}</h2>
+          
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-slate-300">{t({ en: 'Members', it: 'Membri' })}</h3>
+            {leagueMembers.map(m => (
+              <div key={m.userId} className="flex justify-between items-center bg-slate-900/50 p-2 rounded">
+                 <div>
+                    <span className="text-white font-medium">{m.userName}</span>
+                    <span className="ml-2 text-xs text-slate-500">{m.role}</span>
+                 </div>
+                 {m.userId !== data?.user?.id && (
+                    <button 
+                      onClick={() => handleKickMember(m.userId, m.userName)}
+                      className="text-red-400 hover:text-red-300 px-2"
+                      title="Kick User"
+                    >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                 )}
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-4 border-t border-slate-700">
+             <button 
+                onClick={handleDeleteLeague}
+                className="w-full bg-red-900/50 hover:bg-red-800 text-red-200 border border-red-700 font-bold py-2 rounded transition-all flex items-center justify-center gap-2"
+             >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                {t({ en: 'DELETE LEAGUE', it: 'CANCELLA LEGA' })}
+             </button>
+          </div>
+        </div>
 
         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-4">
           <div className="flex justify-between items-center border-b border-slate-700 pb-2">
