@@ -70,8 +70,12 @@ export interface ScoringRules {
   teammateBeatDNF: number; // +1
 
   // Grid Position
-  positionGained: number; // +1 per pos
-  positionLost: number; // -1 per pos
+  positionGained: number; // Defaults (Legacy/Combined?)
+  positionGainedPos1_10: number; // +1
+  positionGainedPos11_Plus: number; // +0.5
+  positionLost: number; // Defaults
+  positionLostPos1_10: number; // -1
+  positionLostPos11_Plus: number; // -0.5
 
   // Sprint
   sprintPositionPoints: number[]; // 1st to 8th

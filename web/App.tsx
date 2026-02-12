@@ -5,7 +5,7 @@ import { initializeAdMob, showAppOpen } from './services/admob';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -2018,6 +2018,23 @@ const App: React.FC = () => {
      }
   };
 
+  const handleSaveRules = async () => {
+    if (!data?.user?.leagueId || !data.rules) return;
+    try {
+        await updateLeagueRules(data.user.leagueId, data.rules);
+        alert(t({ en: "Rules saved!", it: "Regole salvate!" }));
+    } catch (e) {
+        console.error(e);
+        alert(t({ en: "Error saving rules.", it: "Errore salvataggio regole." }));
+    }
+  };
+
+  const handleRuleChangeNumeric = (field: keyof ScoringRules, value: string) => {
+      const num = parseFloat(value);
+      if (isNaN(num)) return;
+      setData(prev => prev ? { ...prev, rules: { ...prev.rules, [field]: num } } : null);
+  };
+
   const renderAdmin = () => {
     return (
       <div className="space-y-6">
@@ -2025,6 +2042,65 @@ const App: React.FC = () => {
           <h1 className="text-2xl font-bold text-white">{t({ en: 'Administrator', it: 'Amministratore' })}</h1>
           <p className="text-slate-400 text-sm">{t({ en: 'Manage drivers prices and points.', it: 'Gestisci quotazioni e punteggi.', fr: 'Gérer prix et points pilotes.', de: 'Fahrerpreise und Punkte verwalten.', es: 'Gestionar precios y puntos.', ru: 'Управление ценами и очками.', zh: '管理车手价格和积分。', ar: 'إدارة أسعار ونقاط السائقين.', ja: 'ドライバー価格とポイント管理。' })}</p>
         </header>
+
+        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-4">
+             <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                 <h2 className="text-lg font-bold text-white uppercase tracking-wider">{t({ en: 'Scoring Rules', it: 'Regole Punteggio' })}</h2>
+                 <button 
+                    onClick={handleSaveRules}
+                    className="bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 px-4 rounded transition-all"
+                 >
+                    {t({ en: 'SAVE RULES', it: 'SALVA REGOLE' })}
+                 </button>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                 <div>
+                    <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">
+                        {t({ en: 'Overtake (P1-10)', it: 'Sorpasso (P1-10)' })}
+                    </label>
+                    <input 
+                        type="number" step="0.1"
+                        value={data?.rules.positionGainedPos1_10 ?? 1}
+                        onChange={(e) => handleRuleChangeNumeric('positionGainedPos1_10', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
+                    />
+                 </div>
+                 <div>
+                    <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">
+                        {t({ en: 'Overtake (P11+)', it: 'Sorpasso (P11+)' })}
+                    </label>
+                    <input 
+                        type="number" step="0.1"
+                        value={data?.rules.positionGainedPos11_Plus ?? 0.5}
+                        onChange={(e) => handleRuleChangeNumeric('positionGainedPos11_Plus', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
+                    />
+                 </div>
+                 <div>
+                    <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">
+                        {t({ en: 'Lost Pos (P1-10)', it: 'Pos Persa (P1-10)' })}
+                    </label>
+                    <input 
+                        type="number" step="0.1"
+                        value={data?.rules.positionLostPos1_10 ?? -1}
+                        onChange={(e) => handleRuleChangeNumeric('positionLostPos1_10', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
+                    />
+                 </div>
+                 <div>
+                    <label className="text-[10px] uppercase text-slate-500 font-bold mb-1 block">
+                        {t({ en: 'Lost Pos (P11+)', it: 'Pos Persa (P11+)' })}
+                    </label>
+                    <input 
+                        type="number" step="0.1"
+                        value={data?.rules.positionLostPos11_Plus ?? -0.5}
+                        onChange={(e) => handleRuleChangeNumeric('positionLostPos11_Plus', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
+                    />
+                 </div>
+             </div>
+        </div>
 
         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-4">
           <h2 className="text-lg font-bold text-white uppercase tracking-wider border-b border-slate-700 pb-2">{t({ en: 'League Management', it: 'Gestione Lega' })}</h2>

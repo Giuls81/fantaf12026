@@ -23,8 +23,12 @@ export const DEFAULT_SCORING_RULES: ScoringRules = {
   teammateBeatDNF: 1,
 
   // Grid Pos
-  positionGained: 1,
-  positionLost: -1,
+  positionGained: 1, // Legacy/Display
+  positionGainedPos1_10: 1.0,
+  positionGainedPos11_Plus: 0.5,
+  positionLost: -1, // Legacy/Display
+  positionLostPos1_10: -1.0,
+  positionLostPos11_Plus: -0.5,
 
   // Sprint
   sprintPositionPoints: [8, 7, 6, 5, 4, 3, 2, 1],
