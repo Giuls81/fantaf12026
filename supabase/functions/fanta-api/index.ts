@@ -279,6 +279,18 @@ app.post("/team/market", requireUser, async (c) => {
 
   if (!leagueId) return c.json({ error: "missing_leagueId" }, 400);
 
+  // Check Lock
+  const races = await sql`SELECT * FROM "Race" ORDER BY round ASC`;
+  const nextRace = races.find(r => !r.isCompleted) || races[races.length - 1];
+  
+  if (nextRace) {
+    const sessionStr = nextRace.isSprint ? nextRace.sprintQualifyingUtc : nextRace.qualifyingUtc;
+    if (sessionStr) {
+      const lockDate = new Date(new Date(sessionStr).getTime() - 5 * 60 * 1000); // 5 mins before
+      if (new Date() > lockDate) return c.json({ error: "market_locked" }, 403);
+    }
+  }
+
   const [team] = await sql`SELECT * FROM "Team" WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id}`;
   if (!team) return c.json({ error: "team_not_found" }, 404);
 
