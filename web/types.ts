@@ -80,6 +80,9 @@ export interface ScoringRules {
   // Sprint
   sprintPositionPoints: number[]; // 1st to 8th
   sprintPole: number; // +1 (Qualifica Sprint)
+
+  // Constructors
+  constructors?: Constructor[]; // Optional for backward compatibility, but should be populated
 }
 
 export interface UserTeam {
@@ -106,5 +109,4 @@ export interface AppData {
   team: UserTeam;
   currentRaceIndex: number;
   rules: ScoringRules;
-  constructors: Constructor[]; // Dynamic list to allow multiplier editing
 }

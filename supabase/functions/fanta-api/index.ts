@@ -563,6 +563,19 @@ const DEFAULT_SCORING_RULES = {
   positionLostPos11_Plus: -0.5,
   sprintPositionPoints: DEFAULT_SPRINT_POINTS,
   sprintPole: 1,
+  constructors: [
+    { id: 'rbr', name: 'Red Bull Racing', color: '#3671C6', multiplier: 1.0 },
+    { id: 'fer', name: 'Ferrari', color: '#F91536', multiplier: 1.1 },
+    { id: 'mer', name: 'Mercedes', color: '#6CD3BF', multiplier: 1.1 },
+    { id: 'mcl', name: 'McLaren', color: '#F58020', multiplier: 1.0 },
+    { id: 'ast', name: 'Aston Martin', color: '#225941', multiplier: 1.3 },
+    { id: 'alp', name: 'Alpine', color: '#2293D1', multiplier: 1.3 },
+    { id: 'wil', name: 'Williams', color: '#37BEDD', multiplier: 1.3 },
+    { id: 'rb', name: 'Racing Bulls', color: '#6692FF', multiplier: 1.3 },
+    { id: 'haa', name: 'Haas', color: '#B6BABD', multiplier: 1.3 },
+    { id: 'sau', name: 'Audi', color: '#000000', multiplier: 1.5 },
+    { id: 'cad', name: 'Cadillac', color: '#E5C25B', multiplier: 1.6 },
+  ]
 };
 
 app.post("/admin/migrate-rules", async (c) => {
@@ -721,6 +734,17 @@ app.post("/admin/sync-race", requireUser, async (c) => {
             teammates[list[1]] = list[0];
         }
     }
+    
+    // Helper Maps for Multipliers
+    const driverConstructorMap: Record<string, string> = {};
+    for (const d of allDrivers) {
+        driverConstructorMap[d.id] = d.constructorId;
+    }
+    const constructorMultipliers: Record<string, number> = {};
+    const activeConstructors = rules.constructors || DEFAULT_SCORING_RULES.constructors || [];
+    for (const c of activeConstructors) {
+        constructorMultipliers[c.id] = Number(c.multiplier);
+    }
 
     // 4. Calculate Points (Simulated)
     const driverRacePoints: Record<string, number> = {};
@@ -874,9 +898,17 @@ app.post("/admin/sync-race", requireUser, async (c) => {
           let teamPoints = 0;
           const resultDrivers = [];
 
-          for (const td of teamDrivers) {
-             let pts = (driverRacePoints[td.driverId] as number) || 0;
-             if (team.captainId === td.driverId) pts *= 2;
+           for (const td of teamDrivers) {
+              let pts = (driverRacePoints[td.driverId] as number) || 0;
+              
+              // Apply Constructor Multiplier
+              const cId = driverConstructorMap[td.driverId];
+              if (cId) {
+                 const mult = constructorMultipliers[cId] || 1.0;
+                 pts = pts * mult;
+              }
+
+              if (team.captainId === td.driverId) pts *= 2;
              teamPoints += pts;
              resultDrivers.push({ driverId: td.driverId, points: pts });
           }

@@ -33,20 +33,35 @@ export const DEFAULT_SCORING_RULES: ScoringRules = {
   // Sprint
   sprintPositionPoints: [8, 7, 6, 5, 4, 3, 2, 1],
   sprintPole: 1,
+
+  // Constructors
+  constructors: [
+    { id: 'rbr', name: 'Red Bull Racing', color: '#3671C6', multiplier: 1.0 },
+    { id: 'fer', name: 'Ferrari', color: '#F91536', multiplier: 1.1 },
+    { id: 'mer', name: 'Mercedes', color: '#6CD3BF', multiplier: 1.1 },
+    { id: 'mcl', name: 'McLaren', color: '#F58020', multiplier: 1.0 },
+    { id: 'ast', name: 'Aston Martin', color: '#225941', multiplier: 1.3 },
+    { id: 'alp', name: 'Alpine', color: '#2293D1', multiplier: 1.3 },
+    { id: 'wil', name: 'Williams', color: '#37BEDD', multiplier: 1.3 },
+    { id: 'rb', name: 'Racing Bulls', color: '#6692FF', multiplier: 1.3 },
+    { id: 'haa', name: 'Haas', color: '#B6BABD', multiplier: 1.3 },
+    { id: 'sau', name: 'Audi', color: '#000000', multiplier: 1.5 },
+    { id: 'cad', name: 'Cadillac', color: '#E5C25B', multiplier: 1.6 },
+  ],
 };
 
 export const CONSTRUCTORS: Constructor[] = [
   { id: 'rbr', name: 'Red Bull Racing', color: '#3671C6', multiplier: 1.0 },
-  { id: 'fer', name: 'Ferrari', color: '#F91536', multiplier: 1.0 },
-  { id: 'mer', name: 'Mercedes', color: '#6CD3BF', multiplier: 1.0 },
+  { id: 'fer', name: 'Ferrari', color: '#F91536', multiplier: 1.1 },
+  { id: 'mer', name: 'Mercedes', color: '#6CD3BF', multiplier: 1.1 },
   { id: 'mcl', name: 'McLaren', color: '#F58020', multiplier: 1.0 },
-  { id: 'ast', name: 'Aston Martin', color: '#225941', multiplier: 1.0 },
-  { id: 'alp', name: 'Alpine', color: '#2293D1', multiplier: 1.0 },
-  { id: 'wil', name: 'Williams', color: '#37BEDD', multiplier: 1.0 },
-  { id: 'rb', name: 'Racing Bulls', color: '#6692FF', multiplier: 1.0 },
-  { id: 'haa', name: 'Haas', color: '#B6BABD', multiplier: 1.0 },
-  { id: 'sau', name: 'Audi', color: '#000000', multiplier: 1.0 },
-  { id: 'cad', name: 'Cadillac', color: '#E5C25B', multiplier: 1.0 },
+  { id: 'ast', name: 'Aston Martin', color: '#225941', multiplier: 1.3 },
+  { id: 'alp', name: 'Alpine', color: '#2293D1', multiplier: 1.3 },
+  { id: 'wil', name: 'Williams', color: '#37BEDD', multiplier: 1.3 },
+  { id: 'rb', name: 'Racing Bulls', color: '#6692FF', multiplier: 1.3 },
+  { id: 'haa', name: 'Haas', color: '#B6BABD', multiplier: 1.3 },
+  { id: 'sau', name: 'Audi', color: '#000000', multiplier: 1.5 },
+  { id: 'cad', name: 'Cadillac', color: '#E5C25B', multiplier: 1.6 },
 ];
 
 export const DRIVERS: Driver[] = [

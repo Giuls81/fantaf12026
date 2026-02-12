@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
-import { initializeAdMob, showAppOpen } from './services/admob';
+import { initializeAdMob, showAppOpen, prepareRewardVideo, showRewardVideo } from './services/admob';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
@@ -23,7 +23,6 @@ const INITIAL_DATA: AppData = {
   team: INITIAL_TEAM,
   currentRaceIndex: 0,
   rules: DEFAULT_SCORING_RULES,
-  constructors: CONSTRUCTORS,
 };
 
 type LockStatus = 'unconfigured' | 'open' | 'closing_soon' | 'locked';
@@ -110,9 +109,18 @@ const App: React.FC = () => {
     (async () => {
       try {
         await initializeAdMob();
+        await prepareRewardVideo(); // Pre-load reward video
         const savedPremium = localStorage.getItem('fantaF1Premium');
         if (savedPremium === 'true') {
-           setIsPremium(true);
+           // Check expiry if we store it? For now 'true' is permanent from debug, need new key for temp
+           const expiry = localStorage.getItem('fantaF1PremiumExpiry');
+           if (expiry && Date.now() > Number(expiry)) {
+              setIsPremium(false);
+              localStorage.removeItem('fantaF1Premium');
+              localStorage.removeItem('fantaF1PremiumExpiry');
+           } else {
+              setIsPremium(true);
+           }
         } else {
            setTimeout(() => showAppOpen(), 2000);
         }
@@ -386,9 +394,9 @@ const App: React.FC = () => {
             parsed.currentRaceIndex = races.length - 1;
           }
         }
-        // Migration for constructors if missing
-        if (!parsed.constructors) {
-          parsed.constructors = CONSTRUCTORS;
+        // Migration for constructors if missing in rules
+        if (!parsed.rules.constructors) {
+          parsed.rules.constructors = CONSTRUCTORS;
         }
         // Migration for schemaVersion
         if (!parsed.schemaVersion || typeof parsed.schemaVersion !== 'number') {
@@ -670,10 +678,11 @@ const App: React.FC = () => {
 
   const handleConstructorMultiplierChange = (id: string, multiplier: number) => {
     if (!data) return;
-    const newConstructors = data.constructors.map(c =>
+    const currentConstructors = data.rules.constructors || CONSTRUCTORS;
+    const newConstructors = currentConstructors.map(c =>
       c.id === id ? { ...c, multiplier } : c
     );
-    setData({ ...data, constructors: newConstructors });
+    handleRuleChange('constructors', newConstructors);
   };
 
   const getLockStatus = (race: Race, currentTime: number): LockState => {
@@ -1220,8 +1229,8 @@ const App: React.FC = () => {
   if (!currentRace) return <div>Error: No Race Data</div>; // Should never happen due to check above
   
   const lockState = getLockStatus(currentRace, now);
-  // Use constructors from data (editable) fallback to constant if needed
-  const activeConstructors = data.constructors || CONSTRUCTORS;
+  // Use constructors from rules (editable) fallback to constant if needed
+  const activeConstructors = data.rules?.constructors || CONSTRUCTORS;
 
   const getStatusColor = (s: LockStatus) => {
     switch (s) {
@@ -1296,19 +1305,18 @@ const App: React.FC = () => {
                        </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        // Simulation of purchase
-                        if (confirm(t({ en: "Buy Premium for 4.99€? (Simulation)", it: "Comprare Premium per 4.99€? (Simulazione)" }))) {
-                           setIsPremium(true);
-                           alert(t({ en: "Thanks for your purchase! Ads removed.", it: "Grazie per l'acquisto! Pubblicità rimosse." }));
-                        }
-                      }}
-                      className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold py-2 px-3 rounded-lg shadow-lg border border-yellow-500/50 transition-all flex items-center justify-center gap-2 text-sm"
-                    >
-                      <span>👑</span>
-                      {t({ en: 'Remove Ads (4.99€)', it: 'Rimuovi Pubblicità (4.99€)' })}
-                    </button>
+                    <div className="space-y-2">
+                        <div className="bg-yellow-900/30 p-2 rounded text-xs text-yellow-200 mb-2">
+                            {t({ en: 'Watch a short video to get 24 hours of Premium for free!', it: 'Guarda un breve video per avere 24 ore di Premium gratis!' })}
+                        </div>
+                        <button
+                          onClick={handleWatchAdForPremium}
+                          className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold py-2 px-3 rounded-lg shadow-lg border border-yellow-500/50 transition-all flex items-center justify-center gap-2 text-sm"
+                        >
+                          <span>🎬</span>
+                          {t({ en: 'Watch Video (24h Free Premium)', it: 'Guarda Video (24h Premium Gratis)' })}
+                        </button>
+                    </div>
                   )}
                 </div>
                 <button
@@ -1656,7 +1664,9 @@ const App: React.FC = () => {
             )}
             <h1 className="text-2xl font-bold text-white">{t({ en: 'Admin Controls', it: 'Controlli Admin', fr: 'Contrôles Admin', de: 'Admin-Steuerung', es: 'Controles Admin', ru: 'Управление', zh: '管理员控制', ar: 'تحكم المسؤول', ja: '管理設定' })}</h1>
 
-            {/* Race Config Card */}
+
+
+        {/* Next Race Card */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
               <h3 className="font-semibold text-white mb-2">{t({ en: 'Race Time Config', it: 'Config Orari Gara', fr: 'Config heures course', de: 'Rennzeit-Konfig', es: 'Config Horas Carrera', ru: 'Конфиг времени гонки', zh: '赛时配置', ar: 'تكوين وقت السباق', ja: 'レース時間設定' })}</h3>
               {/* Navigation */}
@@ -1827,7 +1837,7 @@ const App: React.FC = () => {
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
               <h3 className="font-semibold text-white mb-4 border-b border-slate-700 pb-2">{t({ en: 'Constructor Multipliers', it: 'Coefficienti Scuderie', fr: 'Coefficients Équipes', de: 'Konstrukteurs-Multiplikatoren', es: 'Coeficientes Constructores', ru: 'Коэффициенты конструкторов', zh: '车队系数', ar: 'معاملات الفرق', ja: 'コンストラクター係数' })}</h3>
               <div className="grid grid-cols-2 gap-3">
-                {data.constructors.map(c => (
+                {activeConstructors.map(c => (
                   <div key={c.id} className="flex items-center gap-2 bg-slate-900 p-2 rounded border border-slate-700">
                     <div className="w-1 h-6 rounded-full" style={{ backgroundColor: c.color }}></div>
                     <div className="flex-1">
@@ -2031,6 +2041,19 @@ const App: React.FC = () => {
       const num = parseFloat(value);
       if (isNaN(num)) return;
       setData(prev => prev ? { ...prev, rules: { ...prev.rules, [field]: num } } : null);
+  };
+
+
+  const handleWatchAdForPremium = async () => {
+    const reward = await showRewardVideo();
+    if (reward) {
+      const now = Date.now();
+      const expiry = now + 24 * 60 * 60 * 1000; // 24 hours
+      setIsPremium(true);
+      localStorage.setItem('fantaF1Premium', 'true');
+      localStorage.setItem('fantaF1PremiumExpiry', String(expiry));
+      alert(t({ en: "Premium activated for 24h!", it: "Premium attivato per 24h!" }));
+    }
   };
 
   const renderAdmin = () => {

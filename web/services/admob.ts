@@ -1,5 +1,5 @@
 
-import { AdMob, BannerAdSize, BannerAdPosition, AdOptions, AdLoadInfo, InterstitialAdPluginEvents } from '@capacitor-community/admob';
+import { AdMob, BannerAdSize, BannerAdPosition, AdOptions, AdLoadInfo, InterstitialAdPluginEvents, RewardAdOptions, RewardAdPluginEvents, AdMobRewardItem } from '@capacitor-community/admob';
 import { Capacitor } from '@capacitor/core';
 import { ADMOB_IDS, IS_TEST_MODE } from '../constants_ads';
 
@@ -15,6 +15,10 @@ export const initializeAdMob = async () => {
       initializeForTesting: IS_TEST_MODE,
     });
     console.log('AdMob initialized');
+    
+    // Pre-load App Open Ad
+    await prepareAppOpen();
+
   } catch (e) {
     console.error('AdMob init failed', e);
   }
@@ -76,25 +80,67 @@ export const showInterstitial = async () => {
 
 export const prepareAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
-    // const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.APP_OPEN : ADMOB_IDS.IOS.APP_OPEN;
     
-    try {
-        console.warn('App Open Ads are not supported in this version of @capacitor-community/admob');
-        // await AdMob.prepareAppOpenAd({
-        //     adId,
-        //     isTesting: IS_TEST_MODE
-        // });
-    } catch (e) {
-        console.error('Prepare App Open failed', e);
-    }
+    // Fallback to Interstitial as App Open is not supported in this plugin version
+    console.log('Preparing Interstitial as App Open Fallback');
+    await prepareInterstitial();
 }
 
 export const showAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     try {
-        console.warn('App Open Ads are not supported in this version of @capacitor-community/admob');
-        // await AdMob.showAppOpenAd();
+        console.log('Showing Interstitial as App Open Fallback');
+        await AdMob.showInterstitial();
     } catch (e) {
-        console.error('Show App Open failed', e);
+        console.error('Show App Open queries failed', e);
+        // Try to prepare again
+        await prepareAppOpen();
     }
 }
+
+export const prepareRewardVideo = async () => {
+  if (Capacitor.getPlatform() === 'web') return;
+  const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.REWARDED : ADMOB_IDS.IOS.REWARDED;
+
+  try {
+    await AdMob.prepareRewardVideoAd({
+      adId,
+      isTesting: IS_TEST_MODE,
+    });
+  } catch (e) {
+    console.error('Prepare Reward Video failed', e);
+  }
+};
+
+export const showRewardVideo = async (): Promise<AdMobRewardItem | null> => {
+  if (Capacitor.getPlatform() === 'web') {
+      // Simulate reward for web
+      return { type: 'coin', amount: 10 }; 
+  }
+
+  return new Promise(async (resolve, reject) => {
+      try {
+          // Listener for Reward
+          const onReward = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward: AdMobRewardItem) => {
+              resolve(reward);
+          });
+          
+          // Listener for Close/Fail (Cleanup)
+          const onDismiss = await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
+             // If dismissed without reward?
+             // We can't easily detect "not rewarded" unless we track state.
+             // But usually 'Rewarded' fires before 'Dismissed'.
+             // Making sure we clean up listeners.
+             onReward.remove();
+             onDismiss.remove();
+          });
+
+          await AdMob.showRewardVideoAd();
+      } catch (e) {
+          console.error('Show Reward Video failed', e);
+          // Try to prepare again
+          await prepareRewardVideo();
+          resolve(null);
+      }
+  });
+};
