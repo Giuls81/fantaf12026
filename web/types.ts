@@ -4,6 +4,7 @@ export enum Tab {
   LINEUP = 'LINEUP',
   MARKET = 'MARKET',
   STANDINGS = 'STANDINGS',
+  RESULTS = 'RESULTS',
   ADMIN = 'ADMIN',
 }
 

@@ -200,6 +200,16 @@ const App: React.FC = () => {
     }
   }, [activeTab, data?.user?.leagueId]);
 
+  // Handle Tab Change and Initial Selected Race
+  useEffect(() => {
+    if (activeTab === Tab.RESULTS && !selectedRaceId) {
+      const completed = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
+      if (completed.length > 0) {
+        setSelectedRaceId(completed[0].id);
+      }
+    }
+  }, [activeTab, races]);
+
   // Fetch Race Results
   useEffect(() => {
     if (selectedRaceId && data?.user?.leagueId) {
@@ -319,52 +329,6 @@ const App: React.FC = () => {
     })();
   }, [races]); // Depend on races to ensure index calc is correct if needed
 
-  // 3. Standings & Results Fetching
-  useEffect(() => {
-    if (activeTab === Tab.STANDINGS && data?.user?.leagueId) {
-       fetchStandings();
-    }
-  }, [activeTab]);
-
-  const fetchStandings = async () => {
-    if (!data?.user?.leagueId) return;
-    try {
-      setLoadingStandings(true);
-      const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/standings`, {
-         headers: { 'Authorization': `Bearer ${localStorage.getItem('fantaF1AuthToken')}` }
-      });
-      const list = await res.json();
-      setStandings(Array.isArray(list) ? list : []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingStandings(false);
-    }
-  };
-
-  const fetchRaceResults = async (raceId: string) => {
-    if (!data?.user?.leagueId) return;
-    try {
-      setLoadingResults(true);
-      const res = await fetch(`${getApiUrl()}/leagues/${data.user.leagueId}/results/${raceId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('fantaF1AuthToken')}` }
-      });
-      const list = await res.json();
-      setRaceResults(list);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingResults(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedRaceId) {
-      fetchRaceResults(selectedRaceId);
-    } else {
-      setRaceResults([]);
-    }
-  }, [selectedRaceId]);
 
   // Translation Helper
   const t = (dict: { [key: string]: string }) => {
@@ -733,8 +697,6 @@ const App: React.FC = () => {
   };
 
   const renderStandings = () => {
-    const completedRaces = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
-    
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -770,19 +732,26 @@ const App: React.FC = () => {
              </div>
            )}
         </div>
+      </div>
+    );
+  };
+
+  const renderResults = () => {
+    const completedRaces = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
+    
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+           <span className="text-3xl">🏁</span> {t({ en: 'Race Results', it: 'Risultati Gara' })}
+        </h1>
 
         {/* Race Results / History Section */}
         <div className="space-y-4">
-           <h2 className="text-lg font-bold text-slate-400 uppercase tracking-wider px-1">{t({ en: 'Historical Results', it: 'Risultati Storici' })}</h2>
-           
            {/* Race Filter */}
            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-              <button 
-                onClick={() => setSelectedRaceId(null)}
-                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${!selectedRaceId ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
-              >
-                {t({ en: 'Overall', it: 'Generale' })}
-              </button>
+              {completedRaces.length === 0 && (
+                <div className="text-slate-500 text-sm italic">{t({ en: 'No races completed yet.', it: 'Nessuna gara completata finora.' })}</div>
+              )}
               {completedRaces.map(r => (
                 <button
                   key={r.id}
@@ -795,7 +764,7 @@ const App: React.FC = () => {
            </div>
 
            {/* Selected Race Results List */}
-           {selectedRaceId && (
+           {selectedRaceId ? (
               <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-2">
                  <div className="bg-slate-700/50 p-3 border-b border-slate-700 flex justify-between items-center">
                     <span className="font-bold text-xs uppercase tracking-widest text-slate-300">
@@ -828,6 +797,10 @@ const App: React.FC = () => {
                     {raceResults.length === 0 && !loadingResults && <div className="p-8 text-center text-slate-500 italic">{t({ en: 'No results stored for this race yet.', it: 'Nessun risultato salvato per questa gara.' })}</div>}
                  </div>
               </div>
+           ) : (
+             <div className="p-12 text-center bg-slate-800/50 rounded-xl border border-dashed border-slate-700 text-slate-500 italic">
+                {t({ en: 'Select a race to see results.', it: 'Seleziona una gara per vedere i risultati.' })}
+             </div>
            )}
         </div>
 
@@ -1215,7 +1188,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 64</span>
+            <span className="text-[10px] text-slate-600">Build: 70</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
@@ -1930,6 +1903,9 @@ const App: React.FC = () => {
 
       case Tab.STANDINGS:
         return renderStandings();
+
+      case Tab.RESULTS:
+        return renderResults();
 
 
       default:
