@@ -756,6 +756,100 @@ const App: React.FC = () => {
              </div>
            )}
         </div>
+
+        {/* Modal: Official F1 Results Details */}
+        {viewingOfficialResultsRaceId && (() => {
+          const race = races.find(r => r.id === viewingOfficialResultsRaceId);
+          if (!race) return null;
+          const resultsJson = (race as any).results || {};
+          const currentSessionData = resultsJson[activeResultSession] || {};
+          // Sort drivers by position
+          const sortedDriverIds = Object.keys(currentSessionData).sort((a,b) => currentSessionData[a] - currentSessionData[b]);
+          
+          return (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+               <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+                    <div>
+                      <h3 className="text-lg font-bold text-white">{race.name}</h3>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{t({ en: 'Official Results', it: 'Risultati Ufficiali' })}</p>
+                    </div>
+                    <button onClick={() => setViewingOfficialResultsRaceId(null)} className="p-2 hover:bg-slate-700 rounded-full text-slate-400">✕</button>
+                  </div>
+
+                  {/* Session Selection */}
+                  <div className="p-3 bg-slate-800/30 border-b border-slate-800 flex gap-2 overflow-x-auto no-scrollbar">
+                     <button 
+                       onClick={() => setActiveResultSession('race')}
+                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'race' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                     >
+                       {t({ en: 'Race', it: 'Gara' })}
+                     </button>
+                     <button 
+                       onClick={() => setActiveResultSession('quali')}
+                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'quali' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                     >
+                       {t({ en: 'Qualifying', it: 'Qualifiche' })}
+                     </button>
+                     {race.isSprint && (
+                       <>
+                         <button 
+                           onClick={() => setActiveResultSession('sprint')}
+                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'sprint' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                         >
+                           Sprint
+                         </button>
+                         <button 
+                           onClick={() => setActiveResultSession('sprintQuali')}
+                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'sprintQuali' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                         >
+                           Sprint Quali
+                         </button>
+                       </>
+                     )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {sortedDriverIds.length > 0 ? (
+                      <div className="space-y-1">
+                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
+                          <div className="col-span-1 text-center">Pos</div>
+                          <div className="col-span-8">Driver</div>
+                          {activeResultSession === 'race' && <div className="col-span-3 text-right">Points</div>}
+                        </div>
+                        {sortedDriverIds.map(dId => {
+                          const pos = currentSessionData[dId];
+                          const driver = fetchedDrivers.find(d => d.id === dId);
+                          return (
+                            <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
+                              <div className="col-span-1 text-center font-bold text-white">{pos}</div>
+                              <div className="col-span-8 flex items-center gap-2">
+                                <div className={`w-1 h-4 rounded-full ${driver?.constructorId === 'ferrari' ? 'bg-red-600' : driver?.constructorId === 'mercedes' ? 'bg-teal-500' : driver?.constructorId === 'red_bull' ? 'bg-blue-900' : 'bg-slate-500'}`} />
+                                <span className="text-sm text-slate-200 font-medium">{driver?.name || dId}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-12 text-center text-slate-600 italic text-sm">
+                        {t({ en: 'No data for this session.', it: 'Nessun dato per questa sessione.' })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-slate-800/50 border-t border-slate-800">
+                    <button 
+                      onClick={() => setViewingOfficialResultsRaceId(null)}
+                      className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold text-sm transition-all"
+                    >
+                      {t({ en: 'Close', it: 'Chiudi' })}
+                    </button>
+                  </div>
+               </div>
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -1005,7 +1099,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 71</span>
+            <span className="text-[10px] text-slate-600">Build: 73</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
