@@ -45,6 +45,7 @@ export interface Race {
   fp3Utc?: string | null;
   sprintUtc?: string | null;
   raceUtc?: string | null;
+  results?: any; // Official F1 session results
 }
 
 export interface ScoringRules {

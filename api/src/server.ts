@@ -113,6 +113,7 @@ async function start() {
         sprintQualifyingUtc: true,
         date: true,
         isCompleted: true,
+        results: true,
       },
     });
 
