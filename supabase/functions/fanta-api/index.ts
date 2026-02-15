@@ -188,7 +188,7 @@ app.get("/me", requireUser, async (c) => {
 
 app.get("/races", async (c) => {
   const races = await sql`
-    SELECT id, name, country, city, season, round, "isSprint", "qualifyingUtc", "sprintQualifyingUtc", date, "isCompleted"
+    SELECT id, name, country, city, season, round, "isSprint", "qualifyingUtc", "sprintQualifyingUtc", date, "isCompleted", results
     FROM "Race"
     ORDER BY round ASC
   `;
