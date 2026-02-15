@@ -933,7 +933,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 57 (Final UI + OpenF1 Sync)<br/>
+        Build: 75<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
       </div>
@@ -1251,13 +1251,14 @@ const App: React.FC = () => {
                <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'équipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'Название команды', ja: 'チーム名' })}</p>
                {isEditingTeamName ? (
                  <div className="flex items-center justify-center gap-2">
-                   <input 
-                     type="text" 
+                   <input
+                     type="text"
                      value={teamNameEdit}
                      onChange={(e) => setTeamNameEdit(e.target.value)}
+                     title={t({ en: 'Edit Team Name', it: 'Modifica Nome Team' })}
                      className="bg-slate-900 border border-slate-600 rounded p-1 text-white text-center font-bold"
                    />
-                   <button 
+                   <button
                      onClick={async () => {
                         if (!teamNameEdit.trim()) return;
                         try {
@@ -1295,7 +1296,7 @@ const App: React.FC = () => {
                     return (
                       <li key={id} className="bg-slate-800 p-3 rounded flex justify-between items-center">
                         <div className="flex items-center gap-2">
-                          <div className="w-1 h-8 rounded-full" style={{ backgroundColor: c?.color || '#555' }}></div>
+                          <div className={`w-1 h-8 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
                           <div>
                             <div className="text-white font-medium">{d?.name}</div>
                             <div className="text-xs text-slate-400">{c?.name}</div>
@@ -1378,7 +1379,7 @@ const App: React.FC = () => {
                   return (
                     <div key={id} className={`bg-slate-800 p-3 rounded flex justify-between items-center border ${isCaptain ? 'border-yellow-500' : isReserve ? 'border-green-500' : 'border-slate-700'}`}>
                       <div className="flex items-center gap-2">
-                        <div className="w-1 h-8 rounded-full" style={{ backgroundColor: c?.color || '#555' }}></div>
+                        <div className={`w-1 h-8 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
                         <div>
                           <div className="text-white font-medium flex items-center gap-2">
                             {d?.name}
@@ -1497,7 +1498,7 @@ const App: React.FC = () => {
                 return (
                   <div key={driver.id} className="bg-slate-800 p-3 rounded flex justify-between items-center border border-slate-700/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-10 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]" style={{ backgroundColor: constr?.color || '#555', boxShadow: `0 0 8px ${constr?.color}` }}></div>
+                      <div className={`w-1.5 h-10 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] ${constr ? `constr-bg-${constr.id} constr-shadow-${constr.id}` : 'constr-bg-default'}`}></div>
                       <div>
                         <div className="text-white font-bold leading-tight">{driver.name}</div>
                         <div className="text-xs text-slate-400">{constr?.name}</div>
@@ -1506,7 +1507,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col items-end gap-1">
                       <div className="font-mono text-slate-200">${driver.price}M</div>
                       {isOwned ? (
-                        <button 
+                        <button
                           onClick={() => handleSellDriver(driver)}
                           className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded font-bold uppercase tracking-wider transition-colors"
                         >
@@ -1576,7 +1577,7 @@ const App: React.FC = () => {
 
               {/* Inputs */}
               <div className="space-y-3">
-                 <button 
+                 <button
                     onClick={async () => {
                        if(confirm("Add 'name' column to Team table?")) {
                           const res = await import("./api").then(m => m.migrateTeamName());
@@ -1671,6 +1672,7 @@ const App: React.FC = () => {
                             type="number"
                             value={val}
                             onChange={(e) => handleRacePointChange(index, Number(e.target.value))}
+                            title={`Pos ${index + 1} Points`}
                             className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-center text-sm text-white focus:border-blue-500 focus:outline-none"
                           />
                         </div>
@@ -1680,21 +1682,21 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Quali */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Pole Position', it: 'Pole Position', fr: 'Pole Position', de: 'Pole Position', es: 'Pole Position', ru: 'Поул-позиция', zh: '杆位', ar: 'قطب الانطلاق', ja: 'ポールポジション' })}</label><input type="number" value={data.rules.qualiPole} onChange={(e) => handleRuleChange('qualiPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q3 Reached (1-10)', it: 'Accesso Q3 (1-10)', fr: 'Q3 Atteint (1-10)', de: 'Q3 Erreicht (1.-10.)', es: 'Q3 Alcanzada (1-10)', ru: 'Q3 Достигнут (1-10)', zh: '进入Q3 (1-10)', ar: 'الوصول لـ Q3 (1-10)', ja: 'Q3進出 (1-10)' })}</label><input type="number" value={data.rules.qualiQ3Reached} onChange={(e) => handleRuleChange('qualiQ3Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q2 Reached (11-16)', it: 'Accesso Q2 (11-16)', fr: 'Q2 Atteint (11-16)', de: 'Q2 Erreicht (11.-16.)', es: 'Q2 Alcanzada (11-16)', ru: 'Q2 Достигнут (11-16)', zh: '进入Q2 (11-16)', ar: 'الوصول لـ Q2 (11-16)', ja: 'Q2進出 (11-16)' })}</label><input type="number" value={data.rules.qualiQ2Reached} onChange={(e) => handleRuleChange('qualiQ2Reached', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Q1 Elim (17-22)', it: 'Eliminato Q1 (17-22)', fr: 'Éliminé Q1 (17-22)', de: 'Q1 Ausgeschieden (17.-22.)', es: 'Eliminado Q1 (17-22)', ru: 'Выбыл в Q1 (17-22)', zh: 'Q1淘汰 (17-22)', ar: 'إقصاء Q1 (17-22)', ja: 'Q1敗退 (17-22)' })}</label><input type="number" value={data.rules.qualiQ1Eliminated} onChange={(e) => handleRuleChange('qualiQ1Eliminated', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Grid Penalty', it: 'Penalità Griglia', fr: 'Pénalité Grille', de: 'Startplatzstrafe', es: 'Penalización Parrilla', ru: 'Штраф на решетке', zh: '发车位处罚', ar: 'عقوبة الشبكة', ja: 'グリッド降格' })}</label><input type="number" value={data.rules.qualiGridPenalty} onChange={(e) => handleRuleChange('qualiGridPenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Pole Position', it: 'Pole Position', fr: 'Pole Position', de: 'Pole Position', es: 'Pole Position', ru: 'Поул-позиция', zh: '杆位', ar: 'قطب الانطلاق', ja: 'ポールポジション' })}</label><input type="number" value={data.rules.qualiPole} onChange={(e) => handleRuleChange('qualiPole', Number(e.target.value))} title="Pole Position" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q3 Reached (1-10)', it: 'Accesso Q3 (1-10)', fr: 'Q3 Atteint (1-10)', de: 'Q3 Erreicht (1.-10.)', es: 'Q3 Alcanzada (1-10)', ru: 'Q3 Достигнут (1-10)', zh: '进入Q3 (1-10)', ar: 'الوصول لـ Q3 (1-10)', ja: 'Q3進出 (1-10)' })}</label><input type="number" value={data.rules.qualiQ3Reached} onChange={(e) => handleRuleChange('qualiQ3Reached', Number(e.target.value))} title="Q3 Reached" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q2 Reached (11-16)', it: 'Accesso Q2 (11-16)', fr: 'Q2 Atteint (11-16)', de: 'Q2 Erreicht (11.-16.)', es: 'Q2 Alcanzada (11-16)', ru: 'Q2 Достигнут (11-16)', zh: '进入Q2 (11-16)', ar: 'الوصول لـ Q2 (11-16)', ja: 'Q2進出 (11-16)' })}</label><input type="number" value={data.rules.qualiQ2Reached} onChange={(e) => handleRuleChange('qualiQ2Reached', Number(e.target.value))} title="Q2 Reached" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Q1 Elim (17-22)', it: 'Eliminato Q1 (17-22)', fr: 'Éliminé Q1 (17-22)', de: 'Q1 Ausgeschieden (17.-22.)', es: 'Eliminado Q1 (17-22)', ru: 'Выбыл в Q1 (17-22)', zh: 'Q1淘汰 (17-22)', ar: 'إقصاء Q1 (17-22)', ja: 'Q1敗退 (17-22)' })}</label><input type="number" value={data.rules.qualiQ1Eliminated} onChange={(e) => handleRuleChange('qualiQ1Eliminated', Number(e.target.value))} title="Q1 Eliminated" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Grid Penalty', it: 'Penalità Griglia', fr: 'Pénalité Grille', de: 'Startplatzstrafe', es: 'Penalización Parrilla', ru: 'Штраф на решетке', zh: '发车位处罚', ar: 'عقوبة الشبكة', ja: 'グリッド降格' })}</label><input type="number" value={data.rules.qualiGridPenalty} onChange={(e) => handleRuleChange('qualiGridPenalty', Number(e.target.value))} title="Grid Penalty" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Race Bonuses */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Last Place Malus', it: 'Malus Ultimo Posto', fr: 'Malus Dernière Place', de: 'Malus Letzter Platz', es: 'Malus Último Lugar', ru: 'Штраф за посл. место', zh: '倒数第一惩罚', ar: 'عقوبة المركز الأخير', ja: '最下位ペナルティ' })}</label><input type="number" value={data.rules.raceLastPlaceMalus} onChange={(e) => handleRuleChange('raceLastPlaceMalus', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'DNF / DNS / DSQ', it: 'Ritirato / Squalificato', fr: 'Abandon / Disqualifié', de: 'DNF / DNS / DSQ', es: 'Abandono / Descalificado', ru: 'Сход / Дисквал.', zh: '未完赛/取消资格', ar: 'انسحاب / إقصاء', ja: 'リタイア / 失格' })}</label><input type="number" value={data.rules.raceDNF} onChange={(e) => handleRuleChange('raceDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Race Penalty', it: 'Penalità Gara', fr: 'Pénalité Course', de: 'Rennstrafe', es: 'Penalización Carrera', ru: 'Штраф в гонке', zh: '正赛惩罚', ar: 'عقوبة السباق', ja: 'レースペナルティ' })}</label><input type="number" value={data.rules.racePenalty} onChange={(e) => handleRuleChange('racePenalty', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Last Place Malus', it: 'Malus Ultimo Posto', fr: 'Malus Dernière Place', de: 'Malus Letzter Platz', es: 'Malus Último Lugar', ru: 'Штраф за посл. место', zh: '倒数第一惩罚', ar: 'عقوبة المركز الأخير', ja: '最下位ペナルティ' })}</label><input type="number" value={data.rules.raceLastPlaceMalus} onChange={(e) => handleRuleChange('raceLastPlaceMalus', Number(e.target.value))} title="Last Place Malus" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'DNF / DNS / DSQ', it: 'Ritirato / Squalificato', fr: 'Abandon / Disqualifié', de: 'DNF / DNS / DSQ', es: 'Abandono / Descalificado', ru: 'Сход / Дисквал.', zh: '未完赛/取消资格', ar: 'انسحاب / إقصاء', ja: 'リタイア / 失格' })}</label><input type="number" value={data.rules.raceDNF} onChange={(e) => handleRuleChange('raceDNF', Number(e.target.value))} title="DNF / DNS / DSQ" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Race Penalty', it: 'Penalità Gara', fr: 'Pénalité Course', de: 'Rennstrafe', es: 'Penalización Carrera', ru: 'Штраф в гонке', zh: '正赛惩罚', ar: 'عقوبة السباق', ja: 'レースペナルティ' })}</label><input type="number" value={data.rules.racePenalty} onChange={(e) => handleRuleChange('racePenalty', Number(e.target.value))} title="Race Penalty" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Teammate */}
-                <div><label className="text-xs text-slate-400">{t({ en: 'Beat Teammate', it: 'Batte Compagno', fr: 'Bat Coéquipier', de: 'Teamkollegen geschlagen', es: 'Vence Compañero', ru: 'Опередил напарника', zh: '击败队友', ar: 'تغلب على الزميل', ja: 'チームメイトに勝利' })}</label><input type="number" value={data.rules.teammateBeat} onChange={(e) => handleRuleChange('teammateBeat', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Lost to Teammate', it: 'Perde vs Compagno', fr: 'Perd contre Coéquipier', de: 'Verliert gegen Teamk.', es: 'Pierde vs Compañero', ru: 'Проиграл напарнику', zh: '输给队友', ar: 'خسر أمام الزميل', ja: 'チームメイトに敗北' })}</label><input type="number" value={data.rules.teammateLost} onChange={(e) => handleRuleChange('teammateLost', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Beat TM (TM DNF)', it: 'Batte Compagno (Ritirato)', fr: 'Bat Coéquipier (Abandon)', de: 'Teamk. geschlagen (DNF)', es: 'Vence Comp. (Abandono)', ru: 'Опередил (напарник сошел)', zh: '击败队友 (队友退赛)', ar: 'تغلب (انسحاب الزميل)', ja: '勝利 (僚機リタイア)' })}</label><input type="number" value={data.rules.teammateBeatDNF} onChange={(e) => handleRuleChange('teammateBeatDNF', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Beat Teammate', it: 'Batte Compagno', fr: 'Bat Coéquipier', de: 'Teamkollegen geschlagen', es: 'Vence Compañero', ru: 'Опередил напарника', zh: '击败队友', ar: 'تغلب على الزميل', ja: 'チームメイトに勝利' })}</label><input type="number" value={data.rules.teammateBeat} onChange={(e) => handleRuleChange('teammateBeat', Number(e.target.value))} title="Beat Teammate" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Lost to Teammate', it: 'Perde vs Compagno', fr: 'Perd contre Coéquipier', de: 'Verliert gegen Teamk.', es: 'Pierde vs Compañero', ru: 'Проиграл напарнику', zh: '输给队友', ar: 'خسر أمام الزميل', ja: 'チームメイトに敗北' })}</label><input type="number" value={data.rules.teammateLost} onChange={(e) => handleRuleChange('teammateLost', Number(e.target.value))} title="Lost to Teammate" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Beat TM (TM DNF)', it: 'Batte Compagno (Ritirato)', fr: 'Bat Coéquipier (Abandon)', de: 'Teamk. geschlagen (DNF)', es: 'Vence Comp. (Abandono)', ru: 'Опередил (напарник сошел)', zh: '击败队友 (队友退赛)', ar: 'تغلب (انسحاب الزميل)', ja: '勝利 (僚機リタイア)' })}</label><input type="number" value={data.rules.teammateBeatDNF} onChange={(e) => handleRuleChange('teammateBeatDNF', Number(e.target.value))} title="Beat Teammate (Teammate DNF)" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
 
                 {/* Sprint */}
                 <div className="col-span-2 mt-2">
@@ -1709,6 +1711,7 @@ const App: React.FC = () => {
                             type="number"
                             value={val}
                             onChange={(e) => handleSprintSinglePointChange(index, Number(e.target.value))}
+                            title={`Sprint Pos ${index + 1} Points`}
                             className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-center text-sm text-white focus:border-blue-500 focus:outline-none"
                           />
                         </div>
@@ -1716,7 +1719,7 @@ const App: React.FC = () => {
                     })}
                   </div>
                 </div>
-                <div><label className="text-xs text-slate-400">{t({ en: 'Sprint Quali Pole', it: 'Pole Sprint Quali', fr: 'Pole Qualif Sprint', de: 'Sprint Quali Pole', es: 'Pole Sprint Clasif', ru: 'Поул спринт-квал.', zh: '冲刺排位杆位', ar: 'قطب تصفيات السرعة', ja: 'S予選ポール' })}</label><input type="number" value={data.rules.sprintPole} onChange={(e) => handleRuleChange('sprintPole', Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
+                <div><label className="text-xs text-slate-400">{t({ en: 'Sprint Quali Pole', it: 'Pole Sprint Quali', fr: 'Pole Qualif Sprint', de: 'Sprint Quali Pole', es: 'Pole Sprint Clasif', ru: 'Поул спринт-квал.', zh: '冲刺排位杆位', ar: 'قطب تصفيات السرعة', ja: 'S予選ポール' })}</label><input type="number" value={data.rules.sprintPole} onChange={(e) => handleRuleChange('sprintPole', Number(e.target.value))} title="Sprint Quali Pole" className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-white" /></div>
               </div>
             </div>
 
@@ -1726,7 +1729,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 {activeConstructors.map(c => (
                   <div key={c.id} className="flex items-center gap-2 bg-slate-900 p-2 rounded border border-slate-700">
-                    <div className="w-1 h-6 rounded-full" style={{ backgroundColor: c.color }}></div>
+                    <div className={`w-1 h-6 rounded-full constr-bg-${c.id}`}></div>
                     <div className="flex-1">
                       <div className="text-xs text-slate-400">{c.name}</div>
                       <input
@@ -1734,6 +1737,7 @@ const App: React.FC = () => {
                         step="0.1"
                         value={c.multiplier}
                         onChange={(e) => handleConstructorMultiplierChange(c.id, Number(e.target.value))}
+                        title={`${c.name} Multiplier`}
                         className="w-full bg-transparent text-white font-mono text-sm focus:outline-none border-b border-slate-600 focus:border-blue-500"
                       />
                     </div>
@@ -2049,6 +2053,7 @@ const App: React.FC = () => {
                         type="number" step="0.1"
                         value={data?.rules.positionGainedPos1_10 ?? 1}
                         onChange={(e) => handleRuleChangeNumeric('positionGainedPos1_10', e.target.value)}
+                        title="Overtake (P1-10)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
                  </div>
@@ -2060,6 +2065,7 @@ const App: React.FC = () => {
                         type="number" step="0.1"
                         value={data?.rules.positionGainedPos11_Plus ?? 0.5}
                         onChange={(e) => handleRuleChangeNumeric('positionGainedPos11_Plus', e.target.value)}
+                        title="Overtake (P11+)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
                  </div>
@@ -2071,6 +2077,7 @@ const App: React.FC = () => {
                         type="number" step="0.1"
                         value={data?.rules.positionLostPos1_10 ?? -1}
                         onChange={(e) => handleRuleChangeNumeric('positionLostPos1_10', e.target.value)}
+                        title="Lost Position (P1-10)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
                  </div>
@@ -2082,6 +2089,7 @@ const App: React.FC = () => {
                         type="number" step="0.1"
                         value={data?.rules.positionLostPos11_Plus ?? -0.5}
                         onChange={(e) => handleRuleChangeNumeric('positionLostPos11_Plus', e.target.value)}
+                        title="Lost Position (P11+)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
                  </div>
@@ -2154,7 +2162,7 @@ const App: React.FC = () => {
                 return (
                    <div key={d.id} className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 flex flex-col gap-3">
                       <div className="flex items-center gap-2">
-                         <div className="w-1 h-6 rounded-full" style={{ backgroundColor: c?.color || '#555' }}></div>
+                         <div className={`w-1 h-6 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
                          <div className="font-bold text-white">{d.name}</div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -2165,6 +2173,7 @@ const App: React.FC = () => {
                                step="0.1" 
                                value={price}
                                onChange={(e) => handleAdminValueChange(d.id, 'price', Number(e.target.value))}
+                               title={`${d.name} Price`}
                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                             />
                          </div>
@@ -2174,6 +2183,7 @@ const App: React.FC = () => {
                                type="number" 
                                value={points}
                                onChange={(e) => handleAdminValueChange(d.id, 'points', Number(e.target.value))}
+                               title={`${d.name} Points`}
                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                             />
                          </div>
@@ -2187,9 +2197,21 @@ const App: React.FC = () => {
     );
   };
 
+  const ConstructorStyles = (
+    <style dangerouslySetInnerHTML={{ __html: `
+      ${CONSTRUCTORS.map(c => `
+        .constr-bg-${c.id} { background-color: ${c.color} !important; }
+        .constr-border-${c.id} { border-color: ${c.color} !important; }
+        .constr-shadow-${c.id} { box-shadow: 0 0 8px ${c.color} !important; }
+      `).join('\n')}
+      .constr-bg-default { background-color: #555 !important; }
+    `}} />
+  );
+
   return (
     <>
       <ErrorBoundary>
+        {ConstructorStyles}
         {LangMenu}
         <Layout
           activeTab={activeTab}
