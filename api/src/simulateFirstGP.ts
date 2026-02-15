@@ -204,10 +204,18 @@ async function main() {
     }
   }
 
-  // Mark race as completed
+  // Mark race as completed and store results
   await prisma.race.update({
     where: { id: RACE_ID },
-    data: { isCompleted: true }
+    data: { 
+      isCompleted: true,
+      results: {
+        quali: GRID,
+        race: CLASSIFICATION,
+        // sprintQuali: {},
+        // sprint: {}
+      }
+    }
   });
 
   console.log("\nSimulation finished!");

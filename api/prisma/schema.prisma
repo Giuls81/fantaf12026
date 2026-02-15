@@ -122,6 +122,7 @@ model Race {
   // --- NUOVI CAMPI AGGIUNTI ---
   date                DateTime
   isCompleted         Boolean  @default(false)
+  results             Json?
 
   teamResults         TeamResult[]
 }

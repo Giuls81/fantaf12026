@@ -188,6 +188,8 @@ const App: React.FC = () => {
   const [raceResults, setRaceResults] = useState<any[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
   const [viewingResult, setViewingResult] = useState<any | null>(null);
+  const [viewingOfficialResultsRaceId, setViewingOfficialResultsRaceId] = useState<string | null>(null);
+  const [activeResultSession, setActiveResultSession] = useState<'quali' | 'race' | 'sprintQuali' | 'sprint'>('race');
 
   // Fetch Standings
   useEffect(() => {
@@ -200,9 +202,9 @@ const App: React.FC = () => {
     }
   }, [activeTab, data?.user?.leagueId]);
 
-  // Handle Tab Change and Initial Selected Race
+  // Handle Tab Change
   useEffect(() => {
-    if (activeTab === Tab.RESULTS && !selectedRaceId) {
+    if (activeTab === Tab.STANDINGS && !selectedRaceId) {
       const completed = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
       if (completed.length > 0) {
         setSelectedRaceId(completed[0].id);
@@ -703,6 +705,28 @@ const App: React.FC = () => {
            <span className="text-3xl">🏆</span> {t({ en: 'Standings', it: 'Classifica' })}
         </h1>
 
+      {/* Official Results Button Area */}
+      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col gap-3">
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">{t({ en: 'Race Results', it: 'Risultati Gara' })}</h2>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round).map(r => (
+            <button 
+              key={r.id}
+              onClick={() => {
+                setViewingOfficialResultsRaceId(r.id);
+                setActiveResultSession(r.isSprint ? 'sprint' : 'race');
+              }}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 whitespace-nowrap"
+            >
+              🏁 {r.name.replace(' Grand Prix', '')}
+            </button>
+          ))}
+          {races.filter(r => r.isCompleted).length === 0 && (
+            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No races completed yet.', it: 'Nessuna gara conclusata.' })}</div>
+          )}
+        </div>
+      </div>
+
         {/* Global Standings Card */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
            <div className="bg-slate-700/50 p-3 border-b border-slate-700 font-bold text-xs uppercase tracking-widest text-slate-300">
@@ -734,213 +758,6 @@ const App: React.FC = () => {
         </div>
       </div>
     );
-  };
-
-  const renderResults = () => {
-    const completedRaces = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
-    
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-           <span className="text-3xl">🏁</span> {t({ en: 'Race Results', it: 'Risultati Gara' })}
-        </h1>
-
-        {/* Race Results / History Section */}
-        <div className="space-y-4">
-           {/* Race Filter */}
-           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-              {completedRaces.length === 0 && (
-                <div className="text-slate-500 text-sm italic">{t({ en: 'No races completed yet.', it: 'Nessuna gara completata finora.' })}</div>
-              )}
-              {completedRaces.map(r => (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedRaceId(r.id)}
-                  className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${selectedRaceId === r.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
-                >
-                  {r.name.replace(' Grand Prix', '')}
-                </button>
-              ))}
-           </div>
-
-           {/* Selected Race Results List */}
-           {selectedRaceId ? (
-              <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-2">
-                 <div className="bg-slate-700/50 p-3 border-b border-slate-700 flex justify-between items-center">
-                    <span className="font-bold text-xs uppercase tracking-widest text-slate-300">
-                       {races.find(r => r.id === selectedRaceId)?.name}
-                    </span>
-                    {loadingResults && <div className="w-3 h-3 border-2 border-slate-400 border-t-white rounded-full animate-spin"></div>}
-                 </div>
-                 <div className="divide-y divide-slate-700">
-                    {raceResults.map((r) => (
-                      <div key={r.userId} className="p-4 flex justify-between items-center group">
-                         <div className="flex items-center gap-4">
-                            <div>
-                               <div className="text-white font-bold">{r.userName}</div>
-                               <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Race Score', it: 'Punti Gara' })}</div>
-                            </div>
-                         </div>
-                         <div className="flex items-center gap-4">
-                            <div className="text-right">
-                               <div className="text-lg font-mono font-bold text-green-400">+{r.points}</div>
-                            </div>
-                            <button 
-                              onClick={() => setViewingResult(r)}
-                              className="bg-slate-700 hover:bg-slate-600 text-slate-100 p-2 rounded-lg transition-colors border border-slate-600"
-                            >
-                               🔍
-                            </button>
-                         </div>
-                      </div>
-                    ))}
-                    {raceResults.length === 0 && !loadingResults && <div className="p-8 text-center text-slate-500 italic">{t({ en: 'No results stored for this race yet.', it: 'Nessun risultato salvato per questa gara.' })}</div>}
-                 </div>
-              </div>
-           ) : (
-             <div className="p-12 text-center bg-slate-800/50 rounded-xl border border-dashed border-slate-700 text-slate-500 italic">
-                {t({ en: 'Select a race to see results.', it: 'Seleziona una gara per vedere i risultati.' })}
-             </div>
-           )}
-        </div>
-
-        {/* Modal: Result/Lineup Details */}
-        {viewingResult && (
-           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setViewingResult(null)}>
-              <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 overflow-y-auto max-h-[80vh]" onClick={e => e.stopPropagation()}>
-                 <div className="flex justify-between items-center mb-6">
-                    <div>
-                       <h3 className="text-xl font-bold text-white">{viewingResult.userName}</h3>
-                       <p className="text-slate-400 text-sm">{selectedRaceId ? races.find(r => r.id === selectedRaceId)?.name : ''}</p>
-                    </div>
-                    <button onClick={() => setViewingResult(null)} className="text-slate-500 hover:text-white text-2xl">&times;</button>
-                 </div>
-
-                 <div className="space-y-3">
-                    {viewingResult.drivers.length > 0 ? (
-                      viewingResult.drivers.map((d: any) => {
-                         const isCaptain = viewingResult.captainId === d.id;
-                         const isReserve = viewingResult.reserveId === d.id;
-                         return (
-                           <div key={d.id} className={`bg-slate-800 p-3 rounded-xl border ${isCaptain ? 'border-yellow-500' : isReserve ? 'border-green-500' : 'border-slate-700'} flex justify-between items-center`}>
-                              <div className="flex items-center gap-3">
-                                 <div className="text-lg">🏎️</div>
-                                 <div className="flex-1">
-                                    <div className="text-white font-bold text-sm">
-                                       {d.name} 
-                                       {isCaptain && <span className="text-[8px] bg-yellow-500 text-black px-1 rounded ml-1">CPT</span>}
-                                       {isReserve && <span className="text-[8px] bg-green-500 text-black px-1 rounded ml-1">RES</span>}
-                                    </div>
-                                 </div>
-                              </div>
-                              <div className="text-right">
-                                 <div className="text-blue-400 font-mono font-bold text-sm">+{d.points}</div>
-                              </div>
-                           </div>
-                         );
-                      })
-                    ) : (
-                      <div className="p-8 text-center text-slate-500 italic bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
-                         {t({ 
-                           en: 'Lineup hidden. Results can be viewed once the race is completed.', 
-                           it: 'Formazione nascosta. Potrai vederla quando la gara sarà completata.' 
-                         })}
-                      </div>
-                    )}
-                    
-                    <div className="bg-blue-600/10 border border-blue-600/30 p-4 rounded-xl mt-4 flex justify-between items-center">
-                       <span className="text-slate-300 font-bold text-sm capitalize">{t({ en: 'Total Score', it: 'Punteggio Totale' })}</span>
-                       <span className="text-2xl font-mono font-bold text-white">{viewingResult.points}</span>
-                    </div>
-                 </div>
-
-                 <button 
-                   onClick={() => setViewingResult(null)}
-                   className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl border border-slate-700 transition-colors"
-                 >
-                    Close
-                 </button>
-              </div>
-           </div>
-        )}
-      </div>
-    );
-  };
-
-  const formatCountdown = (ms: number) => {
-    if (ms < 0) ms = 0;
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const handleSetCaptain = async (driverId: string) => {
-    if (!data?.user) return;
-    const currentRace = races[data.currentRaceIndex];
-    const lockState = getLockStatus(currentRace, now);
-    if (lockState.status === 'locked') return;
-
-    let newCaptainId = driverId;
-    let newReserveId = data.team.reserveDriverId;
-    const oldCaptainId = data.team.captainId;
-
-    if (newReserveId === driverId) {
-      newReserveId = oldCaptainId;
-    }
-
-    try {
-      // Optimistic Update or wait for API? Let's do Wait + Sync for safety with lock
-      await updateLineup(data.user.leagueId, newCaptainId, newReserveId);
-      
-      setData({
-        ...data,
-        team: {
-          ...data.team,
-          captainId: newCaptainId,
-          reserveDriverId: newReserveId
-        }
-      });
-    } catch (e) {
-       console.error(e);
-       alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
-    }
-  };
-
-  const handleSetReserve = async (driverId: string) => {
-    if (!data?.user) return;
-    const currentRace = races[data.currentRaceIndex];
-    const lockState = getLockStatus(currentRace, now);
-    if (lockState.status === 'locked') return;
-
-    let newReserveId = driverId;
-    let newCaptainId = data.team.captainId;
-    const oldReserveId = data.team.reserveDriverId;
-
-    if (newCaptainId === driverId) {
-      if (oldReserveId) {
-        newCaptainId = oldReserveId;
-      } else {
-        const other = data.team.driverIds.find(d => d !== driverId);
-        newCaptainId = other || null;
-      }
-    }
-
-    try {
-      await updateLineup(data.user.leagueId, newCaptainId, newReserveId);
-      setData({
-        ...data,
-        team: {
-          ...data.team,
-          captainId: newCaptainId,
-          reserveDriverId: newReserveId
-        }
-      });
-    } catch (e) {
-       console.error(e);
-       alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
-    }
   };
 
   const handleSellDriver = async (driver: Driver) => {
@@ -1188,7 +1005,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 70</span>
+            <span className="text-[10px] text-slate-600">Build: 72</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
@@ -1334,7 +1151,7 @@ const App: React.FC = () => {
           <div className="space-y-4">
             <h1 className="text-2xl font-bold text-white mb-4">{t({ en: 'My Team', it: 'Il Mio Team', fr: 'Mon Équipe', de: 'Mein Team', es: 'Mi Equipo', ru: 'Моя Команда', zh: '我的车队', ar: 'فريقي', ja: 'マイチーム' })}</h1>
             <div className="p-4 bg-slate-800 rounded-lg text-center border border-slate-700 relative">
-               <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'équipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'Название команды', zh: '车队名称', ar: 'اسم الفريق', ja: 'チーム名' })}</p>
+               <p className="text-slate-400 mb-2">{t({ en: 'Team Name', it: 'Nome Team', fr: "Nom de l'équipe", de: 'Teamname', es: 'Nombre del Equipo', ru: 'Название команды', ja: 'チーム名' })}</p>
                {isEditingTeamName ? (
                  <div className="flex items-center justify-center gap-2">
                    <input 
@@ -1904,9 +1721,6 @@ const App: React.FC = () => {
       case Tab.STANDINGS:
         return renderStandings();
 
-      case Tab.RESULTS:
-        return renderResults();
-
 
       default:
         return <div>Tab not found</div>;
@@ -2000,6 +1814,84 @@ const App: React.FC = () => {
         console.error(e);
         alert(t({ en: "Failed to apply penalty.", it: "Errore durante l'applicazione." }));
      }
+  };
+
+  const formatCountdown = (ms: number) => {
+    if (ms < 0) ms = 0;
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleSetCaptain = async (driverId: string) => {
+    if (!data?.user) return;
+    if (!data.team) return;
+    const currentRace = races[data.currentRaceIndex];
+    if (!currentRace) return;
+    const lockState = getLockStatus(currentRace, now);
+    if (lockState.status === 'locked') return;
+
+    let newCaptainId = driverId;
+    let newReserveId = data.team.reserveDriverId;
+    const oldCaptainId = data.team.captainId;
+
+    if (newReserveId === driverId) {
+      newReserveId = oldCaptainId;
+    }
+
+    try {
+      await updateLineup(data.user.leagueId, newCaptainId, newReserveId);
+      setData({
+        ...data,
+        team: {
+          ...data.team,
+          captainId: newCaptainId,
+          reserveDriverId: newReserveId
+        }
+      });
+    } catch (e) {
+       console.error(e);
+       alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
+    }
+  };
+
+  const handleSetReserve = async (driverId: string) => {
+    if (!data?.user) return;
+    if (!data.team) return;
+    const currentRace = races[data.currentRaceIndex];
+    if (!currentRace) return;
+    const lockState = getLockStatus(currentRace, now);
+    if (lockState.status === 'locked') return;
+
+    let newReserveId = driverId;
+    let newCaptainId = data.team.captainId;
+    const oldReserveId = data.team.reserveDriverId;
+
+    if (newCaptainId === driverId) {
+      if (oldReserveId) {
+        newCaptainId = oldReserveId;
+      } else {
+        const other = data.team.driverIds.find(d => d !== driverId);
+        newCaptainId = other || null;
+      }
+    }
+
+    try {
+      await updateLineup(data.user.leagueId, newCaptainId, newReserveId);
+      setData({
+        ...data,
+        team: {
+          ...data.team,
+          captainId: newCaptainId,
+          reserveDriverId: newReserveId
+        }
+      });
+    } catch (e) {
+       console.error(e);
+       alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
+    }
   };
 
   const handleSaveRules = async () => {
