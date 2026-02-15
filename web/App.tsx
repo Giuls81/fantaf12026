@@ -834,6 +834,9 @@ const App: React.FC = () => {
                     ) : (
                       <div className="p-12 text-center text-slate-600 italic text-sm">
                         {t({ en: 'No data for this session.', it: 'Nessun dato per questa sessione.' })}
+                        <pre className="mt-4 text-[8px] opacity-20 text-left overflow-hidden">
+                          {JSON.stringify(resultsJson, null, 2)}
+                        </pre>
                       </div>
                     )}
                   </div>
