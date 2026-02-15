@@ -1099,7 +1099,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 74</span>
+            <span className="text-[10px] text-slate-600">Build: 73</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
