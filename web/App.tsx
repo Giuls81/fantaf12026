@@ -108,15 +108,32 @@ const App: React.FC = () => {
 
   // Initial AdMob & Premium Check
   useEffect(() => {
+    let resumeListenerHandle: any = null;
+
     (async () => {
       try {
-        await initializeAdMob();
-        await prepareRewardVideo(); // Pre-load reward video
-        await prepareInterstitial(); // Pre-load interstitial
+        if (Capacitor.getPlatform() !== 'web') {
+            await initializeAdMob();
+            await prepareRewardVideo();
+            await prepareInterstitial();
+            
+            try {
+              resumeListenerHandle = await CapApp.addListener('appStateChange', ({ isActive }) => {
+                if (isActive) {
+                  console.log('App resumed, checking for ad...');
+                  const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
+                  if (!isCurrentlyPremium) {
+                     showAppOpen();
+                  }
+                }
+              });
+            } catch (capErr) {
+              console.error('CapApp listener failed', capErr);
+            }
+        }
         
         const savedPremium = localStorage.getItem('fantaF1Premium');
         if (savedPremium === 'true') {
-           // ... (existing premium logic)
            const expiry = localStorage.getItem('fantaF1PremiumExpiry');
            if (expiry && Date.now() > Number(expiry)) {
               setIsPremium(false);
@@ -125,35 +142,18 @@ const App: React.FC = () => {
            } else {
               setIsPremium(true);
            }
-        } else {
+        } else if (Capacitor.getPlatform() !== 'web') {
            // Show ad on cold start
            setTimeout(() => showAppOpen(), 3000);
         }
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.error('Initialization failed', e); 
+      }
     })();
 
-    // Handle App Resume (Show Ad every time user comes back)
-    let resumeListener: Promise<any> | null = null;
-    
-    if (Capacitor.getPlatform() !== 'web') {
-      try {
-        resumeListener = CapApp.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) {
-            console.log('App resumed, checking for ad...');
-            const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
-            if (!isCurrentlyPremium) {
-               showAppOpen();
-            }
-          }
-        });
-      } catch (e) {
-        console.error('Failed to add App resume listener', e);
-      }
-    }
-
     return () => {
-      if (resumeListener) {
-        resumeListener.then(l => l.remove()).catch(e => console.error('Failed to remove listener', e));
+      if (resumeListenerHandle) {
+        resumeListenerHandle.remove();
       }
     };
   }, []);
