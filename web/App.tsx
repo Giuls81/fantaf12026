@@ -3,6 +3,7 @@ import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
 import { initializeAdMob, showAppOpen, prepareRewardVideo, showRewardVideo, showInterstitialWithProbability, prepareInterstitial } from './services/admob';
 import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
@@ -132,18 +133,28 @@ const App: React.FC = () => {
     })();
 
     // Handle App Resume (Show Ad every time user comes back)
-    const resumeListener = CapApp.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) {
-        console.log('App resumed, checking for ad...');
-        const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
-        if (!isCurrentlyPremium) {
-           showAppOpen();
-        }
+    let resumeListener: Promise<any> | null = null;
+    
+    if (Capacitor.getPlatform() !== 'web') {
+      try {
+        resumeListener = CapApp.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+            console.log('App resumed, checking for ad...');
+            const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
+            if (!isCurrentlyPremium) {
+               showAppOpen();
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Failed to add App resume listener', e);
       }
-    });
+    }
 
     return () => {
-      resumeListener.then(l => l.remove());
+      if (resumeListener) {
+        resumeListener.then(l => l.remove()).catch(e => console.error('Failed to remove listener', e));
+      }
     };
   }, []);
 
