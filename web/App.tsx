@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
-import { initializeAdMob, showAppOpen, prepareRewardVideo, showRewardVideo, showInterstitialWithProbability, prepareInterstitial } from './services/admob';
+import { initializeAdMob, showAppOpen, showRewardVideo, showInterstitialWithProbability } from './services/admob';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { AdBanner } from './components/AdBanner';
@@ -117,8 +117,8 @@ const App: React.FC = () => {
       try {
         if (Capacitor.getPlatform() !== 'web') {
             await initializeAdMob();
-            await prepareRewardVideo();
-            await prepareInterstitial();
+            // Note: initializeAdMob already prepares App Open + Reward Video.
+            // Do NOT call prepareInterstitial here — it would overwrite the App Open ad.
             
             try {
               resumeListenerHandle = await CapApp.addListener('appStateChange', ({ isActive }) => {
