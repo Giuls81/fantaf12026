@@ -73,6 +73,7 @@ model Team {
   leagueId  String
   userId    String
 
+  name      String?  @default("My F1 Team")
   budget    Float
   totalPoints Float @default(0)
   captainId String?
