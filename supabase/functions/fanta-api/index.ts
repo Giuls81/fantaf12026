@@ -669,29 +669,31 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     if (!race) return c.json({ error: "race_not_found" }, 404);
 
 
-    // 2. Fetch OpenF1 Data - RACE
+    // 2. Fetch OpenF1 Data
     const location = race.city || race.country || "";
-    const raceSessionType = race.isSprint ? "Sprint" : "Race";
-    const sessionKey = await getOpenF1SessionKey(race.season || 2026, location, raceSessionType);
-    
-    if (!sessionKey) return c.json({ error: "openf1_session_not_found", location, season: race.season }, 404);
+    const combinedResults: Record<string, Record<string, number>> = {};
 
-    const classification = await getOpenF1Classification(sessionKey);
-    if (Object.keys(classification).length === 0) return c.json({ error: "no_classification_data" }, 404);
-
-    // 2b. Fetch OpenF1 Data - QUALIFYING / SHOOTOUT
+    // 2a. QUALIFYING / SHOOTOUT
     let gridPositions: Record<string, number> = {};
     const qualiSessionType = race.isSprint ? "Sprint Qualifying" : "Qualifying";
     const qualiKey = await getOpenF1SessionKey(race.season || 2026, location, qualiSessionType);
+    if (qualiKey) {
+      gridPositions = await getOpenF1Classification(qualiKey);
+      combinedResults.quali = gridPositions;
+    }
 
-    if (qualiKey && qualiKey !== sessionKey) {
-          gridPositions = await getOpenF1Classification(qualiKey);
-    } else {
-        // If "Sprint Qualifying" fails, fallback to "Sprint Shootout"? (older name)
-        // Or if Quali fails, maybe log it.
-        if (race.isSprint) {
-           // TODO: Handle fallback logic
-        }
+    // 2b. RACE / SPRINT
+    const raceSessionType = race.isSprint ? "Sprint" : "Race";
+    const sessionKey = await getOpenF1SessionKey(race.season || 2026, location, raceSessionType);
+    
+    let classification: Record<string, number> = {};
+    if (sessionKey) {
+      classification = await getOpenF1Classification(sessionKey);
+      combinedResults[race.isSprint ? "sprint" : "race"] = classification;
+    }
+
+    if (Object.keys(combinedResults).length === 0) {
+      return c.json({ error: "no_data_found_in_openf1", location, season: race.season }, 404);
     }
 
     // 3. Process League
@@ -933,8 +935,8 @@ app.post("/admin/sync-race", requireUser, async (c) => {
           await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${teamPoints} WHERE id = ${team.id}`;
        }
 
-       // C. Mark Race Completed
-       await sql`UPDATE "Race" SET "isCompleted" = true WHERE id = ${raceId}`;
+       // C. Mark Race Completed and save results
+       await sql`UPDATE "Race" SET "isCompleted" = true, "results" = ${sql.json(combinedResults)} WHERE id = ${raceId}`;
     });
 
     return c.json({ ok: true, classification, points: driverRacePoints });

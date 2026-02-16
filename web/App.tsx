@@ -813,30 +813,39 @@ const App: React.FC = () => {
                     {sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
                         <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
-                          <div className="col-span-1 text-center">Pos</div>
-                          <div className="col-span-8">Driver</div>
-                          {activeResultSession === 'race' && <div className="col-span-3 text-right">Points</div>}
+                          <div className="col-span-2 text-center">Pos</div>
+                          <div className="col-span-10">Driver</div>
                         </div>
                         {sortedDriverIds.map(dId => {
                           const pos = currentSessionData[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
-                              <div className="col-span-1 text-center font-bold text-white">{pos}</div>
-                              <div className="col-span-8 flex items-center gap-2">
-                                <div className={`w-1 h-4 rounded-full ${driver?.constructorId === 'ferrari' ? 'bg-red-600' : driver?.constructorId === 'mercedes' ? 'bg-teal-500' : driver?.constructorId === 'red_bull' ? 'bg-blue-900' : 'bg-slate-500'}`} />
-                                <span className="text-sm text-slate-200 font-medium">{driver?.name || dId}</span>
+                              <div className="col-span-2 flex justify-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${pos === 1 ? 'bg-yellow-500 text-black' : pos === 2 ? 'bg-slate-300 text-black' : pos === 3 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                                  {pos}
+                                </div>
+                              </div>
+                              <div className="col-span-10 flex items-center gap-3">
+                                <div className={`w-1 h-6 rounded-full constr-bg-${driver?.constructorId || 'default'}`} />
+                                <div>
+                                  <div className="text-sm text-white font-bold">{driver?.name || dId}</div>
+                                  <div className="text-[10px] text-slate-500 uppercase tracking-tighter font-bold">
+                                    {CONSTRUCTORS.find(c => c.id === driver?.constructorId)?.name || 'Unknown'}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           );
                         })}
                       </div>
                     ) : (
-                      <div className="p-12 text-center text-slate-600 italic text-sm">
-                        {t({ en: 'No data for this session.', it: 'Nessun dato per questa sessione.' })}
-                        <pre className="mt-4 text-[8px] opacity-20 text-left overflow-hidden">
-                          {JSON.stringify(resultsJson, null, 2)}
-                        </pre>
+                      <div className="py-12 flex flex-col items-center justify-center text-center">
+                        <div className="text-4xl mb-4 grayscale opacity-50">🏎️</div>
+                        <div className="text-slate-500 font-medium">{t({ en: 'No results for this session.', it: 'Nessun risultato per questa sessione.' })}</div>
+                        <p className="text-[10px] text-slate-600 mt-2 max-w-[200px]">
+                           {t({ en: 'Official data will be available after the session ends.', it: 'I dati ufficiali saranno disponibili al termine della sessione.' })}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -933,7 +942,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 76<br/>
+        Build: 77<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
       </div>
@@ -1102,7 +1111,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 76</span>
+            <span className="text-[10px] text-slate-600">Build: 77</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>

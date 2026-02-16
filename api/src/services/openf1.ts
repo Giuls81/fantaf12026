@@ -35,8 +35,7 @@ const REVERSE_DRIVER_MAP: Record<number, string> = Object.fromEntries(
 const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const DEFAULT_SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-export async function getOpenF1SessionKey(year: number, location: string, isSprint: boolean): Promise<number | null> {
-  const sessionName = isSprint ? "Sprint" : "Race";
+export async function getOpenF1SessionKey(year: number, location: string, sessionName: string): Promise<number | null> {
   const url = `${OPENF1_BASE}/sessions?year=${year}&location=${encodeURIComponent(location)}&session_name=${encodeURIComponent(sessionName)}`;
   
   try {
@@ -92,15 +91,32 @@ export async function syncRaceResults(prisma: PrismaClient, raceId: string) {
   if (!race) throw new Error("Race not found");
 
   const location = race.city || race.country || "";
-  const sessionKey = await getOpenF1SessionKey(race.season || 2024, location, !!race.isSprint);
-  
-  if (!sessionKey) {
-    throw new Error(`OpenF1 session not found for ${location} ${race.season}`);
+  const year = race.season && race.season <= 2024 ? race.season : 2024;
+
+  // 1. Fetch Classifications for all relevant sessions
+  const combinedResults: Record<string, Record<string, number>> = {};
+
+  // Always fetch Qualifying
+  const qualiKey = await getOpenF1SessionKey(year, location, "Qualifying");
+  if (qualiKey) {
+    combinedResults.quali = await getOpenF1Classification(qualiKey);
   }
 
-  const classification = await getOpenF1Classification(sessionKey);
-  if (Object.keys(classification).length === 0) {
-    throw new Error("No results found in OpenF1 for this session.");
+  // Rate limit protection
+  await new Promise(r => setTimeout(r, 1000));
+
+  // Fetch Race or Sprint
+  const mainSessionName = race.isSprint ? "Sprint" : "Race";
+  const mainKey = await getOpenF1SessionKey(year, location, mainSessionName);
+  let classification: Record<string, number> = {};
+  
+  if (mainKey) {
+    classification = await getOpenF1Classification(mainKey);
+    combinedResults[race.isSprint ? "sprint" : "race"] = classification;
+  }
+
+  if (Object.keys(combinedResults).length === 0) {
+    throw new Error("No results found in OpenF1 for any session of this race.");
   }
 
   // Calculate Points per Driver
@@ -114,10 +130,14 @@ export async function syncRaceResults(prisma: PrismaClient, raceId: string) {
   await prisma.$transaction(async (tx: any) => {
     // 1. Update Global Driver Points (Cumulative)
     for (const [driverId, points] of Object.entries(driverRacePoints)) {
-      await tx.driver.update({
-        where: { id: driverId },
-        data: { points: { increment: points } }
-      });
+      // Check if driver exists to prevent crashes during simulation testing with old data
+      const driverExists = await tx.driver.findUnique({ where: { id: driverId } });
+      if (driverExists) {
+        await tx.driver.update({
+          where: { id: driverId },
+          data: { points: { increment: points } }
+        });
+      }
     }
 
     // 2. Snapshot Results for all Teams
@@ -165,10 +185,13 @@ export async function syncRaceResults(prisma: PrismaClient, raceId: string) {
       });
     }
 
-    // 3. Mark race as completed
+    // 3. Mark race as completed and store combined results
     await tx.race.update({
       where: { id: raceId },
-      data: { isCompleted: true }
+      data: { 
+        isCompleted: true,
+        results: combinedResults
+      }
     });
   });
 
