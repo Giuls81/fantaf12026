@@ -105,6 +105,9 @@ const App: React.FC = () => {
   const [fetchedDrivers, setFetchedDrivers] = useState<Driver[]>([]);
   const [leagueMembers, setLeagueMembers] = useState<any[]>([]); // Added for Admin
   const [adminUpdates, setAdminUpdates] = useState<Record<string, { price: number; points: number }>>({});
+  
+  // Use constructors from rules (editable) fallback to constant if needed
+  const activeConstructors = data?.rules?.constructors || CONSTRUCTORS;
 
   // Initial AdMob & Premium Check
   useEffect(() => {
@@ -144,13 +147,13 @@ const App: React.FC = () => {
            }
         } else if (Capacitor.getPlatform() !== 'web') {
            // Show ad on cold start (if not premium)
-           setTimeout(() => {
+           setTimeout(async () => {
              const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
              if (!isCurrentlyPremium) {
-                console.log('Cold start: showing App Open ad');
-                showAppOpen();
+                console.log('Cold start: showing Startup Ad');
+                await showAppOpen();
              }
-           }, 5000);
+           }, 4000); // 4 seconds should be enough for Test IDs
         }
       } catch (e) { 
         console.error('Initialization failed', e); 
@@ -513,6 +516,11 @@ const App: React.FC = () => {
       });
       setActiveTab(Tab.HOME);
 
+      // MONETIZATION: Show ad after successful login/registration
+      if (!isPremium) {
+        showInterstitialWithProbability(0.6);
+      }
+
     } catch (e: any) {
       console.error('Auth Error Details:', e);
       let msg = t({ en: "Authentication failed.", it: "Autenticazione fallita." });
@@ -571,17 +579,22 @@ const App: React.FC = () => {
       const updatedData = await getMe();
       const league = updatedData.leagues.find(l => l.id === data.user?.leagueId);
       if (league?.team) {
-         setData({
-            ...data,
-            team: {
-               ...data.team,
-               budget: league.team.budget,
-               driverIds: league.team.driverIds,
-               captainId: league.team.captainId,
-               reserveDriverId: league.team.reserveId,
-               totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
-            }
-         });
+      setData({
+        ...data,
+        team: {
+           ...data.team,
+           budget: league.team.budget,
+           driverIds: league.team.driverIds,
+           captainId: league.team.captainId,
+           reserveDriverId: league.team.reserveId,
+           totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
+        }
+      });
+      
+      // MONETIZATION: Show ad after buying a driver
+      if (!isPremium) {
+        showInterstitialWithProbability(0.3);
+      }
       }
     } catch (e) {
       console.error(e);
@@ -596,17 +609,22 @@ const App: React.FC = () => {
       const updatedData = await getMe();
       const league = updatedData.leagues.find(l => l.id === data.user?.leagueId);
       if (league?.team) {
-         setData({
-            ...data,
-            team: {
-               ...data.team,
-               budget: league.team.budget,
-               driverIds: league.team.driverIds,
-               captainId: league.team.captainId,
-               reserveDriverId: league.team.reserveId,
-               totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
-            }
-         });
+      setData({
+        ...data,
+        team: {
+           ...data.team,
+           budget: league.team.budget,
+           driverIds: league.team.driverIds,
+           captainId: league.team.captainId,
+           reserveDriverId: league.team.reserveId,
+           totalValue: calculateTotalValue(league.team.budget, league.team.driverIds)
+        }
+      });
+
+      // MONETIZATION: Show ad after swapping drivers
+      if (!isPremium) {
+        showInterstitialWithProbability(0.2);
+      }
       }
       setSwapCandidate(null);
     } catch (e) {
@@ -981,9 +999,23 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 84<br/>
+        Build: 85<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
+        <div className="mt-2 flex gap-2">
+            <button 
+              onClick={() => { localStorage.clear(); location.reload(); }}
+              className="px-2 py-1 bg-red-900/50 rounded text-[8px] border border-red-700 hover:bg-red-800"
+            >
+              RESET ALL
+            </button>
+            <button 
+              onClick={() => { localStorage.removeItem('fantaF1Premium'); location.reload(); }}
+              className="px-2 py-1 bg-yellow-900/50 rounded text-[8px] border border-yellow-700 hover:bg-yellow-800"
+            >
+              RESET PREMIUM
+            </button>
+        </div>
       </div>
 
       <div className="flex flex-col items-center opacity-30">
@@ -1150,7 +1182,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 84</span>
+            <span className="text-[10px] text-slate-600">Build: 85</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
@@ -1160,12 +1192,11 @@ const App: React.FC = () => {
   }
 
   // Main App Content (Only rendered if logged in)
+  const renderContent = () => {
   const currentRace = races[data.currentRaceIndex] || races[0]; // Fallback to avoid crash
   if (!currentRace) return <div>Error: No Race Data</div>; // Should never happen due to check above
   
   const lockState = getLockStatus(currentRace, now);
-  // Use constructors from rules (editable) fallback to constant if needed
-  const activeConstructors = data.rules?.constructors || CONSTRUCTORS;
 
   const getStatusColor = (s: LockStatus) => {
     switch (s) {
@@ -1176,7 +1207,6 @@ const App: React.FC = () => {
     }
   };
 
-  const renderContent = () => {
     switch (activeTab) {
       case Tab.HOME:
         return (

@@ -3,18 +3,40 @@ import { AdMob, BannerAdSize, BannerAdPosition, AdOptions, AdLoadInfo, Interstit
 import { Capacitor } from '@capacitor/core';
 import { ADMOB_IDS, IS_TEST_MODE } from '../constants_ads';
 
+// Official Google Test IDs
+const TEST_IDS = {
+  ANDROID: {
+    BANNER: 'ca-app-pub-3940256099942544/6300978111',
+    INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712',
+    REWARDED: 'ca-app-pub-3940256099942544/5224354917',
+    APP_OPEN: 'ca-app-pub-3940256099942544/9257395923',
+  },
+  IOS: {
+    BANNER: 'ca-app-pub-3940256099942544/2934735716',
+    INTERSTITIAL: 'ca-app-pub-3940256099942544/4411468910',
+    REWARDED: 'ca-app-pub-3940256099942544/1712485313',
+    APP_OPEN: 'ca-app-pub-3940256099942544/5575463023',
+  }
+};
+
+const getAdId = (type: 'BANNER' | 'INTERSTITIAL' | 'REWARDED' | 'APP_OPEN') => {
+  const platform = Capacitor.getPlatform() === 'android' ? 'ANDROID' : 'IOS';
+  if (IS_TEST_MODE) {
+    return TEST_IDS[platform][type];
+  }
+  return ADMOB_IDS[platform][type];
+};
+
 export const initializeAdMob = async () => {
   if (Capacitor.getPlatform() === 'web') return;
 
   try {
-    // Request tracking authorization before initialization
+    console.log('AdMob: Initializing...');
     await AdMob.requestTrackingAuthorization();
-
     await AdMob.initialize({
-      testingDevices: IS_TEST_MODE ? ['YOUR_DEVICE_ID'] : undefined, // Add test devices if needed
       initializeForTesting: IS_TEST_MODE,
     });
-    console.log('AdMob initialized');
+    console.log('AdMob: Initialized. Test Mode:', IS_TEST_MODE);
     
     // Pre-load ads
     await prepareAppOpen();
@@ -28,9 +50,7 @@ export const initializeAdMob = async () => {
 
 export const showBanner = async () => {
   if (Capacitor.getPlatform() === 'web') return;
-
-  const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.BANNER : ADMOB_IDS.IOS.BANNER;
-  
+  const adId = getAdId('BANNER');
   try {
     await AdMob.showBanner({
       adId,
@@ -56,14 +76,10 @@ export const hideBanner = async () => {
 
 export const prepareInterstitial = async () => {
   if (Capacitor.getPlatform() === 'web') return;
-  
-  const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.INTERSTITIAL : ADMOB_IDS.IOS.INTERSTITIAL;
-
+  const adId = getAdId('INTERSTITIAL');
   try {
-    await AdMob.prepareInterstitial({
-      adId,
-      isTesting: IS_TEST_MODE,
-    });
+    console.log(`AdMob: Preparing Interstitial (${adId})`);
+    await AdMob.prepareInterstitial({ adId, isTesting: IS_TEST_MODE });
   } catch (e) {
      console.error('Prepare Interstitial failed', e);
   }
@@ -72,6 +88,7 @@ export const prepareInterstitial = async () => {
 export const showInterstitial = async () => {
   if (Capacitor.getPlatform() === 'web') return;
   try {
+    console.log('AdMob: Showing Interstitial');
     await AdMob.showInterstitial();
     await prepareInterstitial();
   } catch (e) {
@@ -82,31 +99,23 @@ export const showInterstitial = async () => {
 
 export const prepareAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
-    
-    // Fallback to Interstitial ID because App Open IDs are not compatible with Interstitial methods
-    // and this plugin lacks native App Open support in definitions.
-    const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.INTERSTITIAL : ADMOB_IDS.IOS.INTERSTITIAL;
-    console.log(`Preparing Cold Start Ad (using Interstitial ID): ${adId}`);
-
+    const adId = getAdId('APP_OPEN');
+    console.log(`AdMob: Preparing Startup Ad (ID: ${adId})`);
     try {
-        await AdMob.prepareInterstitial({
-            adId,
-            isTesting: IS_TEST_MODE,
-        });
+        await AdMob.prepareInterstitial({ adId, isTesting: IS_TEST_MODE });
     } catch (e) {
-        console.error('Prepare Cold Start Ad failed', e);
+        console.error('Prepare Startup Ad failed', e);
     }
 }
 
 export const showAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     try {
-        console.log('Attempting to show Cold Start Ad (Interstitial Slot)');
+        console.log('AdMob: Attempting to show Startup Ad');
         await AdMob.showInterstitial();
-        // Always prepare for next time
         await prepareAppOpen();
     } catch (e) {
-        console.error('Show Cold Start Ad failed', e);
+        console.warn('AdMob: Startup Ad not ready. Retrying prepare...');
         await prepareAppOpen();
     }
 }
@@ -114,56 +123,35 @@ export const showAppOpen = async () => {
 export const showInterstitialWithProbability = async (probability: number = 0.5) => {
     if (Capacitor.getPlatform() === 'web') return;
     if (Math.random() < probability) {
-        console.log(`Probability ${probability} hit, showing interstitial`);
+        console.log(`AdMob: Probability ${probability} hit`);
         await showInterstitial();
     } else {
-        console.log(`Probability ${probability} missed, skipping interstitial`);
-        // Always prepare for next time
         await prepareInterstitial();
     }
 }
 
 export const prepareRewardVideo = async () => {
   if (Capacitor.getPlatform() === 'web') return;
-  const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.REWARDED : ADMOB_IDS.IOS.REWARDED;
-
+  const adId = getAdId('REWARDED');
   try {
-    await AdMob.prepareRewardVideoAd({
-      adId,
-      isTesting: IS_TEST_MODE,
-    });
+    await AdMob.prepareRewardVideoAd({ adId, isTesting: IS_TEST_MODE });
   } catch (e) {
     console.error('Prepare Reward Video failed', e);
   }
 };
 
 export const showRewardVideo = async (): Promise<AdMobRewardItem | null> => {
-  if (Capacitor.getPlatform() === 'web') {
-      // Simulate reward for web
-      return { type: 'coin', amount: 10 }; 
-  }
-
-  return new Promise(async (resolve, reject) => {
+  if (Capacitor.getPlatform() === 'web') return { type: 'coin', amount: 10 }; 
+  return new Promise(async (resolve) => {
       try {
-          // Listener for Reward
-          const onReward = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward: AdMobRewardItem) => {
-              resolve(reward);
-          });
-          
-          // Listener for Close/Fail (Cleanup)
+          const onReward = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => resolve(reward));
           const onDismiss = await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
-             // If dismissed without reward?
-             // We can't easily detect "not rewarded" unless we track state.
-             // But usually 'Rewarded' fires before 'Dismissed'.
-             // Making sure we clean up listeners.
-             onReward.remove();
-             onDismiss.remove();
+              onReward.remove();
+              onDismiss.remove();
           });
-
           await AdMob.showRewardVideoAd();
       } catch (e) {
           console.error('Show Reward Video failed', e);
-          // Try to prepare again
           await prepareRewardVideo();
           resolve(null);
       }
