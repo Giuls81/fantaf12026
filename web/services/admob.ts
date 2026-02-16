@@ -83,30 +83,30 @@ export const showInterstitial = async () => {
 export const prepareAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     
-    const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.APP_OPEN : ADMOB_IDS.IOS.APP_OPEN;
-    console.log(`Preparing App Open Ad with ID: ${adId}`);
+    // Fallback to Interstitial ID because App Open IDs are not compatible with Interstitial methods
+    // and this plugin lacks native App Open support in definitions.
+    const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.INTERSTITIAL : ADMOB_IDS.IOS.INTERSTITIAL;
+    console.log(`Preparing Cold Start Ad (using Interstitial ID): ${adId}`);
 
     try {
-        // Many versions of the community plugin use prepareInterstitial for App Open IDs if not explicit
-        // But we must use the correct slot ID to maximize monetization
         await AdMob.prepareInterstitial({
-            adId: adId || (Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.INTERSTITIAL : ADMOB_IDS.IOS.INTERSTITIAL),
+            adId,
             isTesting: IS_TEST_MODE,
         });
     } catch (e) {
-        console.error('Prepare App Open failed', e);
+        console.error('Prepare Cold Start Ad failed', e);
     }
 }
 
 export const showAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     try {
-        console.log('Attempting to show App Open (Interstitial Slot)');
+        console.log('Attempting to show Cold Start Ad (Interstitial Slot)');
         await AdMob.showInterstitial();
-        // Prepare for next time
+        // Always prepare for next time
         await prepareAppOpen();
     } catch (e) {
-        console.error('Show App Open failed', e);
+        console.error('Show Cold Start Ad failed', e);
         await prepareAppOpen();
     }
 }

@@ -19,4 +19,4 @@ export const ADMOB_IDS = {
   }
 };
 
-export const IS_TEST_MODE = false; // Set to true for development
+export const IS_TEST_MODE = true; // Set to true for development
