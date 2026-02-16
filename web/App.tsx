@@ -508,7 +508,7 @@ const App: React.FC = () => {
       setActiveTab(Tab.HOME);
 
     } catch (e: any) {
-      console.error(e);
+      console.error('Auth Error Details:', e);
       let msg = t({ en: "Authentication failed.", it: "Autenticazione fallita." });
       
       if (e.message && e.message.includes("name_taken")) {
