@@ -519,7 +519,10 @@ const App: React.FC = () => {
         msg = t({ en: "League not found. Check the code.", it: "Lega non trovata. Controlla il codice." });
       } else if (e.message && e.message.includes("weak_password")) {
          msg = t({ en: "Password too short (min 3 chars).", it: "Password troppo corta (min 3 caratteri)." });
-      } 
+      } else if (e.message) {
+         // Show raw error if none of the above
+         msg = `${msg}\n(${e.message})`;
+      }
       
       alert(msg);
       // Clean up token if partial failure
@@ -972,7 +975,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 81<br/>
+        Build: 82<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
       </div>
@@ -1141,7 +1144,7 @@ const App: React.FC = () => {
           </button>
           
           <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center opacity-30">
-            <span className="text-[10px] text-slate-600">Build: 81</span>
+            <span className="text-[10px] text-slate-600">Build: 82</span>
             <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
             <img src="/ryzextrade_logo.png" alt="RyzexTrade" className="h-3 w-auto" />
           </div>
