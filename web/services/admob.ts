@@ -16,8 +16,10 @@ export const initializeAdMob = async () => {
     });
     console.log('AdMob initialized');
     
-    // Pre-load App Open Ad
+    // Pre-load ads
     await prepareAppOpen();
+    await prepareRewardVideo();
+    await prepareInterstitial();
 
   } catch (e) {
     console.error('AdMob init failed', e);
@@ -81,16 +83,28 @@ export const showInterstitial = async () => {
 export const prepareAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     
-    // Fallback to Interstitial as App Open is not supported in this plugin version
-    console.log('Preparing Interstitial as App Open Fallback');
-    await prepareInterstitial();
+    const adId = Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.APP_OPEN : ADMOB_IDS.IOS.APP_OPEN;
+    console.log(`Preparing App Open Ad with ID: ${adId}`);
+
+    try {
+        // Many versions of the community plugin use prepareInterstitial for App Open IDs if not explicit
+        // But we must use the correct slot ID to maximize monetization
+        await AdMob.prepareInterstitial({
+            adId: adId || (Capacitor.getPlatform() === 'android' ? ADMOB_IDS.ANDROID.INTERSTITIAL : ADMOB_IDS.IOS.INTERSTITIAL),
+            isTesting: IS_TEST_MODE,
+        });
+    } catch (e) {
+        console.error('Prepare App Open failed', e);
+    }
 }
 
 export const showAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     try {
-        console.log('Attempting to show App Open / Interstitial on Resume');
+        console.log('Attempting to show App Open (Interstitial Slot)');
         await AdMob.showInterstitial();
+        // Prepare for next time
+        await prepareAppOpen();
     } catch (e) {
         console.error('Show App Open failed', e);
         await prepareAppOpen();
