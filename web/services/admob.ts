@@ -71,9 +71,9 @@ export const showInterstitial = async () => {
   if (Capacitor.getPlatform() === 'web') return;
   try {
     await AdMob.showInterstitial();
+    await prepareInterstitial();
   } catch (e) {
     console.error('Show Interstitial failed', e);
-    // Try to prepare again for next time
     await prepareInterstitial();
   }
 };
@@ -89,12 +89,23 @@ export const prepareAppOpen = async () => {
 export const showAppOpen = async () => {
     if (Capacitor.getPlatform() === 'web') return;
     try {
-        console.log('Showing Interstitial as App Open Fallback');
+        console.log('Attempting to show App Open / Interstitial on Resume');
         await AdMob.showInterstitial();
     } catch (e) {
-        console.error('Show App Open queries failed', e);
-        // Try to prepare again
+        console.error('Show App Open failed', e);
         await prepareAppOpen();
+    }
+}
+
+export const showInterstitialWithProbability = async (probability: number = 0.5) => {
+    if (Capacitor.getPlatform() === 'web') return;
+    if (Math.random() < probability) {
+        console.log(`Probability ${probability} hit, showing interstitial`);
+        await showInterstitial();
+    } else {
+        console.log(`Probability ${probability} missed, skipping interstitial`);
+        // Always prepare for next time
+        await prepareInterstitial();
     }
 }
 

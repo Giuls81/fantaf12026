@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
-import { initializeAdMob, showAppOpen, prepareRewardVideo, showRewardVideo } from './services/admob';
+import { initializeAdMob, showAppOpen, prepareRewardVideo, showRewardVideo, showInterstitialWithProbability, prepareInterstitial } from './services/admob';
+import { App as CapApp } from '@capacitor/app';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS } from './constants';
@@ -110,9 +111,11 @@ const App: React.FC = () => {
       try {
         await initializeAdMob();
         await prepareRewardVideo(); // Pre-load reward video
+        await prepareInterstitial(); // Pre-load interstitial
+        
         const savedPremium = localStorage.getItem('fantaF1Premium');
         if (savedPremium === 'true') {
-           // Check expiry if we store it? For now 'true' is permanent from debug, need new key for temp
+           // ... (existing premium logic)
            const expiry = localStorage.getItem('fantaF1PremiumExpiry');
            if (expiry && Date.now() > Number(expiry)) {
               setIsPremium(false);
@@ -122,10 +125,26 @@ const App: React.FC = () => {
               setIsPremium(true);
            }
         } else {
-           setTimeout(() => showAppOpen(), 2000);
+           // Show ad on cold start
+           setTimeout(() => showAppOpen(), 3000);
         }
       } catch (e) { console.error(e); }
     })();
+
+    // Handle App Resume (Show Ad every time user comes back)
+    const resumeListener = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        console.log('App resumed, checking for ad...');
+        const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
+        if (!isCurrentlyPremium) {
+           showAppOpen();
+        }
+      }
+    });
+
+    return () => {
+      resumeListener.then(l => l.remove());
+    };
   }, []);
 
   // Save Premium State
@@ -2224,7 +2243,13 @@ const App: React.FC = () => {
         {LangMenu}
         <Layout
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={(tab) => {
+             setActiveTab(tab);
+             // Aggressive Monetization: Show ad on tab change (50% chance)
+             if (!isPremium) {
+                showInterstitialWithProbability(0.4); 
+             }
+          }}
           showAdmin={data?.user?.isAdmin}
           lang={language}
           t={t}
