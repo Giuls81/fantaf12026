@@ -794,13 +794,33 @@ const App: React.FC = () => {
            ) : (
              <div className="divide-y divide-slate-700">
                 {standings.map((s, idx) => {
+                   const completedRace = races.find(r => r.isCompleted);
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
-                   const hasResults = !!userResult;
+                   const canClick = !!completedRace;
                    return (
                     <div 
                       key={s.userId} 
-                      onClick={() => { if (hasResults) setViewingResult(userResult); }}
-                      className={`p-4 flex justify-between items-center ${s.userId === data?.user?.id ? 'bg-blue-900/10' : ''} ${hasResults ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
+                      onClick={async () => {
+                        if (!canClick || !data?.user?.leagueId) return;
+                        // If we already have results, show immediately
+                        if (userResult) {
+                          setViewingResult(userResult);
+                          return;
+                        }
+                        // Otherwise, fetch on-demand
+                        try {
+                          const rId = selectedRaceId || completedRace!.id;
+                          const results = await getRaceResults(data.user.leagueId, rId);
+                          setRaceResults(results);
+                          const found = results.find((r: any) => r.userId === s.userId);
+                          if (found) setViewingResult(found);
+                          else setViewingResult({ userId: s.userId, userName: s.userName, points: 0, drivers: [] });
+                        } catch (e) {
+                          console.error("Failed to fetch lineup", e);
+                          setViewingResult({ userId: s.userId, userName: s.userName, points: 0, drivers: [] });
+                        }
+                      }}
+                      className={`p-4 flex justify-between items-center ${s.userId === data?.user?.id ? 'bg-blue-900/10' : ''} ${canClick ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
                     >
                        <div className="flex items-center gap-4">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
@@ -809,14 +829,14 @@ const App: React.FC = () => {
                           <div>
                              <div className="text-white font-bold">
                                {s.userName} {s.userId === data?.user?.id && <span className="text-[10px] bg-blue-500 text-white px-1 rounded ml-1">TU</span>}
-                               {hasResults && <span className="text-[10px] text-slate-500 ml-2">▸</span>}
+                               {canClick && <span className="text-[10px] text-slate-500 ml-2">▸</span>}
                              </div>
                              <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Total Points', it: 'Punti Totali' })}</div>
                           </div>
                        </div>
                        <div className="text-right">
                           <div className="text-xl font-mono font-bold text-blue-400">{s.totalPoints}</div>
-                          {hasResults && <div className="text-[10px] text-slate-500 font-mono">{t({ en: 'Race', it: 'Gara' })}: {userResult.points?.toFixed(1)}</div>}
+                          {userResult && <div className="text-[10px] text-slate-500 font-mono">{t({ en: 'Race', it: 'Gara' })}: {userResult.points?.toFixed(1)}</div>}
                        </div>
                     </div>
                    );
