@@ -906,11 +906,20 @@ const App: React.FC = () => {
           if (!race) return null;
           const resultsJson = (race as any).results || {};
           const driverPointsMap: Record<string, number> = resultsJson.driverPoints || {};
+          const driverRacePtsMap: Record<string, number> = resultsJson.driverRacePoints || {};
+          const driverQualiPtsMap: Record<string, number> = resultsJson.driverQualiPoints || {};
           const isFantasyTab = activeResultSession === 'fantasyPts';
+          const isRaceTab = activeResultSession === 'race';
+          const isQualiTab = activeResultSession === 'quali';
+          
+          // Determine which points map to use for this tab
+          const tabPointsMap = isFantasyTab ? driverPointsMap : isRaceTab ? driverRacePtsMap : isQualiTab ? driverQualiPtsMap : {};
+          const hasTabPoints = Object.keys(tabPointsMap).length > 0;
+          
           const currentSessionData = isFantasyTab ? (resultsJson.race || {}) : (resultsJson[activeResultSession] || {});
-          // Sort: fantasy tab by points desc, others by position asc
-          const sortedDriverIds = isFantasyTab
-            ? Object.keys(driverPointsMap).sort((a,b) => (driverPointsMap[b] || 0) - (driverPointsMap[a] || 0))
+          // Sort: if we have tab points, sort by those; otherwise by position
+          const sortedDriverIds = (isFantasyTab && hasTabPoints)
+            ? Object.keys(tabPointsMap).sort((a,b) => (tabPointsMap[b] || 0) - (tabPointsMap[a] || 0))
             : Object.keys(currentSessionData).sort((a,b) => currentSessionData[a] - currentSessionData[b]);
           
           return (
@@ -930,13 +939,13 @@ const App: React.FC = () => {
                        onClick={() => setActiveResultSession('race')}
                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'race' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
                      >
-                       {t({ en: 'Race', it: 'Gara' })}
+                       🏁 {t({ en: 'Race', it: 'Gara' })}
                      </button>
                      <button 
                        onClick={() => setActiveResultSession('quali')}
-                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'quali' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'quali' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-500'}`}
                      >
-                       {t({ en: 'Qualifying', it: 'Qualifiche' })}
+                       ⏱️ {t({ en: 'Qualifying', it: 'Qualifiche' })}
                      </button>
                      {race.isSprint && (
                        <>
@@ -958,7 +967,7 @@ const App: React.FC = () => {
                         onClick={() => setActiveResultSession('fantasyPts')}
                         className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'fantasyPts' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-500'}`}
                       >
-                        ⭐ {t({ en: 'Fantasy Pts', it: 'Punti Fantasy' })}
+                        ⭐ {t({ en: 'Total', it: 'Totale' })}
                       </button>
                   </div>
 
@@ -967,14 +976,14 @@ const App: React.FC = () => {
                       <div className="space-y-1">
                         <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
                           <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
-                          <div className={isFantasyTab ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
-                          {isFantasyTab && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
+                          <div className={hasTabPoints ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
+                          {hasTabPoints && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
                         </div>
                         {sortedDriverIds.map((dId, idx) => {
                           const pos = isFantasyTab ? (idx + 1) : currentSessionData[dId];
                           const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
-                          const fantasyPts = driverPointsMap[dId];
+                          const tabPts = tabPointsMap[dId];
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">
@@ -982,7 +991,7 @@ const App: React.FC = () => {
                                   {isFantasyTab ? (racePos ? `P${racePos}` : 'DNF') : pos}
                                 </div>
                               </div>
-                              <div className={`${isFantasyTab ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>
+                              <div className={`${hasTabPoints ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>
                                 <div className={`w-1 h-6 rounded-full constr-bg-${driver?.constructorId || 'default'}`} />
                                 <div>
                                   <div className="text-sm text-white font-bold">{driver?.name || dId}</div>
@@ -991,10 +1000,10 @@ const App: React.FC = () => {
                                   </div>
                                 </div>
                               </div>
-                              {isFantasyTab && (
+                              {hasTabPoints && (
                                 <div className="col-span-3 text-right">
-                                  <span className={`text-sm font-mono font-bold ${fantasyPts !== undefined && fantasyPts > 0 ? 'text-emerald-400' : fantasyPts !== undefined && fantasyPts < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                    {fantasyPts !== undefined ? (fantasyPts > 0 ? `+${fantasyPts}` : fantasyPts) : '-'}
+                                  <span className={`text-sm font-mono font-bold ${tabPts !== undefined && tabPts > 0 ? 'text-emerald-400' : tabPts !== undefined && tabPts < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                    {tabPts !== undefined ? (tabPts > 0 ? `+${tabPts}` : tabPts) : '-'}
                                   </span>
                                 </div>
                               )}
@@ -1105,7 +1114,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 88<br/>
+        Build: 89<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
         <div className="mt-2 flex gap-2">
