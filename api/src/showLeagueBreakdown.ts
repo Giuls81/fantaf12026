@@ -62,8 +62,8 @@ async function main() {
           mult = 1; // enters at full points
         }
       } else if (isCpt) {
-        role = 'CPT ×1.5';
-        mult = 1.5;
+        role = 'CPT ×2.0';
+        mult = 2.0;
       }
       
       const final = Math.round(base * mult * 10) / 10;

@@ -940,7 +940,14 @@ const App: React.FC = () => {
           // Sort: if we have tab points, sort by those; otherwise by position
           const sortedDriverIds = (isFantasyTab && hasTabPoints)
             ? Object.keys(tabPointsMap).sort((a,b) => (tabPointsMap[b] || 0) - (tabPointsMap[a] || 0))
-            : Object.keys(currentSessionData).sort((a,b) => currentSessionData[a] - currentSessionData[b]);
+            : Object.keys(currentSessionData).sort((a,b) => {
+                const pA = currentSessionData[a] || 999; 
+                const pB = currentSessionData[b] || 999;
+                // If pos is 0 (DNF), treat as very large number to sort at bottom
+                const vA = pA === 0 ? 999 : pA;
+                const vB = pB === 0 ? 999 : pB;
+                return vA - vB;
+            });
           
           return (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1004,11 +1011,12 @@ const App: React.FC = () => {
                           const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
                           const tabPts = tabPointsMap[dId];
+                          const displayPos = (pos === 0 || !pos) ? 'DNF' : pos;
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${pos === 1 ? 'bg-yellow-500 text-black' : pos === 2 ? 'bg-slate-300 text-black' : pos === 3 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                                  {isFantasyTab ? (racePos ? `P${racePos}` : 'DNF') : pos}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${displayPos === 1 ? 'bg-yellow-500 text-black' : displayPos === 2 ? 'bg-slate-300 text-black' : displayPos === 3 ? 'bg-orange-600 text-white' : displayPos === 'DNF' ? 'bg-red-900/50 text-red-200' : 'bg-slate-700 text-slate-300'}`}>
+                                  {isFantasyTab ? (racePos ? `P${racePos}` : 'DNF') : displayPos}
                                 </div>
                               </div>
                               <div className={`${hasTabPoints ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>

@@ -15,7 +15,7 @@ const GRID: Record<string, number> = {
   'ver': 1, 'lec': 2, 'nor': 3, 'ham': 4, 'rus': 5, 
   'pia': 6, 'sai': 7, 'per': 8, 'alo': 9, 'gas': 10,
   'alb': 11, 'hul': 12, 'oco': 13, 'bea': 14, 'law': 15,
-  'tsu': 16, 'str': 17, 'bot': 18, 'col': 19, 'bor': 20,
+  'lin': 16, 'str': 17, 'bot': 18, 'col': 19, 'bor': 20,
   'ant': 21, 'had': 22
 };
 
@@ -41,7 +41,8 @@ const CLASSIFICATION: Record<string, number> = {
   'col': 18, // +1 pos
   'ant': 19, // +2 pos
   'bor': 20, // Same
-  // DNF: had, tsu
+  'had': 0,  // DNF flagged as position 0
+  'lin': 0,  // DNF (replaces tsu) flagged as position 0
 };
 
 // Teammate Map (based on seedRaces.ts)
@@ -53,7 +54,7 @@ const TEAMMATES: Record<string, string> = {
   'alo': 'str', 'str': 'alo',
   'col': 'gas', 'gas': 'col',
   'alb': 'sai', 'sai': 'alb',
-  'law': 'tsu', 'tsu': 'law', // Added tsu/tsu-ish mapping
+  'law': 'lin', 'lin': 'law',
   'bea': 'oco', 'oco': 'bea',
   'bor': 'hul', 'hul': 'bor',
   'per': 'bot', 'bot': 'per'
@@ -121,7 +122,7 @@ function computeBaseDriverPoints(
       if (pos < matePos) teammate = (rules.teammateBeat ?? 2);
       else teammate = (rules.teammateLost ?? -2);
     } else {
-      teammate = (rules.teammateBeatDNF ?? 1);
+      teammate = (rules.teammateBeatDNF ?? 2);
     }
   }
 
@@ -155,13 +156,17 @@ function computeBaseDriverPoints(
 
   const r = (n: number) => Math.round(n * 10) / 10;
 
+  // Apply multiplier ONLY if the raw score is positive
+  const raceFinal = rawRace > 0 ? rawRace * mult : rawRace;
+  const qualiFinal = rawQuali > 0 ? rawQuali * mult : rawQuali;
+
   return {
     racePosition, overtakes, teammate, dnf, lastPlace,
     qualiPole, qualiSession,
     constructorMult: mult,
-    race: r(rawRace * mult),
-    quali: r(rawQuali * mult),
-    total: r((rawRace + rawQuali) * mult),
+    race: r(raceFinal),
+    quali: r(qualiFinal),
+    total: r(raceFinal + qualiFinal),
   };
 }
 
@@ -254,7 +259,7 @@ async function main() {
           }
           // If a starter DNFed, reserve enters at ×1.0 (full points)
         } else if (isCaptain) {
-          finalPts *= 1.5;
+          finalPts *= 2.0;
         }
 
         const storedPts = Math.round(finalPts * 10) / 10;
