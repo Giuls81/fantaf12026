@@ -63,85 +63,105 @@ const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0
 
 /**
  * Compute the BASE fantasy points for a single driver (no captain/reserve).
- * Returns a breakdown: { race, quali, total }
+ * Returns a full breakdown per component.
  */
+interface DriverBreakdown {
+  racePosition: number;
+  overtakes: number;
+  teammate: number;
+  dnf: number;
+  lastPlace: number;
+  qualiPole: number;
+  qualiSession: number;
+  constructorMult: number; // the multiplier applied
+  race: number;   // sum of race components × mult
+  quali: number;  // sum of quali components × mult
+  total: number;
+}
+
 function computeBaseDriverPoints(
   driverId: string,
   rules: any,
   allDrivers: any[],
   racePosPoints: number[],
   multipliers: Record<string, number>
-): { race: number; quali: number; total: number } {
-  let racePts = 0;
-  let qualiPts = 0;
+): DriverBreakdown {
+  let racePosition = 0, overtakes = 0, teammate = 0, dnf = 0, lastPlace = 0;
+  let qualiPole = 0, qualiSession = 0;
   const driverInfo = allDrivers.find(d => d.id === driverId);
   const pos = CLASSIFICATION[driverId];
   const grid = GRID[driverId];
 
-  // ── RACE POINTS ──
+  // ── RACE COMPONENTS ──
 
   // 1. Race Position Points
   if (pos && pos <= racePosPoints.length) {
-    racePts += racePosPoints[pos - 1];
+    racePosition = racePosPoints[pos - 1] || 0;
   }
 
-  // 2. Overtakes
+  // 2. Overtakes (positions gained/lost)
   if (pos && grid) {
     const diff = grid - pos;
     if (diff > 0) {
       for (let p = grid - 1; p >= pos; p--) {
-        racePts += (p <= 10 ? (rules.positionGainedPos1_10 || 1) : (rules.positionGainedPos11_Plus || 0.5));
+        overtakes += (p <= 10 ? (rules.positionGainedPos1_10 || 1) : (rules.positionGainedPos11_Plus || 0.5));
       }
     } else if (diff < 0) {
       for (let p = grid + 1; p <= pos; p++) {
-        racePts += (p <= 10 ? (rules.positionLostPos1_10 || -1) : (rules.positionLostPos11_Plus || -0.5));
+        overtakes += (p <= 10 ? (rules.positionLostPos1_10 || -1) : (rules.positionLostPos11_Plus || -0.5));
       }
     }
   }
 
-  // 3. Teammate Duel (race-based)
+  // 3. Teammate Duel
   const mateId = TEAMMATES[driverId];
   if (mateId && pos) {
     const matePos = CLASSIFICATION[mateId];
     if (matePos) {
-      if (pos < matePos) racePts += (rules.teammateBeat ?? 2);
-      else racePts += (rules.teammateLost ?? -2);
+      if (pos < matePos) teammate = (rules.teammateBeat ?? 2);
+      else teammate = (rules.teammateLost ?? -2);
     } else {
-      racePts += (rules.teammateBeatDNF ?? 1);
+      teammate = (rules.teammateBeatDNF ?? 1);
     }
   }
 
   // 4. DNF Malus
   if (!pos) {
-    racePts += (rules.raceDNF ?? -5);
+    dnf = (rules.raceDNF ?? -5);
   }
 
   // 5. Last Place Malus
   const maxPos = Math.max(...Object.values(CLASSIFICATION));
   if (pos === maxPos && maxPos > 10) {
-    racePts += (rules.raceLastPlaceMalus ?? -3);
+    lastPlace = (rules.raceLastPlaceMalus ?? -3);
   }
 
-  // ── QUALIFYING POINTS ──
+  // ── QUALIFYING COMPONENTS ──
 
   if (grid) {
-    if (grid === 1) qualiPts += (rules.qualiPole ?? 3);
-    if (grid <= 10) qualiPts += (rules.qualiQ3Reached ?? 3);
-    else if (grid <= 15) qualiPts += (rules.qualiQ2Reached ?? 1);
-    else qualiPts += (rules.qualiQ1Eliminated ?? -3);
+    if (grid === 1) qualiPole = (rules.qualiPole ?? 3);
+    if (grid <= 10) qualiSession = (rules.qualiQ3Reached ?? 3);
+    else if (grid <= 15) qualiSession = (rules.qualiQ2Reached ?? 1);
+    else qualiSession = (rules.qualiQ1Eliminated ?? -3);
   }
 
-  // ── CONSTRUCTOR MULTIPLIER (applies to both) ──
-  if (driverInfo && multipliers[driverInfo.constructorId] !== undefined) {
-    const mult = multipliers[driverInfo.constructorId];
-    racePts = racePts * mult;
-    qualiPts = qualiPts * mult;
-  }
+  // ── CONSTRUCTOR MULTIPLIER ──
+  const mult = (driverInfo && multipliers[driverInfo.constructorId] !== undefined)
+    ? multipliers[driverInfo.constructorId]!
+    : 1.0;
+
+  const rawRace = racePosition + overtakes + teammate + dnf + lastPlace;
+  const rawQuali = qualiPole + qualiSession;
+
+  const r = (n: number) => Math.round(n * 10) / 10;
 
   return {
-    race: Math.round(racePts * 10) / 10,
-    quali: Math.round(qualiPts * 10) / 10,
-    total: Math.round((racePts + qualiPts) * 10) / 10,
+    racePosition, overtakes, teammate, dnf, lastPlace,
+    qualiPole, qualiSession,
+    constructorMult: mult,
+    race: r(rawRace * mult),
+    quali: r(rawQuali * mult),
+    total: r((rawRace + rawQuali) * mult),
   };
 }
 
@@ -175,25 +195,26 @@ async function main() {
   const driverPoints: Record<string, number> = {};
   const driverRacePoints: Record<string, number> = {};
   const driverQualiPoints: Record<string, number> = {};
+  const driverBreakdown: Record<string, DriverBreakdown> = {};
   for (const dId of allDriverIds) {
     const breakdown = computeBaseDriverPoints(dId, baseRules, allDrivers, baseRacePosPoints, baseMults);
     driverPoints[dId] = breakdown.total;
     driverRacePoints[dId] = breakdown.race;
     driverQualiPoints[dId] = breakdown.quali;
+    driverBreakdown[dId] = breakdown;
   }
 
-  console.log("\n📊 Base Driver Fantasy Points:");
-  console.log("  Pos   Driver                  Race    Quali   Total");
-  console.log("  ──── ─────────────────────── ─────── ─────── ───────");
-  // Sort by total points descending
+  console.log("\n📊 Base Driver Fantasy Points (detailed breakdown):");
+  console.log("  Pos   Driver                  PosP  Overt  Mate   DNF   Last  | Pole  Sess  | ×Mult  Race   Quali  Total");
+  console.log("  ──── ─────────────────────── ───── ────── ───── ───── ───── | ───── ───── | ───── ─────── ────── ──────");
   const sorted = Object.entries(driverPoints).sort((a, b) => b[1] - a[1]);
   for (const [dId, pts] of sorted) {
     const driver = allDrivers.find(d => d.id === dId);
     const pos = CLASSIFICATION[dId];
     const status = pos ? `P${pos}` : 'DNF';
-    const rp = driverRacePoints[dId];
-    const qp = driverQualiPoints[dId];
-    console.log(`  ${status.padEnd(4)} ${(driver?.name || dId).padEnd(22)} ${(rp > 0 ? '+' : '') + rp.toString().padEnd(6)} ${(qp > 0 ? '+' : '') + qp.toString().padEnd(6)}  ${pts > 0 ? '+' : ''}${pts}`);
+    const b = driverBreakdown[dId]!;
+    const f = (n: number) => (n > 0 ? '+' + n : n === 0 ? ' 0' : '' + n).padStart(5);
+    console.log(`  ${status.padEnd(4)} ${(driver?.name || dId).padEnd(22)} ${f(b.racePosition)} ${f(b.overtakes)} ${f(b.teammate)} ${f(b.dnf)} ${f(b.lastPlace)} | ${f(b.qualiPole)} ${f(b.qualiSession)} | ×${b.constructorMult} ${f(b.race)} ${f(b.quali)}  ${pts > 0 ? '+' : ''}${pts}`);
   }
   console.log("");
 
@@ -218,14 +239,25 @@ async function main() {
 
       for (const td of team.drivers) {
         const driverId = td.driverId;
-        // Use the base points (already computed), then apply captain/reserve
         const breakdown = computeBaseDriverPoints(driverId, rules, allDrivers, racePosPoints, multipliers);
 
         let finalPts = breakdown.total;
-        if (driverId === team.captainId) finalPts *= 1.5;
-        if (driverId === team.reserveId) finalPts *= 0.5;
+        const isReserve = driverId === team.reserveId;
+        const isCaptain = driverId === team.captainId;
 
-        const storedPts = Math.round(finalPts);
+        if (isReserve) {
+          // Reserve is INSURANCE: only scores if a starter DNFed
+          const starters = team.drivers.filter((d: any) => d.driverId !== team.reserveId);
+          const anyStarterDNF = starters.some((d: any) => !CLASSIFICATION[d.driverId]);
+          if (!anyStarterDNF) {
+            finalPts = 0; // Reserve stays on the bench
+          }
+          // If a starter DNFed, reserve enters at ×1.0 (full points)
+        } else if (isCaptain) {
+          finalPts *= 1.5;
+        }
+
+        const storedPts = Math.round(finalPts * 10) / 10;
         driverPointsList.push({ driverId, points: storedPts });
         teamPoints += finalPts;
       }
@@ -273,6 +305,7 @@ async function main() {
         driverPoints: driverPoints,
         driverRacePoints: driverRacePoints,
         driverQualiPoints: driverQualiPoints,
+        driverBreakdown: driverBreakdown as any,
       }
     }
   });
