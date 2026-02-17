@@ -819,9 +819,13 @@ const App: React.FC = () => {
           const race = races.find(r => r.id === viewingOfficialResultsRaceId);
           if (!race) return null;
           const resultsJson = (race as any).results || {};
-          const currentSessionData = resultsJson[activeResultSession] || {};
-          // Sort drivers by position
-          const sortedDriverIds = Object.keys(currentSessionData).sort((a,b) => currentSessionData[a] - currentSessionData[b]);
+          const driverPointsMap: Record<string, number> = resultsJson.driverPoints || {};
+          const isFantasyTab = activeResultSession === 'fantasyPts';
+          const currentSessionData = isFantasyTab ? (resultsJson.race || {}) : (resultsJson[activeResultSession] || {});
+          // Sort: fantasy tab by points desc, others by position asc
+          const sortedDriverIds = isFantasyTab
+            ? Object.keys(driverPointsMap).sort((a,b) => (driverPointsMap[b] || 0) - (driverPointsMap[a] || 0))
+            : Object.keys(currentSessionData).sort((a,b) => currentSessionData[a] - currentSessionData[b]);
           
           return (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -864,26 +868,36 @@ const App: React.FC = () => {
                          </button>
                        </>
                      )}
+                      <button 
+                        onClick={() => setActiveResultSession('fantasyPts' as any)}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'fantasyPts' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                      >
+                        ⭐ {t({ en: 'Fantasy Pts', it: 'Punti Fantasy' })}
+                      </button>
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
-                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
-                          <div className="col-span-2 text-center">Pos</div>
-                          <div className="col-span-10">Driver</div>
+                        <div className={`grid ${Object.keys(driverPointsMap).length > 0 ? 'grid-cols-12' : 'grid-cols-12'} gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1`}>
+                          <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
+                          <div className={Object.keys(driverPointsMap).length > 0 ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
+                          {Object.keys(driverPointsMap).length > 0 && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
                         </div>
-                        {sortedDriverIds.map(dId => {
-                          const pos = currentSessionData[dId];
+                        {sortedDriverIds.map((dId, idx) => {
+                          const pos = isFantasyTab ? (idx + 1) : currentSessionData[dId];
+                          const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
+                          const fantasyPts = driverPointsMap[dId];
+                          const hasPts = Object.keys(driverPointsMap).length > 0;
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${pos === 1 ? 'bg-yellow-500 text-black' : pos === 2 ? 'bg-slate-300 text-black' : pos === 3 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                                  {pos}
+                                  {isFantasyTab ? (racePos ? `P${racePos}` : 'DNF') : pos}
                                 </div>
                               </div>
-                              <div className="col-span-10 flex items-center gap-3">
+                              <div className={`${hasPts ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>
                                 <div className={`w-1 h-6 rounded-full constr-bg-${driver?.constructorId || 'default'}`} />
                                 <div>
                                   <div className="text-sm text-white font-bold">{driver?.name || dId}</div>
@@ -892,6 +906,13 @@ const App: React.FC = () => {
                                   </div>
                                 </div>
                               </div>
+                              {hasPts && (
+                                <div className="col-span-3 text-right">
+                                  <span className={`text-sm font-mono font-bold ${fantasyPts !== undefined && fantasyPts > 0 ? 'text-emerald-400' : fantasyPts !== undefined && fantasyPts < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                    {fantasyPts !== undefined ? (fantasyPts > 0 ? `+${fantasyPts}` : fantasyPts) : '-'}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
