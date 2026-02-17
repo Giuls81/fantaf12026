@@ -928,6 +928,7 @@ const App: React.FC = () => {
           const driverPointsMap: Record<string, number> = resultsJson.driverPoints || {};
           const driverRacePtsMap: Record<string, number> = resultsJson.driverRacePoints || {};
           const driverQualiPtsMap: Record<string, number> = resultsJson.driverQualiPoints || {};
+          const dnfDrivers: string[] = resultsJson.dnfDrivers || [];
           const isFantasyTab = activeResultSession === 'fantasyPts';
           const isRaceTab = activeResultSession === 'race';
           const isQualiTab = activeResultSession === 'quali';
@@ -1011,7 +1012,8 @@ const App: React.FC = () => {
                           const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
                           const tabPts = tabPointsMap[dId];
-                          const displayPos = (pos === 0 || !pos) ? 'DNF' : pos;
+                          // Show DNF if pos is 0/undefined OR if driver is in dnfDrivers list
+                          const displayPos = (pos === 0 || !pos || dnfDrivers.includes(dId)) ? 'DNF' : pos;
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">

@@ -41,9 +41,11 @@ const CLASSIFICATION: Record<string, number> = {
   'col': 18, // +1 pos
   'ant': 19, // +2 pos
   'bor': 20, // Same
-  'had': 0,  // DNF flagged as position 0
-  'lin': 0,  // DNF (replaces tsu) flagged as position 0
+  'had': 21, // DNF (retired later than lin) -> classified ahead of lin
+  'lin': 22, // DNF (retired earlier)
 };
+
+const DNF_DRIVERS = ['had', 'lin'];
 
 // Teammate Map (based on seedRaces.ts)
 const TEAMMATES: Record<string, string> = {
@@ -92,6 +94,7 @@ function computeBaseDriverPoints(
   const driverInfo = allDrivers.find(d => d.id === driverId);
   const pos = CLASSIFICATION[driverId];
   const grid = GRID[driverId];
+  const isDNF = DNF_DRIVERS.includes(driverId);
 
   // ── RACE COMPONENTS ──
 
@@ -121,13 +124,11 @@ function computeBaseDriverPoints(
     if (matePos) {
       if (pos < matePos) teammate = (rules.teammateBeat ?? 2);
       else teammate = (rules.teammateLost ?? -2);
-    } else {
-      teammate = (rules.teammateBeatDNF ?? 2);
     }
   }
 
   // 4. DNF Malus
-  if (!pos) {
+  if (isDNF) {
     dnf = (rules.raceDNF ?? -5);
   }
 
@@ -253,7 +254,7 @@ async function main() {
         if (isReserve) {
           // Reserve is INSURANCE: only scores if a starter DNFed
           const starters = team.drivers.filter((d: any) => d.driverId !== team.reserveId);
-          const anyStarterDNF = starters.some((d: any) => !CLASSIFICATION[d.driverId]);
+          const anyStarterDNF = starters.some((d: any) => DNF_DRIVERS.includes(d.driverId));
           if (!anyStarterDNF) {
             finalPts = 0; // Reserve stays on the bench
           }
@@ -311,6 +312,7 @@ async function main() {
         driverRacePoints: driverRacePoints,
         driverQualiPoints: driverQualiPoints,
         driverBreakdown: driverBreakdown as any,
+        dnfDrivers: DNF_DRIVERS,
       }
     }
   });
