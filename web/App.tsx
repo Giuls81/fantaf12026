@@ -795,7 +795,7 @@ const App: React.FC = () => {
              <div className="divide-y divide-slate-700">
                 {standings.map((s, idx) => {
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
-                   const hasResults = userResult && userResult.drivers && userResult.drivers.length > 0;
+                   const hasResults = !!userResult;
                    return (
                     <div 
                       key={s.userId} 
@@ -965,17 +965,16 @@ const App: React.FC = () => {
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
-                        <div className={`grid ${Object.keys(driverPointsMap).length > 0 ? 'grid-cols-12' : 'grid-cols-12'} gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1`}>
+                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
                           <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
-                          <div className={Object.keys(driverPointsMap).length > 0 ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
-                          {Object.keys(driverPointsMap).length > 0 && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
+                          <div className={isFantasyTab ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
+                          {isFantasyTab && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
                         </div>
                         {sortedDriverIds.map((dId, idx) => {
                           const pos = isFantasyTab ? (idx + 1) : currentSessionData[dId];
                           const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
                           const fantasyPts = driverPointsMap[dId];
-                          const hasPts = Object.keys(driverPointsMap).length > 0;
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">
@@ -983,7 +982,7 @@ const App: React.FC = () => {
                                   {isFantasyTab ? (racePos ? `P${racePos}` : 'DNF') : pos}
                                 </div>
                               </div>
-                              <div className={`${hasPts ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>
+                              <div className={`${isFantasyTab ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>
                                 <div className={`w-1 h-6 rounded-full constr-bg-${driver?.constructorId || 'default'}`} />
                                 <div>
                                   <div className="text-sm text-white font-bold">{driver?.name || dId}</div>
@@ -992,7 +991,7 @@ const App: React.FC = () => {
                                   </div>
                                 </div>
                               </div>
-                              {hasPts && (
+                              {isFantasyTab && (
                                 <div className="col-span-3 text-right">
                                   <span className={`text-sm font-mono font-bold ${fantasyPts !== undefined && fantasyPts > 0 ? 'text-emerald-400' : fantasyPts !== undefined && fantasyPts < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                                     {fantasyPts !== undefined ? (fantasyPts > 0 ? `+${fantasyPts}` : fantasyPts) : '-'}
@@ -1106,7 +1105,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 87<br/>
+        Build: 88<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
         <div className="mt-2 flex gap-2">
