@@ -228,7 +228,7 @@ const App: React.FC = () => {
   const [loadingResults, setLoadingResults] = useState(false);
   const [viewingResult, setViewingResult] = useState<any | null>(null);
   const [viewingOfficialResultsRaceId, setViewingOfficialResultsRaceId] = useState<string | null>(null);
-  const [activeResultSession, setActiveResultSession] = useState<'quali' | 'race' | 'sprintQuali' | 'sprint'>('race');
+  const [activeResultSession, setActiveResultSession] = useState<'quali' | 'race' | 'sprintQuali' | 'sprint' | 'fantasyPts'>('race');
 
   // Fetch Standings
   useEffect(() => {
@@ -869,7 +869,7 @@ const App: React.FC = () => {
                        </>
                      )}
                       <button 
-                        onClick={() => setActiveResultSession('fantasyPts' as any)}
+                        onClick={() => setActiveResultSession('fantasyPts')}
                         className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'fantasyPts' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-500'}`}
                       >
                         ⭐ {t({ en: 'Fantasy Pts', it: 'Punti Fantasy' })}
@@ -1020,7 +1020,7 @@ const App: React.FC = () => {
       
       <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
         API: {getApiUrl()}<br/>
-        Build: 85<br/>
+        Build: 86<br/>
         Status: {loadingStatus}<br/>
         Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
         <div className="mt-2 flex gap-2">
