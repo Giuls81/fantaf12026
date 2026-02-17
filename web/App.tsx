@@ -793,26 +793,112 @@ const App: React.FC = () => {
              <div className="p-8 text-center text-slate-500 animate-pulse">{t({ en: 'Loading standings...', it: 'Caricamento classifica...' })}</div>
            ) : (
              <div className="divide-y divide-slate-700">
-                {standings.map((s, idx) => (
-                   <div key={s.userId} className={`p-4 flex justify-between items-center ${s.userId === data?.user?.id ? 'bg-blue-900/10' : ''}`}>
-                      <div className="flex items-center gap-4">
-                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                            {s.rank}
-                         </div>
-                         <div>
-                            <div className="text-white font-bold">{s.userName} {s.userId === data?.user?.id && <span className="text-[10px] bg-blue-500 text-white px-1 rounded ml-1">TU</span>}</div>
-                            <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Total Points', it: 'Punti Totali' })}</div>
-                         </div>
-                      </div>
-                      <div className="text-right">
-                         <div className="text-xl font-mono font-bold text-blue-400">{s.totalPoints}</div>
-                      </div>
-                   </div>
-                ))}
+                {standings.map((s, idx) => {
+                   const userResult = raceResults.find((r: any) => r.userId === s.userId);
+                   const hasResults = userResult && userResult.drivers && userResult.drivers.length > 0;
+                   return (
+                    <div 
+                      key={s.userId} 
+                      onClick={() => { if (hasResults) setViewingResult(userResult); }}
+                      className={`p-4 flex justify-between items-center ${s.userId === data?.user?.id ? 'bg-blue-900/10' : ''} ${hasResults ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
+                    >
+                       <div className="flex items-center gap-4">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                             {s.rank}
+                          </div>
+                          <div>
+                             <div className="text-white font-bold">
+                               {s.userName} {s.userId === data?.user?.id && <span className="text-[10px] bg-blue-500 text-white px-1 rounded ml-1">TU</span>}
+                               {hasResults && <span className="text-[10px] text-slate-500 ml-2">▸</span>}
+                             </div>
+                             <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Total Points', it: 'Punti Totali' })}</div>
+                          </div>
+                       </div>
+                       <div className="text-right">
+                          <div className="text-xl font-mono font-bold text-blue-400">{s.totalPoints}</div>
+                          {hasResults && <div className="text-[10px] text-slate-500 font-mono">{t({ en: 'Race', it: 'Gara' })}: {userResult.points?.toFixed(1)}</div>}
+                       </div>
+                    </div>
+                   );
+                })}
                 {standings.length === 0 && <div className="p-8 text-center text-slate-500 italic">{t({ en: 'No users found in this league.', it: 'Nessun utente trovato in questa lega.' })}</div>}
              </div>
            )}
         </div>
+
+        {/* Modal: Team Lineup Detail */}
+        {viewingResult && (() => {
+          const res = viewingResult;
+          const selectedRace = races.find(r => r.id === selectedRaceId);
+          return (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+               <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+                    <div>
+                      <h3 className="text-lg font-bold text-white">{res.userName}</h3>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                        {selectedRace?.name || t({ en: 'Race Results', it: 'Risultati Gara' })} — {res.points?.toFixed(1)} {t({ en: 'pts', it: 'punti' })}
+                      </p>
+                    </div>
+                    <button onClick={() => setViewingResult(null)} className="p-2 hover:bg-slate-700 rounded-full text-slate-400">✕</button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {res.drivers && res.drivers.length > 0 ? (
+                      <div className="space-y-2">
+                        {res.drivers
+                          .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
+                          .map((d: any) => {
+                          const driver = fetchedDrivers.find(fd => fd.id === d.id);
+                          const isCaptain = d.id === res.captainId;
+                          const isReserve = d.id === res.reserveId;
+                          return (
+                            <div key={d.id} className={`p-3 rounded-xl border ${isCaptain ? 'bg-yellow-900/20 border-yellow-600/40' : isReserve ? 'bg-slate-800/80 border-slate-600/40' : 'bg-slate-800/50 border-slate-700/30'} flex items-center justify-between`}>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-1.5 h-8 rounded-full constr-bg-${driver?.constructorId || 'default'}`} />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-white font-bold">{d.name || driver?.name || d.id}</span>
+                                    {isCaptain && <span className="text-[10px] bg-yellow-600 text-black px-1.5 py-0.5 rounded font-bold">👑 {t({ en: 'CPT', it: 'CAP' })}</span>}
+                                    {isReserve && <span className="text-[10px] bg-slate-600 text-slate-200 px-1.5 py-0.5 rounded font-bold">🔄 {t({ en: 'RES', it: 'RIS' })}</span>}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 uppercase tracking-tighter font-bold">
+                                    {CONSTRUCTORS.find(c => c.id === driver?.constructorId)?.name || ''}
+                                    {isCaptain && <span className="ml-1 text-yellow-500/70">× 1.5</span>}
+                                    {isReserve && <span className="ml-1 text-slate-400/70">× 0.5</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className={`text-lg font-mono font-bold ${d.points > 0 ? 'text-emerald-400' : d.points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                  {d.points > 0 ? `+${d.points}` : d.points}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center text-slate-500">
+                        <div className="text-4xl mb-3 opacity-50">🔒</div>
+                        <p className="font-medium">{t({ en: 'Lineup not visible yet', it: 'Formazione non ancora visibile' })}</p>
+                        <p className="text-[10px] mt-1 text-slate-600">{t({ en: 'Results will be visible after the race is completed.', it: 'I risultati saranno visibili al termine della gara.' })}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-slate-800/50 border-t border-slate-800">
+                    <button 
+                      onClick={() => setViewingResult(null)}
+                      className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold text-sm transition-all"
+                    >
+                      {t({ en: 'Close', it: 'Chiudi' })}
+                    </button>
+                  </div>
+               </div>
+            </div>
+          );
+        })()}
 
         {/* Modal: Official F1 Results Details */}
         {viewingOfficialResultsRaceId && (() => {
