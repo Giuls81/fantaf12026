@@ -1079,7 +1079,7 @@ const App: React.FC = () => {
                       </div>
                     ) : sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
-                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 py-2 border-b border-slate-800">
+                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 py-3 border-b border-slate-800 items-center">
                           <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
                           <div className={hasTabPoints ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
                           {hasTabPoints && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
