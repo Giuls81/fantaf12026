@@ -242,7 +242,10 @@ const App: React.FC = () => {
       setLoadingStandings(true);
       getLeagueStandings(data.user.leagueId)
         .then(setStandings)
-        .catch(e => console.error("Failed to load standings", e))
+        .catch(e => {
+          console.error("Failed to load standings", e);
+          alert(`Debug Error: ${e.message}`);
+        })
         .finally(() => setLoadingStandings(false));
     }
   }, [activeTab, data?.user?.leagueId]);
