@@ -266,7 +266,10 @@ const App: React.FC = () => {
        setLoadingResults(true);
        getRaceResults(data.user.leagueId, selectedRaceId)
         .then(setRaceResults)
-        .catch(e => console.error("Failed to load results", e))
+        .catch(e => {
+          console.error("Failed to load results", e);
+          alert(`Debug RaceResults Error: ${e.message}`);
+        })
         .finally(() => setLoadingResults(false));
     }
   }, [selectedRaceId, data?.user?.leagueId]);
