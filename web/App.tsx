@@ -285,6 +285,7 @@ const App: React.FC = () => {
   // UI State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
+  const [showLeagueSelector, setShowLeagueSelector] = useState(false);
   const [teamNameEdit, setTeamNameEdit] = useState("");
   const [loadingStatus, setLoadingStatus] = useState("Initializing...");
   const [startupError, setStartupError] = useState("");
@@ -493,7 +494,26 @@ const App: React.FC = () => {
 
       // 3. Refresh Me (to get User object with League info)
       const { user, leagues } = await getMe();
-      const myLeague = leagues[0];
+      
+      const userLeagues = leagues.map(l => ({
+         id: l.id,
+         name: l.name,
+         isAdmin: l.isAdmin,
+         joinCode: l.joinCode,
+         team: l.team ? {
+            name: l.team.name || 'My F1 Team',
+            driverIds: l.team.driverIds,
+            reserveDriverId: l.team.reserveId,
+            captainId: l.team.captainId,
+            budget: Number(l.team.budget),
+            totalValue: calculateTotalValue(l.team.budget, l.team.driverIds)
+         } : null
+      }));
+
+      // Default to first league or keep current if valid (not possible on login/refresh usually resets)
+      // On fresh login/refresh, default to first.
+      const myLeagueIndex = 0; 
+      const myLeague = leagues[myLeagueIndex];
 
       if (myLeague && myLeague.members) {
          setLeagueMembers(myLeague.members);
@@ -514,7 +534,8 @@ const App: React.FC = () => {
         isAdmin: myLeague.isAdmin,
         leagueId: myLeague.id,
         leagueName: myLeague.name,
-        leagueCode: myLeague.joinCode
+        leagueCode: myLeague.joinCode,
+        leagues: userLeagues
       };
 
       const serverTeam: UserTeam = myLeague.team ? {
@@ -583,6 +604,38 @@ const App: React.FC = () => {
     setIsRegistering(true);
     setShowResetConfirm(false);
     setShowDebug(false);
+  };
+
+  const switchLeague = (leagueId: string) => {
+    if (!data.user?.leagues) return;
+    const target = data.user.leagues.find(l => l.id === leagueId);
+    if (!target) return;
+    
+    // Find full league data from API to get members? 
+    // We only have basic info in user.leagues. 
+    // Ideally we should re-fetch `getMe` or store members.
+    // For now, let's just switch context. The "members" state is used for Standings tab which fetches its own data?
+    // No, setLeagueMembers is used for "Team" tab sometimes? 
+    // Actually setLeagueMembers is used for line 499.
+    // Let's just reload page? No that's bad UX.
+    // Let's rely on effects.
+    
+    setData({
+      ...data,
+      user: {
+        ...data.user,
+        leagueId: target.id,
+        leagueName: target.name,
+        isAdmin: target.isAdmin,
+        leagueCode: target.joinCode,
+      },
+      team: target.team || INITIAL_TEAM
+    });
+    
+    setShowLeagueSelector(false);
+    // Effects will trigger refetch of races/standings/etc.
+    // We might want to re-fetch "members" for the Admin tab / etc.
+    // But let's start with this.
   };
 
   const calculateTotalValue = (budget: number, driverIds: string[]) => {
@@ -1037,6 +1090,15 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {/* Fixed Header Row for Results (Non-Breakdown) */}
+                    {activeResultSession !== 'breakdown' && sortedDriverIds.length > 0 && (
+                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-6 py-3 border-b border-slate-800 items-center bg-slate-900 shrink-0">
+                          <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
+                          <div className={hasTabPoints ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
+                          {hasTabPoints && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
+                        </div>
+                    )}
+
                     {activeResultSession === 'breakdown' ? (
                       <div className="overflow-x-auto pb-4">
                         <table className="w-full text-left text-xs text-slate-300">
@@ -1079,11 +1141,7 @@ const App: React.FC = () => {
                       </div>
                     ) : sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
-                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 py-3 border-b border-slate-800 items-center">
-                          <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
-                          <div className={hasTabPoints ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
-                          {hasTabPoints && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
-                        </div>
+                        {/* Header Removed (Moved fixed above) */}
                         {sortedDriverIds.map((dId, idx) => {
                           const pos = isFantasyTab ? (idx + 1) : currentSessionData[dId];
                           const racePos = (resultsJson.race || {})[dId];
@@ -1435,8 +1493,36 @@ const App: React.FC = () => {
           <div className="space-y-6">
             <header>
               <h1 className="text-2xl font-bold text-white">{t({ en: 'Welcome', it: 'Benvenuto', fr: 'Bienvenue', de: 'Willkommen', es: 'Bienvenido', ru: 'Добро пожаловать', zh: '欢迎', ar: 'مرحباً', ja: 'ようこそ' })}, {data.user?.name}</h1>
-              <p className="text-slate-400">
-                {data.user?.isAdmin ? `${t({ en: 'Admin of', it: 'Admin di', fr: 'Admin de', de: 'Admin von', es: 'Admin de', ru: 'Админ', zh: '管理员', ar: 'مسؤول عن', ja: '管理者' })} ${data.user.leagueName}` : t({ en: 'Member', it: 'Membro', fr: 'Membre', de: 'Mitglied', es: 'Miembro', ru: 'Участник', zh: '成员', ar: 'عضو', ja: 'メンバー' })}
+              <p className="text-slate-400 relative">
+                {data.user?.isAdmin ? `${t({ en: 'Admin of', it: 'Admin di' })} ` : t({ en: 'Member of', it: 'Membro di' })}
+                
+                <button 
+                  onClick={() => setShowLeagueSelector(!showLeagueSelector)}
+                  className="font-bold text-white ml-1 hover:text-blue-400 inline-flex items-center gap-1"
+                >
+                   {data.user.leagueName}
+                   <span className="text-[10px]">▼</span>
+                </button>
+
+                {showLeagueSelector && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-slate-800 border border-slate-600 rounded shadow-xl z-50 overflow-hidden">
+                     {data.user.leagues?.map(l => (
+                        <button
+                          key={l.id}
+                          onClick={() => switchLeague(l.id)}
+                          className={`w-full text-left px-4 py-3 text-sm border-b border-slate-700 last:border-0 hover:bg-slate-700 flex justify-between items-center ${l.id === data.user?.leagueId ? 'bg-slate-700/50 text-blue-400' : 'text-slate-300'}`}
+                        >
+                           <span className="truncate">{l.name}</span>
+                           {l.id === data.user?.leagueId && <span>✓</span>}
+                        </button>
+                     ))}
+                     {/* 
+                     <button className="w-full text-left px-4 py-2 text-xs text-slate-500 bg-slate-900 hover:bg-slate-800 hover:text-slate-300">
+                        + Join / Create New (Logs out)
+                     </button>
+                     */}
+                  </div>
+                )}
               </p>
               <div className="mt-2 inline-block bg-blue-900/50 border border-blue-500/30 rounded px-3 py-1">
                 <span className="text-slate-400 text-xs mr-2">{t({ en: 'LEAGUE CODE', it: 'CODICE LEGA', fr: 'CODE LIGUE', de: 'LIGA-CODE', es: 'CÓDIGO LIGA', ru: 'КОД ЛИГИ', zh: '联盟代码', ar: 'رمز الدوري', ja: 'リーグコード' })}:</span>

@@ -378,7 +378,7 @@ app.get("/leagues/:id/standings", requireUser, async (c) => {
 app.get("/leagues/:leagueId/results/:raceId", requireUser, async (c) => {
   const { leagueId, raceId } = c.req.param();
   const results = await sql`
-    SELECT tr.*, u."displayName" as "userName"
+    SELECT tr.*, t."userId", u."displayName" as "userName"
     FROM "TeamResult" tr
     JOIN "Team" t ON tr."teamId" = t.id
     JOIN "User" u ON t."userId" = u.id

@@ -102,6 +102,13 @@ export interface User {
   leagueId: string;
   leagueName?: string;
   leagueCode: string;
+  leagues?: {
+    id: string;
+    name: string;
+    isAdmin: boolean;
+    joinCode: string;
+    team: UserTeam | null;
+  }[];
 }
 
 export interface AppData {
