@@ -394,11 +394,20 @@ const App: React.FC = () => {
     // if (races.length === 0) return; // Wait for API -> This blocks everything if API fails!
     
     if (data) return; // Already loaded
+    
+    // CRITICAL: Check if we have a token. If not, ignore stored data to force login.
+    const token = localStorage.getItem('fantaF1AuthToken');
+    if (!token) {
+       console.warn("No token found. Ignoring stored fantaF1Data to force login.");
+       const freshData = { ...INITIAL_DATA, currentRaceIndex: getNextRaceIndex(races) };
+       setData(freshData);
+       return;
+    }
 
     const storedData = localStorage.getItem('fantaF1Data');
     if (storedData) {
-      try {
-        const parsed = JSON.parse(storedData);
+       try {
+         const parsed = JSON.parse(storedData);
         // Robustness checks
         if (typeof parsed.currentRaceIndex !== 'number' || parsed.currentRaceIndex < 0) {
           parsed.currentRaceIndex = getNextRaceIndex(races);
