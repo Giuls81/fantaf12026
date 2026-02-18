@@ -935,7 +935,9 @@ const App: React.FC = () => {
           const tabPointsMap = isFantasyTab ? driverPointsMap : isRaceTab ? driverRacePtsMap : isQualiTab ? driverQualiPtsMap : {};
           const hasTabPoints = Object.keys(tabPointsMap).length > 0;
           
-          const currentSessionData = isFantasyTab ? (resultsJson.race || {}) : (resultsJson[activeResultSession] || {});
+          const currentSessionData = isFantasyTab ? (resultsJson.race || {}) 
+            : (activeResultSession === 'breakdown') ? (resultsJson.driverBreakdown || {})
+            : (resultsJson[activeResultSession] || {});
           // Sort: if we have tab points, sort by those; otherwise by position
           const sortedDriverIds = (isFantasyTab && hasTabPoints)
             ? Object.keys(tabPointsMap).sort((a,b) => (tabPointsMap[b] || 0) - (tabPointsMap[a] || 0))
