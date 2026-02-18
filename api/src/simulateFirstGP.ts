@@ -161,6 +161,11 @@ function computeBaseDriverPoints(
   const raceFinal = rawRace > 0 ? rawRace * mult : rawRace;
   const qualiFinal = rawQuali > 0 ? rawQuali * mult : rawQuali;
 
+  if (driverId === 'ant') {
+    // console.log(`DEBUG ANT: rawRace=${rawRace}, rawQuali=${rawQuali}, mult=${mult}`);
+    // console.log(`DEBUG ANT: raceFinal=${raceFinal}, qualiFinal=${qualiFinal}`);
+  }
+
   return {
     racePosition, overtakes, teammate, dnf, lastPlace,
     qualiPole, qualiSession,

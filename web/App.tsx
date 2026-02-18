@@ -228,7 +228,7 @@ const App: React.FC = () => {
   const [loadingResults, setLoadingResults] = useState(false);
   const [viewingResult, setViewingResult] = useState<any | null>(null);
   const [viewingOfficialResultsRaceId, setViewingOfficialResultsRaceId] = useState<string | null>(null);
-  const [activeResultSession, setActiveResultSession] = useState<'quali' | 'race' | 'sprintQuali' | 'sprint' | 'fantasyPts'>('race');
+  const [activeResultSession, setActiveResultSession] = useState<'quali' | 'race' | 'sprintQuali' | 'sprint' | 'fantasyPts' | 'breakdown'>('race');
 
   // Fetch Standings
   useEffect(() => {
@@ -899,10 +899,8 @@ const App: React.FC = () => {
                         })}
                       </div>
                     ) : (
-                      <div className="py-12 text-center text-slate-500">
-                        <div className="text-4xl mb-3 opacity-50">🔒</div>
-                        <p className="font-medium">{t({ en: 'Lineup not visible yet', it: 'Formazione non ancora visibile' })}</p>
-                        <p className="text-[10px] mt-1 text-slate-600">{t({ en: 'Results will be visible after the race is completed.', it: 'I risultati saranno visibili al termine della gara.' })}</p>
+                      <div className="text-center p-8 text-slate-500">
+                        {t({ en: 'No results available yet', it: 'Nessun risultato disponibile' })}
                       </div>
                     )}
                   </div>
@@ -997,10 +995,56 @@ const App: React.FC = () => {
                       >
                         ⭐ {t({ en: 'Total', it: 'Totale' })}
                       </button>
+                      <button 
+                        onClick={() => setActiveResultSession('breakdown')}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'breakdown' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                      >
+                        📊 {t({ en: 'Breakdown', it: 'Dettagli' })}
+                      </button>
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {sortedDriverIds.length > 0 ? (
+                    {activeResultSession === 'breakdown' ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[10px] text-slate-300">
+                          <thead>
+                            <tr className="border-b border-slate-700 text-slate-500 uppercase">
+                              <th className="p-2 whitespace-nowrap">Pos</th>
+                              <th className="p-2 whitespace-nowrap">Driver</th>
+                              <th className="p-2 text-center">Pos.Pts</th>
+                              <th className="p-2 text-center">Overt</th>
+                              <th className="p-2 text-center">Mate</th>
+                              <th className="p-2 text-center">DNF</th>
+                              <th className="p-2 text-center">Pole</th>
+                              <th className="p-2 text-center">Sess</th>
+                              <th className="p-2 text-center">×Mult</th>
+                              <th className="p-2 text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedDriverIds.map((dId, idx) => {
+                               const bd = (resultsJson.driverBreakdown || {})[dId] || {};
+                               const driver = fetchedDrivers.find(d => d.id === dId);
+                               const f = (n: number) => n > 0 ? `+${n}` : n === 0 ? '-' : `${n}`;
+                               return (
+                                 <tr key={dId} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                                   <td className="p-2">{idx+1}</td>
+                                   <td className="p-2 font-bold text-white whitespace-nowrap">{driver?.name || dId}</td>
+                                   <td className="p-2 text-center text-emerald-400">{f(bd.racePosition)}</td>
+                                   <td className="p-2 text-center">{f(bd.overtakes)}</td>
+                                   <td className="p-2 text-center">{f(bd.teammate)}</td>
+                                   <td className="p-2 text-center text-red-400">{f(bd.dnf)}</td>
+                                   <td className="p-2 text-center text-purple-400">{f(bd.qualiPole)}</td>
+                                   <td className="p-2 text-center text-purple-400">{f(bd.qualiSession)}</td>
+                                   <td className="p-2 text-center text-amber-400">×{bd.constructorMult || 1}</td>
+                                   <td className="p-2 text-right font-bold text-white">{bd.total}</td>
+                                 </tr>
+                               );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
                         <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
                           <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
