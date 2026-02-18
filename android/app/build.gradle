@@ -4,7 +4,7 @@ android {
     namespace "com.fantaf1.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        versionCode 92
+        versionCode 93
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
