@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
 import { initializeAdMob, showAppOpen, showRewardVideo, showInterstitialWithProbability } from './services/admob';
@@ -97,6 +97,12 @@ type LangCode = 'en' | 'it' | 'fr' | 'de' | 'es' | 'ru' | 'zh' | 'ar' | 'ja';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
+  
+  // Performance Optimization: Calculate latest completed race once
+  const latestCompletedRace = useMemo(() => {
+    return [...races].reverse().find(r => r.isCompleted);
+  }, [races]);
+
   const [isPremium, setIsPremium] = useState(false); // Premium State
   const [data, setData] = useState<AppData | null>(null);
   const [swapCandidate, setSwapCandidate] = useState<Driver | null>(null);
@@ -448,7 +454,7 @@ const App: React.FC = () => {
 
       if (isRegistering) {
          // 1. Register
-         const res = await import("./api").then(m => m.register(username.trim(), password));
+         const res = await import("./api").then(m => m.register(username.trim(), password.trim()));
          authToken = res.authToken;
          localStorage.setItem('fantaF1AuthToken', authToken);
 
@@ -463,7 +469,7 @@ const App: React.FC = () => {
 
       } else {
          // 1. Login
-         const res = await import("./api").then(m => m.login(username.trim(), password));
+         const res = await import("./api").then(m => m.login(username.trim(), password.trim()));
          authToken = res.authToken;
          localStorage.setItem('fantaF1AuthToken', authToken);
          // No need to create/join league, user should already have one. 
@@ -794,7 +800,7 @@ const App: React.FC = () => {
            ) : (
              <div className="divide-y divide-slate-700">
                 {standings.map((s, idx) => {
-                   const completedRace = [...races].reverse().find(r => r.isCompleted);
+                   const completedRace = latestCompletedRace;
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
                    const canClick = !!completedRace;
                    return (
