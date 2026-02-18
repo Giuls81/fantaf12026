@@ -8,6 +8,8 @@ import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
 import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
+import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings } from './services/purchases';
+import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -164,6 +166,23 @@ const App: React.FC = () => {
       } catch (e) { 
         console.error('Initialization failed', e); 
       }
+
+    })();
+
+    // Initialize IAP
+    (async () => {
+        await initializePurchases();
+        const pkg = await getOfferings();
+        if (pkg) {
+           console.log("IAP Package found:", pkg);
+           setAnnualPackage(pkg);
+        }
+        const isPrem = await checkPremiumStatus();
+        if (isPrem) {
+           console.log("User is Premium (RevenueCat)");
+           setIsPremium(true);
+           localStorage.setItem('fantaF1Premium', 'true');
+        }
     })();
 
     return () => {
@@ -225,6 +244,7 @@ const App: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
 
   const [showDebug, setShowDebug] = useState(false);
+  const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
   
   // Standings & History States
   const [standings, setStandings] = useState<any[]>([]);
@@ -1579,16 +1599,45 @@ const App: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                        <div className="bg-yellow-900/30 p-2 rounded text-xs text-yellow-200 mb-2">
-                            {t({ en: 'Watch a short video to get 24 hours of Premium for free!', it: 'Guarda un breve video per avere 24 ore di Premium gratis!' })}
+                        {annualPackage && (
+                          <button
+                            onClick={async () => {
+                               const success = await purchasePackage(annualPackage);
+                               if (success) {
+                                  setIsPremium(true);
+                                  alert(t({ en: "Premium Activated!", it: "Premium Attivato!" }));
+                               }
+                            }}
+                            className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold py-3 px-3 rounded-lg shadow-lg border border-yellow-500/50 transition-all flex items-center justify-center gap-2 text-sm mb-2"
+                          >
+                            <span>💎</span>
+                            {t({ en: `Buy Premium ${annualPackage.product.priceString}/yr`, it: `Acquista Premium ${annualPackage.product.priceString}/anno` })}
+                          </button>
+                        )}
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                           <button
+                             onClick={async () => {
+                                const success = await restorePurchases();
+                                if (success) {
+                                   setIsPremium(true);
+                                   alert(t({ en: "Purchases Restored", it: "Acquisti Ripristinati" }));
+                                } else {
+                                   alert(t({ en: "No active subscription found", it: "Nessun abbonamento attivo trovato" }));
+                                }
+                             }}
+                             className="bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 py-2 rounded border border-slate-600"
+                           >
+                             {t({ en: "Restore Purchases", it: "Ripristina Acquisti" })}
+                           </button>
+                           
+                           <button
+                             onClick={handleWatchAdForPremium}
+                             className="bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 py-2 rounded border border-slate-600 flex items-center justify-center gap-1"
+                           >
+                             <span>🎬</span> {t({ en: "Watch Ad (24h)", it: "Guarda Video (24h)" })}
+                           </button>
                         </div>
-                        <button
-                          onClick={handleWatchAdForPremium}
-                          className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold py-2 px-3 rounded-lg shadow-lg border border-yellow-500/50 transition-all flex items-center justify-center gap-2 text-sm"
-                        >
-                          <span>🎬</span>
-                          {t({ en: 'Watch Video (24h Free Premium)', it: 'Guarda Video (24h Premium Gratis)' })}
-                        </button>
                     </div>
                   )}
                 </div>
