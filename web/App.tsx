@@ -942,8 +942,18 @@ const App: React.FC = () => {
           const sortedDriverIds = (isFantasyTab && hasTabPoints)
             ? Object.keys(tabPointsMap).sort((a,b) => (tabPointsMap[b] || 0) - (tabPointsMap[a] || 0))
             : Object.keys(currentSessionData).sort((a,b) => {
-                const pA = currentSessionData[a] || 999; 
-                const pB = currentSessionData[b] || 999;
+                const valA = currentSessionData[a];
+                const valB = currentSessionData[b];
+
+                if (activeResultSession === 'breakdown') {
+                   // Sort by total points DESCENDING
+                   const tA = valA?.total || 0;
+                   const tB = valB?.total || 0;
+                   return tB - tA;
+                }
+
+                const pA = (typeof valA === 'number') ? valA : 999; 
+                const pB = (typeof valB === 'number') ? valB : 999;
                 // If pos is 0 (DNF), treat as very large number to sort at bottom
                 const vA = pA === 0 ? 999 : pA;
                 const vB = pB === 0 ? 999 : pB;
