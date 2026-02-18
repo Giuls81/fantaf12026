@@ -359,7 +359,7 @@ const App: React.FC = () => {
 
           // Re-sync team data from backend if available
           const serverTeam: UserTeam = firstLeague.team ? {
-             name: 'My F1 Team',
+             name: firstLeague.team.name || 'My F1 Team',
              driverIds: firstLeague.team.driverIds,
              budget: firstLeague.team.budget,
              captainId: firstLeague.team.captainId,
