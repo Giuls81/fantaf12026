@@ -98,11 +98,6 @@ type LangCode = 'en' | 'it' | 'fr' | 'de' | 'es' | 'ru' | 'zh' | 'ar' | 'ja';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
   
-  // Performance Optimization: Calculate latest completed race once
-  const latestCompletedRace = useMemo(() => {
-    return [...races].reverse().find(r => r.isCompleted);
-  }, [races]);
-
   const [isPremium, setIsPremium] = useState(false); // Premium State
   const [data, setData] = useState<AppData | null>(null);
   const [swapCandidate, setSwapCandidate] = useState<Driver | null>(null);
@@ -112,6 +107,11 @@ const App: React.FC = () => {
   const [leagueMembers, setLeagueMembers] = useState<any[]>([]); // Added for Admin
   const [adminUpdates, setAdminUpdates] = useState<Record<string, { price: number; points: number }>>({});
   
+  // Performance Optimization: Calculate latest completed race once
+  const latestCompletedRace = useMemo(() => {
+    return [...races].reverse().find(r => r.isCompleted);
+  }, [races]);
+
   // Use constructors from rules (editable) fallback to constant if needed
   const activeConstructors = data?.rules?.constructors || CONSTRUCTORS;
 

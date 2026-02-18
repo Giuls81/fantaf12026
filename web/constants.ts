@@ -1,6 +1,6 @@
 import { Constructor, Driver, Race, ScoringRules } from './types';
 
-export const APP_VERSION = "95"; // Build number for display
+export const APP_VERSION = "96"; // Build number for display
 export const DEFAULT_SCORING_RULES: ScoringRules = {
   // Race Classifica (padded to 22 positions)
   racePositionPoints: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
