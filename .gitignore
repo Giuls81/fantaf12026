@@ -27,3 +27,10 @@ dist-ssr
 
 .vite/
 
+
+# Local Simulation Logs
+api/breakdown.txt
+api/breakdown_v*.txt
+
+# Build Artifacts
+eas.json
