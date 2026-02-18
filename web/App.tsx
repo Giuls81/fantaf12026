@@ -794,7 +794,7 @@ const App: React.FC = () => {
            ) : (
              <div className="divide-y divide-slate-700">
                 {standings.map((s, idx) => {
-                   const completedRace = races.find(r => r.isCompleted);
+                   const completedRace = [...races].reverse().find(r => r.isCompleted);
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
                    const canClick = !!completedRace;
                    return (
@@ -1007,20 +1007,20 @@ const App: React.FC = () => {
 
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {activeResultSession === 'breakdown' ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-[10px] text-slate-300">
+                      <div className="overflow-x-auto pb-4">
+                        <table className="w-full text-left text-xs text-slate-300">
                           <thead>
-                            <tr className="border-b border-slate-700 text-slate-500 uppercase">
-                              <th className="p-2 whitespace-nowrap">Pos</th>
-                              <th className="p-2 whitespace-nowrap">Driver</th>
-                              <th className="p-2 text-center">Pos.Pts</th>
-                              <th className="p-2 text-center">Overt</th>
-                              <th className="p-2 text-center">Mate</th>
-                              <th className="p-2 text-center">DNF</th>
-                              <th className="p-2 text-center">Pole</th>
-                              <th className="p-2 text-center">Sess</th>
-                              <th className="p-2 text-center">×Mult</th>
-                              <th className="p-2 text-right">Total</th>
+                            <tr className="border-b border-slate-700 text-slate-500 uppercase leading-normal">
+                              <th className="p-3 whitespace-nowrap">Pos</th>
+                              <th className="p-3 whitespace-nowrap">Driver</th>
+                              <th className="p-3 text-center">Pos.Pts</th>
+                              <th className="p-3 text-center">Overt</th>
+                              <th className="p-3 text-center">Mate</th>
+                              <th className="p-3 text-center">DNF</th>
+                              <th className="p-3 text-center">Pole</th>
+                              <th className="p-3 text-center">Sess</th>
+                              <th className="p-3 text-center">×Mult</th>
+                              <th className="p-3 text-right">Total</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1048,7 +1048,7 @@ const App: React.FC = () => {
                       </div>
                     ) : sortedDriverIds.length > 0 ? (
                       <div className="space-y-1">
-                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 pb-1">
+                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-2 py-2 border-b border-slate-800">
                           <div className="col-span-2 text-center">{isFantasyTab ? '#' : 'Pos'}</div>
                           <div className={hasTabPoints ? 'col-span-7' : 'col-span-10'}>{t({ en: 'Driver', it: 'Pilota' })}</div>
                           {hasTabPoints && <div className="col-span-3 text-right">{t({ en: 'Pts', it: 'Punti' })}</div>}
