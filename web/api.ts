@@ -26,6 +26,28 @@ export async function apiGet<T>(path: string): Promise<T> {
       signal: controller.signal,
     });
     clearTimeout(id);
+
+    // If 401 and we sent a token, it might be expired/bad. 
+    // Retry once without token (handles public endpoints like /races).
+    if (res.status === 401 && token) {
+       console.warn("Got 401 with token. Clearing token and retrying...");
+       localStorage.removeItem("fantaF1AuthToken");
+       // Also clear fantaF1Data to ensure clean state
+       localStorage.removeItem("fantaF1Data");
+       
+       // Retry without auth header
+       const retryRes = await fetch(`${API_URL}${path}`, {
+         method: "GET",
+         headers: { "Content-Type": "application/json" },
+       });
+       
+       if (!retryRes.ok) {
+         const text = await retryRes.text().catch(() => "");
+         throw new Error(`GET ${path} failed (retry): ${retryRes.status} ${text}`);
+       }
+       return (await retryRes.json()) as T;
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`GET ${path} failed: ${res.status} ${text}`);
@@ -55,6 +77,16 @@ export async function apiPost<T>(path: string, body: any): Promise<T> {
       signal: controller.signal,
     });
     clearTimeout(id);
+
+    if (res.status === 401 && token) {
+       console.warn("Got 401 on POST. Clearing token.");
+       localStorage.removeItem("fantaF1AuthToken");
+       localStorage.removeItem("fantaF1Data");
+       // Do NOT retry POST automatically as it might require auth.
+       // Just let it fail, but token is gone so next time user starts fresh.
+       throw new Error(`POST ${path} failed: 401 Invalid Token (Logged out)`);
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`POST ${path} failed: ${res.status} ${text}`);
