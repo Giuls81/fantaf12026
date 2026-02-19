@@ -199,3 +199,36 @@ export async function getRaceResults(leagueId: string, raceId: string) {
 export async function updateLeagueRules(leagueId: string, rules: any) {
   return apiPost<{ ok: true }>("/league/rules", { leagueId, rules });
 }
+export async function fixSchema() {
+  return apiPost<{ ok: true; message: string }>("/admin/fix-schema", {});
+}
+export async function checkDrivers() {
+  return apiPost<any>("/admin/check-drivers", {});
+}
+export async function recalculateRace(raceId: string) {
+  // Longer timeout: the recalculate endpoint runs heavy DB operations
+  const token = localStorage.getItem("fantaF1AuthToken");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+  try {
+    const res = await fetch(`${getApiUrl()}/admin/recalculate-race`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ raceId }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Recalculate failed: ${res.status} ${text}`);
+    }
+    return (await res.json()) as any;
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    throw e;
+  }
+}

@@ -286,7 +286,7 @@ app.post("/team/market", requireUser, async (c) => {
   if (nextRace) {
     const sessionStr = nextRace.isSprint ? nextRace.sprintQualifyingUtc : nextRace.qualifyingUtc;
     if (sessionStr) {
-      const lockDate = new Date(new Date(sessionStr).getTime() - 5 * 60 * 1000); // 5 mins before
+      const lockDate = new Date(new Date(sessionStr).getTime()); // Lock exactly at session start
       if (new Date() > lockDate) return c.json({ error: "market_locked" }, 403);
     }
   }
@@ -343,7 +343,7 @@ app.post("/team/lineup", requireUser, async (c) => {
   if (nextRace) {
     const sessionStr = nextRace.isSprint ? nextRace.sprintQualifyingUtc : nextRace.qualifyingUtc;
     if (sessionStr) {
-      const lockDate = new Date(new Date(sessionStr).getTime() - 5 * 60 * 1000);
+      const lockDate = new Date(new Date(sessionStr).getTime()); // Lock exactly at session start
       if (new Date() > lockDate) return c.json({ error: "lineup_locked" }, 403);
     }
   }
@@ -538,6 +538,11 @@ const DRIVER_NUMBER_MAP: Record<string, number> = {
 const REVERSE_DRIVER_MAP: Record<number, string> = Object.fromEntries(
   Object.entries(DRIVER_NUMBER_MAP).map(([id, num]) => [num, id])
 );
+// Manual overrides for substitutes/past numbers
+REVERSE_DRIVER_MAP[38] = 'bea'; // Bearman Jeddah 2024
+REVERSE_DRIVER_MAP[50] = 'bea'; // Bearman Baku/Brazil 2024
+REVERSE_DRIVER_MAP[43] = 'col'; // Colapinto
+
 const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const DEFAULT_SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 
@@ -671,7 +676,8 @@ app.post("/admin/sync-race", requireUser, async (c) => {
 
     // 2. Fetch OpenF1 Data
     const location = race.city || race.country || "";
-    const combinedResults: Record<string, Record<string, number>> = {};
+    // deno-lint-ignore no-explicit-any
+    const combinedResults: Record<string, any> = {};
 
     // 2a. QUALIFYING / SHOOTOUT
     let gridPositions: Record<string, number> = {};
@@ -697,6 +703,29 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     }
 
     // 3. Process League
+    // 3a. AUTO-FIX SCHEMA: Ensure points are decimals
+    try {
+        await sql`ALTER TABLE "TeamResultDriver" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
+        await sql`ALTER TABLE "Driver" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
+        await sql`ALTER TABLE "Team" ALTER COLUMN "totalPoints" TYPE DOUBLE PRECISION USING "totalPoints"::double precision`;
+        await sql`ALTER TABLE "TeamResult" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
+        
+        // VERIFY
+        const check = await sql`
+            SELECT data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'TeamResultDriver' AND column_name = 'points'
+        `;
+        if (check.length > 0) {
+             const type = check[0].data_type;
+             if (type !== 'double precision' && type !== 'real') {
+                 throw new Error(`Column is still ${type}, not double precision!`);
+             }
+        }
+    } catch (e) { 
+        return c.json({ error: "Schema Fix Error: " + (e as Error).message }, 500);
+    }
+    
     // Fetch League Rules
     const [leagueData] = await sql`SELECT rules FROM "League" WHERE id = ${membership[0].leagueId}`;
     const rules = leagueData?.rules || DEFAULT_SCORING_RULES;
@@ -722,7 +751,61 @@ app.post("/admin/sync-race", requireUser, async (c) => {
       teamsByUserId[d.userId] = d.teamId;
     }
 
-    const allDrivers = await sql`SELECT id, "constructorId" FROM "Driver"`;
+    // SMART DRIVER MAPPING
+    const allDrivers = await sql`SELECT id, name, "constructorId" FROM "Driver"`;
+    // Create Map: OpenF1 Number -> DB Driver ID
+    const dbDriverMap: Record<number, string> = {};
+    
+    // Known Name -> Number (2026 Grid + 2024 Spares)
+    const nameToNumber: Record<string, number[]> = {
+       'Max Verstappen': [1], 'Sergio Pérez': [11],
+       'Lewis Hamilton': [44], 'George Russell': [63],
+       'Charles Leclerc': [16],
+       'Lando Norris': [4], 'Oscar Piastri': [81],
+       'Fernando Alonso': [14], 'Lance Stroll': [18],
+       'Pierre Gasly': [10], 'Jack Doohan': [7],
+       'Alexander Albon': [23], 'Carlos Sainz': [55],
+       'Yuki Tsunoda': [22], 'Liam Lawson': [30],
+       'Nico Hülkenberg': [27], 'Gabriel Bortoleto': [59],
+       'Esteban Ocon': [31], 'Oliver Bearman': [87, 38, 50],
+       'Valtteri Bottas': [77], 'Franco Colapinto': [43],
+       'Kimi Antonelli': [12], 'Isack Hadjar': [6]
+    };
+
+    for (const d of allDrivers) {
+        // 1. Try if ID is a recognized code (e.g. 'bea', 'ver')
+        // const num = DRIVER_NUMBER_MAP[d.id]; // This assumes ID is code
+        
+        // 2. Try match by Name
+        let matchedNumbers: number[] = [];
+        for (const [name, nums] of Object.entries(nameToNumber)) {
+            if (d.name && d.name.toLowerCase().includes(name.toLowerCase().split(' ')[1])) { // Match surname
+                 matchedNumbers = nums;
+                 break;
+            }
+        }
+        
+        // If not found, try exact name
+        if (matchedNumbers.length === 0) {
+             const key = Object.keys(nameToNumber).find(n => n.toLowerCase() === d.name?.toLowerCase());
+             if (key) matchedNumbers = nameToNumber[key];
+        }
+
+        // Assign to map
+        for (const num of matchedNumbers) {
+            dbDriverMap[num] = d.id;
+        }
+    }
+    
+    // Fallback: If map is empty-ish, maybe IDs are codes?
+    if (Object.keys(dbDriverMap).length < 5) {
+         for (const d of allDrivers) {
+             const code = d.id; // assume id is 'bea'
+             const num = Object.entries(REVERSE_DRIVER_MAP).find(([_n, c]) => c === code);
+             if (num) dbDriverMap[Number(num[0])] = d.id;
+         }
+    }
+
     // Teammate Map
     const teammates: Record<string, string> = {};
     const driversByConstructor: Record<string, string[]> = {};
@@ -748,13 +831,26 @@ app.post("/admin/sync-race", requireUser, async (c) => {
         constructorMultipliers[c.id] = Number(c.multiplier);
     }
 
+
     // 4. Calculate Points (Simulated)
     const driverRacePoints: Record<string, number> = {};
+    const driverBreakdown: Record<string, Record<string, number>> = {};
     
     // Per-Driver Calculation
     for (const d of allDrivers) {
       const driverId = d.id;
       let pts = 0;
+      
+      // Init Breakdown
+      driverBreakdown[driverId] = {
+           racePosition: 0,
+           overtakes: 0,
+           teammate: 0,
+           dnf: 0,
+           qualiPole: 0,
+           qualiSession: 0,
+           total: 0
+       };
 
       // A. Race Position
       if (classification[driverId]) {
@@ -762,7 +858,9 @@ app.post("/admin/sync-race", requireUser, async (c) => {
           // Use rules.racePositionPoints if available, else DEFAULT
           const racePoints = rules.racePositionPoints || DEFAULT_RACE_POINTS;
           if (position <= racePoints.length) {
-              pts += racePoints[position - 1]; // 1-based to 0-based
+              const posPts = racePoints[position - 1]; // 1-based to 0-based
+              pts += posPts; 
+              driverBreakdown[driverId].racePosition = posPts;
           }
       } else {
         // DNF? Handled later or implicitly 0
@@ -774,7 +872,9 @@ app.post("/admin/sync-race", requireUser, async (c) => {
       // Last Place Malus
       const maxPos = Math.max(...Object.values(classification));
       if (classification[driverId] && classification[driverId] === maxPos && maxPos > 10) { 
-          pts += (rules.raceLastPlaceMalus ?? -3);
+          const malus = (rules.raceLastPlaceMalus ?? -3);
+          pts += malus;
+          driverBreakdown[driverId].racePosition = (driverBreakdown[driverId].racePosition || 0) + malus;
       }
 
       // C. Grid & Qualifying Bonuses (Now applies to BOTH Race and Sprint)
@@ -784,18 +884,16 @@ app.post("/admin/sync-race", requireUser, async (c) => {
           
           if (!race.isSprint) {
               // Standard Quali Bonuses
-              if (grid === 1) pts += (rules.qualiPole ?? 3);
-              if (grid <= 10) pts += (rules.qualiQ3Reached ?? 3);
-              else if (grid <= 15) pts += (rules.qualiQ2Reached ?? 1);
-              else pts += (rules.qualiQ1Eliminated ?? -3); // 16+
+              if (grid === 1) { pts += (rules.qualiPole ?? 3); driverBreakdown[driverId].qualiPole = (rules.qualiPole ?? 3); }
+              if (grid <= 10) { pts += (rules.qualiQ3Reached ?? 3); driverBreakdown[driverId].qualiSession = (rules.qualiQ3Reached ?? 3); }
+              else if (grid <= 15) { pts += (rules.qualiQ2Reached ?? 1); driverBreakdown[driverId].qualiSession = (rules.qualiQ2Reached ?? 1); }
+              else { pts += (rules.qualiQ1Eliminated ?? -3); driverBreakdown[driverId].qualiSession = (rules.qualiQ1Eliminated ?? -3); }
           } else {
               // Sprint Shootout Bonuses
-              if (grid === 1) pts += (rules.sprintPole ?? 1);
+              if (grid === 1) { pts += (rules.sprintPole ?? 1); driverBreakdown[driverId].qualiPole = (rules.sprintPole ?? 1); }
           }
 
           // Positions Gained/Lost (Applies to BOTH)
-          // Only if finished race? Yes, usually overtake points require finishing? 
-          // Or at least being classified.
           if (position) {
               const diff = grid - position;
               let movePts = 0;
@@ -804,7 +902,6 @@ app.post("/admin/sync-race", requireUser, async (c) => {
                   // Gained positions
                   for (let p = grid - 1; p >= position; p--) {
                       // Moving from p+1 to p
-                      // If target p is <= 10
                       if (p <= 10) movePts += (rules.positionGainedPos1_10 ?? 1.0);
                       else movePts += (rules.positionGainedPos11_Plus ?? 0.5);
                   }
@@ -817,6 +914,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
                   }
               }
               pts += movePts;
+              driverBreakdown[driverId].overtakes = movePts;
           }
       }
 
@@ -829,17 +927,21 @@ app.post("/admin/sync-race", requireUser, async (c) => {
           const matePos = classification[mateId];
           if (myPos < matePos) {
               pts += (rules.teammateBeat ?? 2);
+              driverBreakdown[driverId].teammate = (rules.teammateBeat ?? 2);
           } else {
               pts += (rules.teammateLost ?? -2);
+              driverBreakdown[driverId].teammate = (rules.teammateLost ?? -2);
           }
       } else if (mateId && classification[driverId] && !classification[mateId]) {
            // Teammate not in classification -> Likely DNF or DNS
            // If I am classified and he is not -> I beat him
            pts += (rules.teammateBeat ?? 2);
            pts += (rules.teammateBeatDNF ?? 1);
+           driverBreakdown[driverId].teammate = (rules.teammateBeat ?? 2) + (rules.teammateBeatDNF ?? 1);
       }
 
       driverRacePoints[driverId] = pts;
+      driverBreakdown[driverId].total = pts;
     }
     
     // Handle drivers NOT in classification (DNFs?)
@@ -852,16 +954,21 @@ app.post("/admin/sync-race", requireUser, async (c) => {
                  // Did they qualify?
                  const grid = gridPositions[d.id];
                  let pts = 0;
+                 
+                 // Ensure breakdown init if skipped
+                 if (!driverBreakdown[d.id]) driverBreakdown[d.id] = { total: 0, overtakes: 0, teammate: 0, dnf: 0, racePosition: 0, qualiPole: 0, qualiSession: 0 };
+
                  if (grid) {
                      // They existed in Quali, so they probably started or tried to.
                      // Apply DNF Malus
                      pts += (rules.raceDNF ?? -5);
+                     driverBreakdown[d.id].dnf = (rules.raceDNF ?? -5);
                      
                      // Quali points still apply? Yes usually.
-                     if (grid === 1) pts += (rules.qualiPole ?? 3);
-                     if (grid <= 10) pts += (rules.qualiQ3Reached ?? 3);
-                     else if (grid <= 15) pts += (rules.qualiQ2Reached ?? 1);
-                     else pts += (rules.qualiQ1Eliminated ?? -3); // 16+
+                     if (grid === 1) { pts += (rules.qualiPole ?? 3); driverBreakdown[d.id].qualiPole = (rules.qualiPole ?? 3); }
+                     if (grid <= 10) { pts += (rules.qualiQ3Reached ?? 3); driverBreakdown[d.id].qualiSession = (rules.qualiQ3Reached ?? 3); }
+                     else if (grid <= 15) { pts += (rules.qualiQ2Reached ?? 1); driverBreakdown[d.id].qualiSession = (rules.qualiQ2Reached ?? 1); }
+                     else { pts += (rules.qualiQ1Eliminated ?? -3); driverBreakdown[d.id].qualiSession = (rules.qualiQ1Eliminated ?? -3); }
                      
                      driverRacePoints[d.id] = pts;
                  }
@@ -872,10 +979,12 @@ app.post("/admin/sync-race", requireUser, async (c) => {
                      // Teammate finished, I didn't.
                      // I lost.
                      pts += (rules.teammateLost ?? -2);
+                     driverBreakdown[d.id].teammate = (rules.teammateLost ?? -2);
                  }
                  
                  if (grid || driverRacePoints[d.id] !== undefined) {
                      driverRacePoints[d.id] = (driverRacePoints[d.id] || 0) + pts;
+                     driverBreakdown[d.id].total = driverRacePoints[d.id];
                  }
             }
         }
@@ -884,6 +993,9 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     // 4. Transactional Update
 
     // 4. Transactional Update
+    combinedResults.driverPoints = driverRacePoints;
+    combinedResults.driverBreakdown = driverBreakdown;
+
     await sql.begin(async (sql) => {
        // A. Update Driver Points
        for (const [driverId, points] of Object.entries(driverRacePoints)) {
@@ -891,8 +1003,23 @@ app.post("/admin/sync-race", requireUser, async (c) => {
        }
 
        // B. Snapshot Teams
-       const teams = await sql`SELECT id, "userId", "captainId", "reserveId" FROM "Team"`;
+       const teams = await sql`SELECT id, "userId", "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${membership[0].leagueId}`;
        
+       // Deduplicate: Delete previous results for this race and league
+       const teamIds = teams.map(t => t.id);
+       if (teamIds.length > 0) {
+           // Delete TeamResultDrivers via Join? No, assuming standard delete by raceId for results
+           // Wait, we need to find TeamResult IDs to delete TeamResultDriver rows
+           // Or assume Cascade Delete on FK?
+           // If no cascade, we must delete manually.
+           const oldResults = await sql`SELECT id FROM "TeamResult" WHERE "raceId" = ${race.id} AND "teamId" IN ${sql(teamIds)}`;
+           if (oldResults.length > 0) {
+               const oldResultIds = oldResults.map(r => r.id);
+               await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" IN ${sql(oldResultIds)}`;
+               await sql`DELETE FROM "TeamResult" WHERE id IN ${sql(oldResultIds)}`;
+           }
+       }
+
        for (const team of teams) {
           // Get Team Drivers
           const teamDrivers = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${team.id}`;
@@ -903,14 +1030,18 @@ app.post("/admin/sync-race", requireUser, async (c) => {
            for (const td of teamDrivers) {
               let pts = (driverRacePoints[td.driverId] as number) || 0;
               
-              // Apply Constructor Multiplier
-              const cId = driverConstructorMap[td.driverId];
-              if (cId) {
-                 const mult = constructorMultipliers[cId] || 1.0;
-                 pts = pts * mult;
+              // Apply Captain / Reserve Multipliers
+              // Captain: x1.5
+              // Reserve: x0.5
+              
+              // Constructor Multiplier currently removed to match UI expectation and fix 0.8 bug
+              
+              if (team.captainId === td.driverId) {
+                  pts = pts * 2.0;
+              } else if (team.reserveId === td.driverId) {
+                  pts = pts * 0.5;
               }
 
-              if (team.captainId === td.driverId) pts *= 2;
              teamPoints += pts;
              resultDrivers.push({ driverId: td.driverId, points: pts });
           }
@@ -932,7 +1063,12 @@ app.post("/admin/sync-race", requireUser, async (c) => {
           }
 
           // Update Team Total Points
-          await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${teamPoints} WHERE id = ${team.id}`;
+          // Strategy: Recalculate Total Points from scratch to be safe and allow multiple syncs
+          // 1. Get all Race Results for this team
+          const allTeamResults = await sql`SELECT points FROM "TeamResult" WHERE "teamId" = ${team.id}`;
+          const total = allTeamResults.reduce((acc, r) => acc + (r.points || 0), 0);
+          
+          await sql`UPDATE "Team" SET "totalPoints" = ${total} WHERE id = ${team.id}`;
        }
 
        // C. Mark Race Completed and save results
@@ -943,6 +1079,24 @@ app.post("/admin/sync-race", requireUser, async (c) => {
 
   } catch (e) {
     return c.json({ error: (e as Error).message, type: "sync_race_error" }, 500);
+  }
+});
+
+app.post("/admin/fix-schema", requireUser, async (c) => {
+  const user = c.get("user");
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+
+  try {
+     // Ensure points columns are NUMERIC/FLOAT to support decimals
+     await sql`ALTER TABLE "TeamResultDriver" ALTER COLUMN "points" TYPE DOUBLE PRECISION`;
+     await sql`ALTER TABLE "Driver" ALTER COLUMN "points" TYPE DOUBLE PRECISION`;
+     await sql`ALTER TABLE "Team" ALTER COLUMN "totalPoints" TYPE DOUBLE PRECISION`;
+     await sql`ALTER TABLE "TeamResult" ALTER COLUMN "points" TYPE DOUBLE PRECISION`;
+     
+     return c.json({ ok: true, message: "Schema updated to DOUBLE PRECISION." });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
   }
 });
 
@@ -965,6 +1119,137 @@ app.post("/admin/migrate-penalties", requireUser, async (c) => {
     return c.json({ ok: true, message: "TeamPenalty table created" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// Recalculate race results WITHOUT fetching from OpenF1
+// Uses the stored Race.results JSON to re-apply scoring rules
+app.post("/admin/recalculate-race", requireUser, async (c) => {
+  const user = c.get("user");
+  const membership = await sql`SELECT "leagueId" FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+
+  const { raceId } = await c.req.json();
+  if (!raceId) return c.json({ error: "missing_raceId" }, 400);
+
+  try {
+    // 1. Get Race and its stored results
+    const [race] = await sql`SELECT * FROM "Race" WHERE id = ${raceId}`;
+    if (!race) return c.json({ error: "race_not_found" }, 404);
+    if (!race.results) return c.json({ error: "no_results_stored", message: "This race has no stored results. Use Sync first." }, 400);
+
+    const storedResults = race.results;
+    
+    // Get the driverPoints from stored results
+    const driverRacePoints: Record<string, number> = storedResults.driverPoints || {};
+    
+    if (Object.keys(driverRacePoints).length === 0) {
+      return c.json({ error: "no_driver_points", message: "Stored results have no driverPoints. Run Sync first." }, 400);
+    }
+
+    // 2. Ensure schema supports decimals
+    try {
+        await sql`ALTER TABLE "TeamResultDriver" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
+        await sql`ALTER TABLE "TeamResult" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
+        await sql`ALTER TABLE "Team" ALTER COLUMN "totalPoints" TYPE DOUBLE PRECISION USING "totalPoints"::double precision`;
+    } catch (_e) { /* already DOUBLE PRECISION */ }
+
+    // 3. Get league ID from membership
+    const theLeagueId = membership[0].leagueId;
+
+    // deno-lint-ignore no-explicit-any
+    const debugTeams: any[] = [];
+
+    // 4. Transaction: Re-process team results
+    await sql.begin(async (sql) => {
+      const teams = await sql`SELECT id, "userId", "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${theLeagueId}`;
+      
+      // Delete old results
+      const teamIds = teams.map(t => t.id);
+      if (teamIds.length > 0) {
+        const oldResults = await sql`SELECT id FROM "TeamResult" WHERE "raceId" = ${race.id} AND "teamId" IN ${sql(teamIds)}`;
+        if (oldResults.length > 0) {
+          const oldResultIds = oldResults.map(r => r.id);
+          await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" IN ${sql(oldResultIds)}`;
+          await sql`DELETE FROM "TeamResult" WHERE id IN ${sql(oldResultIds)}`;
+        }
+      }
+
+      // Re-insert with correct calculations
+      for (const team of teams) {
+        const teamDrivers = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${team.id}`;
+        
+        let teamPoints = 0;
+        const resultDrivers = [];
+        // deno-lint-ignore no-explicit-any
+        const debugDrivers: any[] = [];
+
+        for (const td of teamDrivers) {
+          const basePoints = Number(driverRacePoints[td.driverId]) || 0;
+          let pts = basePoints;
+          let role = "normal";
+          
+          // Apply Captain multiplier (always x2)
+          if (team.captainId === td.driverId) {
+            pts = pts * 2.0;
+            role = "captain";
+          } else if (team.reserveId === td.driverId) {
+            role = "reserve";
+            // Reserve only enters if a main driver (non-captain, non-reserve) had DNF
+            let hasMainDNF = false;
+            const breakdown = storedResults.driverBreakdown || {};
+            
+            for (const d of teamDrivers) {
+              if (d.driverId !== team.captainId && d.driverId !== team.reserveId) {
+                // This is a main driver. Check if they have DNF.
+                 if (breakdown[d.driverId] && breakdown[d.driverId].dnf) {
+                   hasMainDNF = true;
+                   break;
+                 }
+              }
+            }
+
+            if (hasMainDNF) {
+              pts = pts * 0.5;
+            } else {
+              pts = 0; // Reserve doesn't enter formation
+            }
+          }
+
+          teamPoints += pts;
+          resultDrivers.push({ driverId: td.driverId, points: pts });
+          debugDrivers.push({ driverId: td.driverId, basePoints, role, finalPoints: pts, entered: role !== "reserve" || pts !== 0 });
+        }
+
+        // Create TeamResult
+        const trId = crypto.randomUUID();
+        await sql`
+          INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt")
+          VALUES (${trId}, ${race.id}, ${team.id}, ${teamPoints}, ${team.captainId}, ${team.reserveId}, ${new Date().toISOString()})
+        `;
+
+        // Create TeamResultDrivers
+        for (const rd of resultDrivers) {
+          const trdId = crypto.randomUUID();
+          await sql`
+            INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points)
+            VALUES (${trdId}, ${trId}, ${rd.driverId}, ${rd.points})
+          `;
+        }
+
+        // Recalculate total
+        const allTeamResults = await sql`SELECT points FROM "TeamResult" WHERE "teamId" = ${team.id}`;
+        const total = allTeamResults.reduce((acc, r) => acc + Number(r.points || 0), 0);
+        await sql`UPDATE "Team" SET "totalPoints" = ${total} WHERE id = ${team.id}`;
+        
+        debugTeams.push({ teamId: team.id, userId: team.userId, captainId: team.captainId, reserveId: team.reserveId, teamPoints, newTotal: total, drivers: debugDrivers });
+      }
+    });
+
+    return c.json({ ok: true, message: "Race results recalculated from stored data", driverPoints: driverRacePoints, debugTeams });
+
+  } catch (e) {
+    return c.json({ error: (e as Error).message, type: "recalculate_error" }, 500);
   }
 });
 

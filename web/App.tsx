@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules, recalculateRace } from "./api";
 import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 // RACES_2026 removed
@@ -174,12 +174,10 @@ const App: React.FC = () => {
         await initializePurchases();
         const pkg = await getOfferings();
         if (pkg) {
-           console.log("IAP Package found:", pkg);
            setAnnualPackage(pkg);
         }
         const isPrem = await checkPremiumStatus();
         if (isPrem) {
-           console.log("User is Premium (RevenueCat)");
            setIsPremium(true);
            localStorage.setItem('fantaF1Premium', 'true');
         }
@@ -690,9 +688,13 @@ const App: React.FC = () => {
         showInterstitialWithProbability(0.3);
       }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert(t({ en: 'Failed to buy driver.', it: 'Acquisto pilota fallito.' }));
+      if (e.message?.includes('market_locked')) {
+         alert(t({ en: 'Too late! Qualifying has started. Market is closed.', it: 'Troppo tardi! Le qualifiche sono iniziate. Mercato chiuso.' }));
+      } else {
+         alert(t({ en: 'Failed to buy driver.', it: 'Acquisto pilota fallito.' }));
+      }
     }
   };
 
@@ -721,9 +723,13 @@ const App: React.FC = () => {
       }
       }
       setSwapCandidate(null);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert(t({ en: 'Failed to swap driver.', it: 'Scambio pilota fallito.' }));
+      if (e.message?.includes('market_locked')) {
+         alert(t({ en: 'Too late! Qualifying has started. Market is closed.', it: 'Troppo tardi! Le qualifiche sono iniziate. Mercato chiuso.' }));
+      } else {
+         alert(t({ en: 'Failed to swap driver.', it: 'Scambio pilota fallito.' }));
+      }
     }
   };
 
@@ -929,7 +935,7 @@ const App: React.FC = () => {
                           </div>
                        </div>
                        <div className="text-right">
-                          <div className="text-xl font-mono font-bold text-blue-400">{s.totalPoints}</div>
+                          <div className="text-xl font-mono font-bold text-blue-400">{Number(s.totalPoints || 0).toFixed(1)}</div>
                           {userResult && <div className="text-[10px] text-slate-500 font-mono">{t({ en: 'Race', it: 'Gara' })}: {userResult.points?.toFixed(1)}</div>}
                        </div>
                     </div>
@@ -978,7 +984,7 @@ const App: React.FC = () => {
                                   </div>
                                   <div className="text-[10px] text-slate-500 uppercase tracking-tighter font-bold">
                                     {CONSTRUCTORS.find(c => c.id === driver?.constructorId)?.name || ''}
-                                    {isCaptain && <span className="ml-1 text-yellow-500/70">× 1.5</span>}
+                                    {isCaptain && <span className="ml-1 text-yellow-500/70">× 2.0</span>}
                                     {isReserve && <span className="ml-1 text-slate-400/70">× 0.5</span>}
                                   </div>
                                 </div>
@@ -986,6 +992,7 @@ const App: React.FC = () => {
                               <div className="text-right">
                                 <div className={`text-lg font-mono font-bold ${d.points > 0 ? 'text-emerald-400' : d.points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                                   {d.points > 0 ? '+' : ''}{Number(d.points || 0).toFixed(1)}
+                                  <span className="text-[8px] text-slate-600 block">{JSON.stringify(d.points)}</span>
                                 </div>
                               </div>
                             </div>
@@ -1244,9 +1251,13 @@ const App: React.FC = () => {
             }
          });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert(t({ en: 'Failed to sell driver.', it: 'Vendita pilota fallita.' }));
+      if (e.message?.includes('market_locked')) {
+         alert(t({ en: 'Too late! Qualifying has started. Market is closed.', it: 'Troppo tardi! Le qualifiche sono iniziate. Mercato chiuso.' }));
+      } else {
+         alert(t({ en: 'Failed to sell driver.', it: 'Vendita pilota fallita.' }));
+      }
     }
   };
 
@@ -1979,6 +1990,7 @@ const App: React.FC = () => {
 
       case Tab.ADMIN:
         return (
+          <>
           <fieldset className="space-y-6 border-none p-0 m-0 min-w-0" disabled={!data.user?.isAdmin}>
             {!data.user?.isAdmin && (
               <div className="bg-yellow-900/50 text-yellow-200 p-2 rounded text-center text-xs font-bold border border-yellow-700">
@@ -2012,17 +2024,7 @@ const App: React.FC = () => {
 
               {/* Inputs */}
               <div className="space-y-3">
-                 <button
-                    onClick={async () => {
-                       if(confirm("Add 'name' column to Team table?")) {
-                          const res = await import("./api").then(m => m.migrateTeamName());
-                          alert(JSON.stringify(res));
-                       }
-                    }}
-                    className="w-full bg-indigo-900/50 border border-indigo-500 text-indigo-200 text-xs py-2 rounded"
-                 >
-                    Run DB Migration (Add Team Name)
-                 </button>
+
                  <div className={`p-2 rounded-lg border ${!currentRace.isSprint ? 'border-yellow-500 bg-yellow-900/20' : 'border-transparent'}`}>
                   <div className="flex justify-between">
                     <label className="block text-xs text-slate-400 mb-1">{t({ en: 'Qualifying UTC (ISO)', it: 'Qualifiche UTC (ISO)', fr: 'Qualif UTC (ISO)', de: 'Quali UTC (ISO)', es: 'Clasif UTC (ISO)', ru: 'Квалиф UTC', zh: '排位赛 UTC', ar: 'التصفيات UTC', ja: '予選 UTC' })}</label>
@@ -2069,21 +2071,6 @@ const App: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Debug Time Tooling */}
-            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h3 className="font-semibold text-white mb-2">{t({ en: 'Debug Time', it: 'Debug Tempo', fr: 'Temps Debug', de: 'Debug-Zeit', es: 'Tiempo Debug', ru: 'Отладка времени', zh: '调试时间', ar: 'وقت التصحيح', ja: 'デバッグ時間' })}</h3>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => handleTestTime(120, false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Quali +2h', it: 'Qualifiche +2h', fr: 'Qualif +2h', de: 'Quali +2h', es: 'Clasif +2h', ru: 'Квал +2ч', zh: '排位 +2小时', ar: 'التصفيات +2س', ja: '予選 +2時間' })}</button>
-                <button onClick={() => handleTestTime(10, false)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Quali +10m', it: 'Qualifiche +10m', fr: 'Qualif +10m', de: 'Quali +10m', es: 'Clasif +10m', ru: 'Квал +10м', zh: '排位 +10分', ar: 'التصفيات +10د', ja: '予選 +10分' })}</button>
-                {currentRace.isSprint && (
-                  <>
-                    <button onClick={() => handleTestTime(120, true)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Sprint +2h', it: 'Sprint +2h', fr: 'Sprint +2h', de: 'Sprint +2h', es: 'Sprint +2h', ru: 'Спринт +2ч', zh: '冲刺 +2小时', ar: 'السرعة +2س', ja: 'スプリント +2時間' })}</button>
-                    <button onClick={() => handleTestTime(10, true)} className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white">{t({ en: 'Sprint +10m', it: 'Sprint +10m', fr: 'Sprint +10m', de: 'Sprint +10m', es: 'Sprint +10m', ru: 'Спринт +10м', zh: '冲刺 +10分', ar: 'السرعة +10د', ja: 'スプリント +10分' })}</button>
-                  </>
                 )}
               </div>
             </div>
@@ -2222,36 +2209,9 @@ const App: React.FC = () => {
             {/* Admin Driver Config (Merged) */}
             {renderAdmin()}
 
-            {/* Toggle Debug */}
-            <div className="flex justify-center">
-              <button
-                onClick={() => setShowDebug(!showDebug)}
-                className="text-xs text-slate-500 hover:text-slate-300 underline"
-              >
-                {showDebug ? t({ en: 'Hide Debug Info', it: 'Nascondi Debug', fr: 'Masquer Debug', de: 'Debug verbergen', es: 'Ocultar Debug', ru: 'Скрыть отладку', zh: '隐藏调试', ar: 'إخفاء التصحيح', ja: 'デバッグ非表示' }) : t({ en: 'Show Debug Info', it: 'Mostra Debug', fr: 'Afficher Debug', de: 'Debug zeigen', es: 'Mostrar Debug', ru: 'Показать отладку', zh: '显示调试', ar: 'إظهار التصحيح', ja: 'デバッグ表示' })}
-              </button>
-            </div>
-
-            {/* Debug Info (Collapsed) */}
-            {showDebug && (
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700/50">
-                <h3 className="font-semibold text-white mb-2">{t({ en: 'Debug', it: 'Debug', fr: 'Debug', de: 'Debug', es: 'Debug', ru: 'Отладка', zh: '调试', ar: 'تصحيح', ja: 'デバッグ' })}</h3>
-                <div className="text-xs font-mono text-slate-400 bg-slate-950 p-2 rounded mb-4 overflow-x-auto border border-slate-800">
-                  {JSON.stringify(data.team, null, 2)}
-                </div>
-
-                <h3 className="font-semibold text-white mb-2 mt-4">{t({ en: 'Race Lock Debug', it: 'Debug Blocco Gara', fr: 'Debug Verrouillage', de: 'Renn-Sperre Debug', es: 'Debug Bloqueo', ru: 'Отладка блокировки', zh: '锁定调试', ar: 'تصحيح قفل السباق', ja: 'レースロックデバッグ' })}</h3>
-                <div className="text-xs font-mono text-slate-400 bg-slate-950 p-2 rounded mb-4 overflow-x-auto border border-slate-800">
-                  <p>Race: {currentRace.name}</p>
-                  <p>Status: <span className={getStatusColor(lockState.status)}>{lockState.status}</span></p>
-                  <p>Session: {currentRace.isSprint ? t({ en: 'Sprint Qualifying', it: 'Sprint Shootout', fr: 'Qualif Sprint', de: 'Sprint Quali', es: 'Sprint Clasif', ru: 'Спринт Квал', zh: '冲刺排位', ar: 'تصفيات السرعة', ja: 'スプリント予選' }) : t({ en: 'Qualifying', it: 'Qualifiche', fr: 'Qualifications', de: 'Qualifying', es: 'Clasificación', ru: 'Квалификация', zh: '排位赛', ar: 'التصفيات', ja: '予選' })}</p>
-                  <p>Target UTC: {lockState.targetSessionUtc || 'N/A'}</p>
-                  <p>Lock UTC: {lockState.lockTimeUtc || 'N/A'}</p>
-                  <p>Server Time: {new Date(now).toISOString()}</p>
-                </div>
-              </div>
-            )}
           </fieldset>
+
+          </>
         );
 
       case Tab.STANDINGS:
@@ -2387,9 +2347,13 @@ const App: React.FC = () => {
           reserveDriverId: newReserveId
         }
       });
-    } catch (e) {
+    } catch (e: any) {
        console.error(e);
-       alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
+       if (e.message?.includes('lineup_locked')) {
+          alert(t({ en: 'Too late! Qualifying has started. Lineup is locked.', it: 'Troppo tardi! Le qualifiche sono iniziate. Formazione bloccata.' }));
+       } else {
+          alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
+       }
     }
   };
 
@@ -2424,9 +2388,13 @@ const App: React.FC = () => {
           reserveDriverId: newReserveId
         }
       });
-    } catch (e) {
+    } catch (e: any) {
        console.error(e);
-       alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
+       if (e.message?.includes('lineup_locked')) {
+          alert(t({ en: 'Too late! Qualifying has started. Lineup is locked.', it: 'Troppo tardi! Le qualifiche sono iniziate. Formazione bloccata.' }));
+       } else {
+          alert(t({ en: "Failed to update lineup.", it: "Aggiornamento formazione fallito." }));
+       }
     }
   };
 
@@ -2438,6 +2406,16 @@ const App: React.FC = () => {
     } catch (e) {
         console.error(e);
         alert(t({ en: "Error saving rules.", it: "Errore salvataggio regole." }));
+    }
+  };
+  
+  const handleMigrateTeamName = async () => {
+    if (!confirm("Migrate all teams to have a name?")) return;
+    try {
+      const res = await import("./api").then(m => m.migrateTeamName());
+      alert("Migration: " + res.message);
+    } catch (e: any) {
+      alert("Error: " + e.message);
     }
   };
 
@@ -2627,6 +2605,8 @@ const App: React.FC = () => {
                 );
              })}
           </div>
+
+
         </div>
       </div>
     );
