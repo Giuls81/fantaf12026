@@ -985,7 +985,7 @@ const App: React.FC = () => {
                               </div>
                               <div className="text-right">
                                 <div className={`text-lg font-mono font-bold ${d.points > 0 ? 'text-emerald-400' : d.points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                  {d.points > 0 ? `+${d.points}` : d.points}
+                                  {d.points > 0 ? '+' : ''}{Number(d.points || 0).toFixed(1)}
                                 </div>
                               </div>
                             </div>
