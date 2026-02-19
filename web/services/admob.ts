@@ -185,18 +185,66 @@ export const prepareRewardVideo = async () => {
 
 export const showRewardVideo = async (): Promise<AdMobRewardItem | null> => {
   if (Capacitor.getPlatform() === 'web') return { type: 'coin', amount: 10 }; 
+  
   return new Promise(async (resolve) => {
+      let resolved = false;
+      let earnedReward: AdMobRewardItem | null = null;
+      let listeners: any[] = [];
+
+      const cleanup = () => {
+        listeners.forEach(l => l.remove());
+        listeners = [];
+      };
+
+      // Prepare next ad in background (Fire & Forget)
+      const preloadNext = () => {
+         setTimeout(() => {
+            console.log('AdMob: Preloading next reward video...');
+            prepareRewardVideo().catch(e => console.warn('AdMob: Preload failed', e));
+         }, 1000);
+      };
+
+      const safeResolve = (val: AdMobRewardItem | null) => {
+        if (!resolved) {
+           resolved = true;
+           cleanup();
+           clearTimeout(timer);
+           resolve(val);
+           preloadNext(); 
+        }
+      };
+
+      // Safety timeout: 70s (longer than typical video)
+      const timer = setTimeout(() => {
+        console.log('AdMob: Reward Video Timeout Reached');
+        // If we timeout but have a reward, give it to them
+        safeResolve(earnedReward);
+      }, 70000);
+
       try {
-          const onReward = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => resolve(reward));
-          const onDismiss = await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
-              onReward.remove();
-              onDismiss.remove();
-          });
+          console.log('AdMob: Registering Reward Listeners...');
+          
+          listeners.push(await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => {
+              console.log('AdMob: 🎁 Reward Event Fired! Storing reward.', reward);
+              earnedReward = reward;
+              // we DO NOT resolve here. We wait for Dismissed.
+          }));
+
+          listeners.push(await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
+              console.log('AdMob: 🚪 Reward Video Dismissed. Earned:', earnedReward);
+              safeResolve(earnedReward);
+          }));
+
+          listeners.push(await AdMob.addListener(RewardAdPluginEvents.FailedToShow, (err) => {
+              console.error('AdMob: ❌ Reward Video Failed to Show', err);
+              safeResolve(null);
+          }));
+
+          console.log('AdMob: Calling showRewardVideoAd()...');
           await AdMob.showRewardVideoAd();
       } catch (e) {
-          console.error('AdMob: Show Reward Video failed', e);
-          await prepareRewardVideo();
-          resolve(null);
+          console.error('AdMob: Show Reward Video Exception', e);
+          safeResolve(null);
       }
   });
 };

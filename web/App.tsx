@@ -297,8 +297,8 @@ const App: React.FC = () => {
   // Login Form State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(true); // Toggle between Register and Login
-  const [loginMode, setLoginMode] = useState<'create' | 'join'>('create');
+  const [isRegistering, setIsRegistering] = useState(false); // Default to Login mode
+  const [loginMode, setLoginMode] = useState<'create' | 'join'>('join'); // Default to Join for new users
   const [leagueName, setLeagueName] = useState('');
   const [leagueCodeInput, setLeagueCodeInput] = useState('');
 
@@ -1473,11 +1473,11 @@ const App: React.FC = () => {
 
           <button
             onClick={handleAuth}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded transition-all shadow-lg transform hover:scale-[1.02]"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded transition-all shadow-lg transform hover:scale-[1.02] flex items-center justify-center gap-2"
           >
             {isRegistering 
-                ? (loginMode === 'create' ? t({ en: 'Register & Start', it: 'Registrati e Inizia' }) : t({ en: 'Register & Join', it: 'Registrati e Unisciti' }))
-                : t({ en: 'Login', it: 'Accedi' })
+                ? (loginMode === 'create' ? t({ en: 'Register & Create League', it: 'Registrati e Crea Lega' }) : t({ en: 'Register & Join League', it: 'Registrati e Unisciti' }))
+                : t({ en: 'Login to Account', it: 'Accedi all\'Account' })
             }
           </button>
           

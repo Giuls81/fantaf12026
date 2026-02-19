@@ -4,6 +4,9 @@ android {
     namespace "com.fantaf1.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
+        applicationId "com.fantaf1.app"
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
         versionCode 102
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
