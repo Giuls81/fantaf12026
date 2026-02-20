@@ -140,6 +140,7 @@ export async function getMe() {
         reserveId: string | null;
         driverIds: string[];
       } | null;
+      rules?: any; // Added for scoring rules
     }[];
   }>("/me");
 }

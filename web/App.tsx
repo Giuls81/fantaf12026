@@ -858,27 +858,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSimulateRace = async () => {
-    if (!data) return;
-    const currentRace = races[data.currentRaceIndex];
-    if (!currentRace) return;
-    
-    try {
-      setSyncing(true);
-      const result = await simulateRaceResults(currentRace.id);
-      if (result.ok) {
-        alert(t({ en: 'Simulated 2026 Race successfully!', it: 'Gara 2026 simulata con successo!' }));
-        window.location.reload();
-      } else {
-        alert(t({ en: `Simulation failed`, it: `Simulazione fallita` }));
-      }
-    } catch (e) {
-      console.error(e);
-      alert(t({ en: 'Network error during simulation', it: 'Errore di rete durante la simulazione' }));
-    } finally {
-      setSyncing(false);
-    }
-  };
+
 
   const handleNextRace = async () => {
     if (!data?.user) return;
@@ -2312,23 +2292,7 @@ const App: React.FC = () => {
                 )}
               </button>
 
-              <button
-                onClick={handleSimulateRace}
-                disabled={syncing}
-                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${syncing ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-purple-900/20'}`}
-              >
-                {syncing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                    {t({ en: 'Simulating...', it: 'Simulazione...', fr: 'Sim...', de: 'Sim...', es: 'Simulando...', ru: 'Симуляция...', zh: '模拟中...', ar: 'محاكاة...', ja: 'シミュレート中...' })}
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xl">🎲</span>
-                    {t({ en: 'Simulate Random Results (2026)', it: 'Simula Risultati Casuali (Test 2026)', fr: 'Simuler Résultats', de: 'Ergebnisse Simulieren', es: 'Simular Resultados', ru: 'Сим. Результаты', zh: '模拟随机结果', ar: 'محاكاة نتائج', ja: '結果をシミュレート' })}
-                  </>
-                )}
-              </button>
+
             </div>
 
             {/* Admin Driver Config (Merged) */}

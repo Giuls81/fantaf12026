@@ -1412,90 +1412,292 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
           }
       }
 
-      // Teammate Duel
-      const mateId = teammates[driverId];
-      if (mateId && classification[driverId] && classification[mateId]) {
+      // D. Sprint Points
+      if (race.isSprint && combinedResults.sprint && combinedResults.sprint[driverId]) {
+          const sprintPos = combinedResults.sprint[driverId];
+          const sprintPoints = rules.sprintPositionPoints || DEFAULT_SPRINT_POINTS;
+          if (sprintPos <= sprintPoints.length) {
+              const sPts = sprintPoints[sprintPos - 1];
+              pts += sPts;
+              driverBreakdown[driverId].sprintPosition = sPts;
+          }
+      }
+
+      // E. Teammate beat/lost
+      const tmId = teammates[driverId];
+      if (tmId && classification[driverId] && classification[tmId]) {
           const myPos = classification[driverId];
-          const matePos = classification[mateId];
-          if (myPos < matePos) {
+          const tmPos = classification[tmId];
+          if (myPos < tmPos) {
               pts += (rules.teammateBeat ?? 2);
               driverBreakdown[driverId].teammate = (rules.teammateBeat ?? 2);
-          } else {
+          } else if (myPos > tmPos) {
               pts += (rules.teammateLost ?? -2);
               driverBreakdown[driverId].teammate = (rules.teammateLost ?? -2);
           }
       }
 
-      driverRacePoints[driverId] = pts;
       driverBreakdown[driverId].total = pts;
+      driverRacePoints[driverId] = pts;
+
+      // Ensure points is numeric
+      if (isNaN(pts)) pts = 0;
+      await sql`UPDATE "Driver" SET points = points + ${pts} WHERE id = ${driverId}`;
     }
 
-    // 4. Transactional Update
-    combinedResults.driverPoints = driverRacePoints;
-    combinedResults.driverBreakdown = driverBreakdown;
+    // 5. Update All Teams
+    const teamsToUpdate = await sql`SELECT * FROM "Team"`;
+    for (const team of teamsToUpdate) {
+        let teamRacePoints = 0;
+        const driverIds = team.driverIds || [];
+        const isLockPassed = true; // Always true for simulation
 
-    await sql.begin(async (sql) => {
-       for (const [driverId, points] of Object.entries(driverRacePoints)) {
-         await sql`UPDATE "Driver" SET points = points + ${points} WHERE id = ${driverId}`;
-       }
+        let oldTeamResult = await sql`SELECT id FROM "TeamResult" WHERE "teamId" = ${team.id} AND "raceId" = ${race.id}`;
+        let teamResultId;
+        
+        if (oldTeamResult.length === 0) {
+            const inserted = await sql`
+                INSERT INTO "TeamResult" ("id", "teamId", "raceId", "points", "rank", "valueAtTime", "budgetAtTime", "captainId", "reserveId", "modifiers", "isLockPassed")
+                VALUES (${crypto.randomUUID()}, ${team.id}, ${race.id}, 0, 0, ${team.totalValue || 100}, ${team.budget || 0}, ${team.captainId}, ${team.reserveId}, ${team.modifiers || null}, ${isLockPassed})
+                RETURNING id
+            `;
+            teamResultId = inserted[0].id;
+        } else {
+            teamResultId = oldTeamResult[0].id;
+            await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" = ${teamResultId}`;
+        }
 
-       const teams = await sql`SELECT id, "userId", "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${membership[0].leagueId}`;
-       
-       const teamIds = teams.map(t => t.id);
-       if (teamIds.length > 0) {
-           const oldResults = await sql`SELECT id FROM "TeamResult" WHERE "raceId" = ${race.id} AND "teamId" IN ${sql(teamIds)}`;
-           if (oldResults.length > 0) {
-               const oldResultIds = oldResults.map(r => r.id);
-               await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" IN ${sql(oldResultIds)}`;
-               await sql`DELETE FROM "TeamResult" WHERE id IN ${sql(oldResultIds)}`;
-           }
-       }
+        for (const drvId of driverIds) {
+            const rawPts = driverRacePoints[drvId] || 0;
+            let finalPts = rawPts;
+            let isCaptain = false;
+            let isReserve = false;
+            let multiplier = 1.0;
 
-       for (const team of teams) {
-          const teamDrivers = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${team.id}`;
-          let teamPoints = 0;
-          const resultDrivers = [];
+            const drvData = allDrivers.find(d => d.id === drvId);
+            const drvConstructorId = drvData ? drvData.constructorId : null;
+            let isConstructorMatch = false;
+            let constructorMultiplier = 1.0;
+            
+            if (rawPts > 0 && rules.constructors && drvConstructorId) {
+                const constrRule = rules.constructors.find((c: any) => c.id === drvConstructorId);
+                if (constrRule) {
+                    isConstructorMatch = true;
+                    constructorMultiplier = constrRule.multiplier;
+                    finalPts = finalPts * constructorMultiplier; 
+                }
+            }
 
-           for (const td of teamDrivers) {
-              let pts = (driverRacePoints[td.driverId] as number) || 0;
-              if (team.captainId === td.driverId) {
-                  pts = pts * 2.0;
-              } else if (team.reserveId === td.driverId) {
-                  pts = pts * 0.5;
-                  // Handle DNF logic if applying here? 
-                  // Left out for brevity unless strictly needed.
-              }
-             teamPoints += pts;
-             resultDrivers.push({ driverId: td.driverId, points: pts });
-          }
+            if (drvId === team.captainId) {
+                isCaptain = true;
+                multiplier = 2.0;
+                finalPts = finalPts * 2.0;
+            }
 
-          const trId = crypto.randomUUID();
-          await sql`
-            INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt")
-            VALUES (${trId}, ${race.id}, ${team.id}, ${teamPoints}, ${team.captainId}, ${team.reserveId}, ${new Date().toISOString()})
-          `;
+            if (drvId === team.reserveId) {
+               isReserve = true;
+            } else {
+               teamRacePoints += finalPts;
+            }
 
-          for (const rd of resultDrivers) {
-             const trdId = crypto.randomUUID();
-             await sql`
-                INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points)
-                VALUES (${trdId}, ${trId}, ${rd.driverId}, ${rd.points})
-             `;
-          }
+            if (isNaN(finalPts)) finalPts = 0;
 
-          const allTeamResults = await sql`SELECT points FROM "TeamResult" WHERE "teamId" = ${team.id}`;
-          const total = allTeamResults.reduce((acc, r) => acc + (Number(r.points) || 0), 0);
-          
-          await sql`UPDATE "Team" SET "totalPoints" = ${total} WHERE id = ${team.id}`;
-       }
+            await sql`
+                INSERT INTO "TeamResultDriver" ("id", "teamResultId", "driverId", "points", "isCaptain", "isReserve", "multiplier", "isConstructorMatch", "constructorMultiplier")
+                VALUES (${crypto.randomUUID()}, ${teamResultId}, ${drvId}, ${finalPts}, ${isCaptain}, ${isReserve}, ${multiplier}, ${isConstructorMatch}, ${constructorMultiplier})
+            `;
+        }
 
-       await sql`UPDATE "Race" SET "isCompleted" = true, "results" = ${sql.json(combinedResults)} WHERE id = ${raceId}`;
-    });
+        if (isNaN(teamRacePoints)) teamRacePoints = 0;
 
-    return c.json({ ok: true, classification, points: driverRacePoints });
+        await sql`UPDATE "TeamResult" SET points = ${teamRacePoints} WHERE id = ${teamResultId}`;
+        await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${teamRacePoints} WHERE id = ${team.id}`;
+    }
 
-  } catch (e) {
-    return c.json({ error: (e as Error).message, type: "simulate_race_error" }, 500);
+    // 6. Update Race object
+    const updatedRace = await sql`
+        UPDATE "Race" 
+        SET "isCompleted" = true, results = ${JSON.stringify(combinedResults)}::jsonb 
+        WHERE id = ${race.id}
+        RETURNING *
+    `;
+
+    return c.json({ ok: true, race: updatedRace[0], driverRacePoints, driverBreakdown, simulatedGrid: gridPositions, simulatedClassification: classification });
+
+  } catch (error: any) {
+    console.error("Simulation error:", error);
+    return c.json({ error: "simulation_failed", details: error.message }, 500);
+  }
+});
+
+// Temporary endpoint to instantly simulate China GP via browser/curl
+app.get("/simulate-china-test", async (c) => {
+  try {
+    const chinaRace = await sql`SELECT id FROM "Race" WHERE name ILIKE '%China%' or name ILIKE '%Cina%' LIMIT 1`;
+    if (chinaRace.length === 0) return c.json({ error: "China GP not found" }, 404);
+    
+    // Call the exact same logic but without HTTP req block
+    const allDrivers = await sql`SELECT id, name, "constructorId" FROM "Driver"`;
+    if (allDrivers.length === 0) return c.json({ error: "no_drivers_found" }, 400);
+
+    const shuffle = (array: any[]) => {
+      let currentIndex = array.length, randomIndex;
+      while (currentIndex > 0) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+      }
+      return array;
+    };
+
+    const generateClassification = (drivers: any[]) => {
+      const shuffled = shuffle([...drivers]);
+      const classif: Record<string, number> = {};
+      shuffled.forEach((d, index) => { classif[d.id] = index + 1; });
+      return classif;
+    };
+
+    const combinedResults: Record<string, any> = {};
+    const gridPositions = generateClassification(allDrivers);
+    combinedResults.quali = gridPositions;
+    const classification = generateClassification(allDrivers);
+    combinedResults["race"] = classification;
+    combinedResults.sprint = generateClassification(allDrivers); // Chinese GP has sprint
+    combinedResults.sprintQuali = generateClassification(allDrivers);
+
+    // Default Rules
+    const rules = {
+      racePositionPoints: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      sprintPositionPoints: [8, 7, 6, 5, 4, 3, 2, 1],
+      raceFastestLap: 1,
+      raceLastPlaceMalus: -3,
+      qualiQ1Eliminated: -3,
+      qualiQ2Reached: 1,
+      qualiQ3Reached: 3,
+      qualiPole: 3,
+      qualiGridPenalty: -3,
+      raceDNF: -5,
+      racePenalty: -5,
+      teammateBeat: 2,
+      teammateLost: -2,
+      teammateBeatDNF: 1,
+      positionGainedPos1_10: 1,
+      positionGainedPos11_Plus: 0.5,
+      positionLostPos1_10: -1,
+      positionLostPos11_Plus: -0.5,
+      sprintPole: 1
+    };
+
+    const teammates: Record<string, string> = {};
+    const driversByConstructor: Record<string, string[]> = {};
+    for (const d of allDrivers) {
+        if (!driversByConstructor[d.constructorId]) driversByConstructor[d.constructorId] = [];
+        driversByConstructor[d.constructorId].push(d.id);
+    }
+    for (const list of Object.values(driversByConstructor)) {
+        if (list.length === 2) {
+            teammates[list[0]] = list[1];
+            teammates[list[1]] = list[0];
+        }
+    }
+
+    const driverRacePoints: Record<string, number> = {};
+
+    for (const d of allDrivers) {
+      const driverId = d.id;
+      let pts = 0;
+      
+      const position = classification[driverId];
+      if (position <= 10) pts += rules.racePositionPoints[position - 1];
+
+      const grid = gridPositions[driverId];
+      if (grid === 1) pts += rules.qualiPole;
+      if (grid <= 10) pts += rules.qualiQ3Reached;
+      else if (grid <= 15) pts += rules.qualiQ2Reached;
+      else pts += rules.qualiQ1Eliminated;
+
+      const diff = grid - position;
+      if (diff > 0) pts += (diff * rules.positionGainedPos1_10); // Simplification for test
+      else if (diff < 0) pts += (Math.abs(diff) * rules.positionLostPos1_10); 
+
+      const sprintPos = combinedResults.sprint[driverId];
+      if (sprintPos <= 8) pts += rules.sprintPositionPoints[sprintPos - 1];
+
+      const tmId = teammates[driverId];
+      if (tmId) {
+          const tmPos = classification[tmId];
+          if (position < tmPos) pts += rules.teammateBeat;
+          else pts += rules.teammateLost;
+      }
+
+      driverRacePoints[driverId] = pts;
+
+      const updatedPts = isNaN(pts) ? 0 : pts;
+      await sql`UPDATE "Driver" SET points = points + ${updatedPts} WHERE id = ${driverId}`;
+    }
+
+    const teamsToUpdate = await sql`SELECT * FROM "Team"`;
+    for (const team of teamsToUpdate) {
+        let teamRacePoints = 0;
+        const driverIds = team.driverIds || [];
+        let oldTeamResult = await sql`SELECT id FROM "TeamResult" WHERE "teamId" = ${team.id} AND "raceId" = ${chinaRace[0].id}`;
+        let teamResultId;
+        if (oldTeamResult.length === 0) {
+            const inserted = await sql`
+                INSERT INTO "TeamResult" ("id", "teamId", "raceId", "points", "captainId", "reserveId", "createdAt")
+                VALUES (${crypto.randomUUID()}, ${team.id}, ${chinaRace[0].id}, 0, ${team.captainId}, ${team.reserveId}, ${new Date().toISOString()})
+                RETURNING id
+            `;
+            teamResultId = inserted[0].id;
+        } else {
+            teamResultId = oldTeamResult[0].id;
+            await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" = ${teamResultId}`;
+        }
+
+        for (const drvId of driverIds) {
+            const rawPts = driverRacePoints[drvId] || 0;
+            let finalPts = rawPts;
+
+            const drvData = allDrivers.find(d => d.id === drvId);
+            const drvConstructorId = drvData ? drvData.constructorId : null;
+            
+            if (rawPts > 0 && rules.constructors && drvConstructorId) {
+                const constrRule = rules.constructors.find((c: any) => c.id === drvConstructorId);
+                if (constrRule) {
+                    finalPts = finalPts * constrRule.multiplier; 
+                }
+            }
+
+            if (drvId === team.captainId) {
+                finalPts = finalPts * 2.0;
+            } else if (drvId !== team.reserveId) {
+                teamRacePoints += finalPts;
+            }
+
+            const updatedFinalPts = isNaN(finalPts) ? 0 : finalPts;
+            await sql`
+                INSERT INTO "TeamResultDriver" ("id", "teamResultId", "driverId", "points")
+                VALUES (${crypto.randomUUID()}, ${teamResultId}, ${drvId}, ${updatedFinalPts})
+            `;
+        }
+
+        const updatedTeamRacePoints = isNaN(teamRacePoints) ? 0 : teamRacePoints;
+        await sql`UPDATE "TeamResult" SET points = ${updatedTeamRacePoints} WHERE id = ${teamResultId}`;
+        await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${updatedTeamRacePoints} WHERE id = ${team.id}`;
+    }
+
+    const updatedRace = await sql`
+        UPDATE "Race" 
+        SET "isCompleted" = true, results = ${JSON.stringify(combinedResults)}::jsonb 
+        WHERE id = ${chinaRace[0].id}
+        RETURNING *
+    `;
+
+    return c.json({ ok: true, race: updatedRace[0], driverRacePoints });
+
+  } catch (error: any) {
+    console.error("Simulation error:", error);
+    return c.json({ error: "simulation_failed", details: error.message }, 500);
   }
 });
 
