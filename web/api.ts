@@ -232,3 +232,31 @@ export async function recalculateRace(raceId: string) {
     throw e;
   }
 }
+
+export async function simulateRaceResults(raceId: string) {
+  // Uses similar timeout as recalculate-race
+  const token = localStorage.getItem("fantaF1AuthToken");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+  try {
+    const res = await fetch(`${getApiUrl()}/admin/simulate-race`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ raceId }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Simulate failed: ${res.status} ${text}`);
+    }
+    return (await res.json()) as { ok: true; classification: Record<string, number>; points: Record<string, number> };
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    throw e;
+  }
+}

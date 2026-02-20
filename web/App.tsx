@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules, recalculateRace } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules, recalculateRace, simulateRaceResults } from "./api";
 import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 // RACES_2026 removed
@@ -386,9 +386,12 @@ const App: React.FC = () => {
              totalValue: calculateTotalValue(firstLeague.team.budget, firstLeague.team.driverIds)
           } : INITIAL_TEAM;
           
+          const savedRules = firstLeague.rules || DEFAULT_SCORING_RULES;
+          const savedIndex = typeof savedRules.currentRaceIndex === 'number' ? savedRules.currentRaceIndex : getNextRaceIndex(races);
+
           setData(prev => {
-             const base = prev || { ...INITIAL_DATA, currentRaceIndex: getNextRaceIndex(races) };
-             return { ...base, user: fullUser, team: serverTeam };
+             const base = prev || { ...INITIAL_DATA };
+             return { ...base, user: fullUser, team: serverTeam, rules: savedRules, currentRaceIndex: savedIndex };
           });
       } catch (e) {
         console.error("Session restore failed", e);
@@ -855,6 +858,76 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSimulateRace = async () => {
+    if (!data) return;
+    const currentRace = races[data.currentRaceIndex];
+    if (!currentRace) return;
+    
+    try {
+      setSyncing(true);
+      const result = await simulateRaceResults(currentRace.id);
+      if (result.ok) {
+        alert(t({ en: 'Simulated 2026 Race successfully!', it: 'Gara 2026 simulata con successo!' }));
+        window.location.reload();
+      } else {
+        alert(t({ en: `Simulation failed`, it: `Simulazione fallita` }));
+      }
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: 'Network error during simulation', it: 'Errore di rete durante la simulazione' }));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleNextRace = async () => {
+    if (!data?.user) return;
+    if (data.currentRaceIndex >= races.length - 1) {
+      alert(t({ en: 'Already at the last race!', it: 'Sei già all\'ultima gara!' }));
+      return;
+    }
+    if (!confirm(t({ en: 'Advance league to the next race?', it: 'Passare alla prossima gara?' }))) return;
+    
+    try {
+      setSyncing(true);
+      await updateLeagueRules(data.user.leagueId, {
+        ...data.rules,
+        currentRaceIndex: data.currentRaceIndex + 1
+      });
+      alert(t({ en: 'Advanced to next race!', it: 'Passato alla gara successiva!' }));
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: 'Failed to advance race', it: 'Errore nel cambio gara' }));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handlePrevRace = async () => {
+    if (!data?.user) return;
+    if (data.currentRaceIndex <= 0) {
+      alert(t({ en: 'Already at the first race!', it: 'Sei già alla prima gara!' }));
+      return;
+    }
+    if (!confirm(t({ en: 'Go back to the previous race?', it: 'Tornare alla gara precedente?' }))) return;
+    
+    try {
+      setSyncing(true);
+      await updateLeagueRules(data.user.leagueId, {
+        ...data.rules,
+        currentRaceIndex: data.currentRaceIndex - 1
+      });
+      alert(t({ en: 'Reverted to previous race!', it: 'Tornato alla gara precedente!' }));
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+      alert(t({ en: 'Failed to revert race', it: 'Errore nel cambio gara' }));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const renderStandings = () => {
     return (
       <div className="space-y-6">
@@ -864,8 +937,8 @@ const App: React.FC = () => {
 
       {/* Official Results Button Area */}
       <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col gap-3">
-        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">{t({ en: 'Race Results', it: 'Risultati Gara' })}</h2>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">{t({ en: 'Race Results', it: 'Risultati Gara', fr: 'Résultats', de: 'Ergebnisse', es: 'Resultados', ru: 'Результаты', zh: '比赛结果', ar: 'النتائج', ja: 'レース結果' })}</h2>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar items-center">
           {races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round).map(r => (
             <button 
               key={r.id}
@@ -879,10 +952,44 @@ const App: React.FC = () => {
             </button>
           ))}
           {races.filter(r => r.isCompleted).length === 0 && (
-            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No races completed yet.', it: 'Nessuna gara conclusata.' })}</div>
+            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No races completed yet.', it: 'Nessuna gara conclusa.' })}</div>
           )}
         </div>
       </div>
+
+      {/* Testing Tools Panel */}
+      {data?.user && (
+        <div className="bg-slate-800/50 p-4 rounded-xl border border-blue-500/50 flex flex-col gap-3 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+          <h2 className="text-sm font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+            ⚙️ {t({ en: 'Testing Tools', it: 'Strumenti di Test' })}
+          </h2>
+          <div className="text-xs text-slate-400">
+            {t({ 
+              en: 'Use these buttons to manually advance or revert the current race for testing 2026 data.', 
+              it: 'Usa questi pulsanti per far avanzare o retrocedere manualmente la gara per testare i dati 2026.' 
+            })}
+          </div>
+          <div className="flex gap-2 items-center mt-1">
+            <button
+              onClick={handlePrevRace}
+              disabled={syncing || data.currentRaceIndex <= 0}
+              className={`px-4 py-2 border border-blue-600/50 hover:bg-blue-900/40 border-dashed rounded-lg text-xs font-bold ${syncing || data.currentRaceIndex <= 0 ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-blue-300 hover:text-white'} transition-colors flex items-center gap-1`}
+            >
+              {t({ en: '⏪ Back', it: '⏪ Indietro' })}
+            </button>
+            <div className="flex-1 text-center text-xs font-bold text-slate-300">
+               {races[data.currentRaceIndex]?.name.replace(' Grand Prix', '') || '...'}
+            </div>
+            <button
+              onClick={handleNextRace}
+              disabled={syncing || data.currentRaceIndex >= races.length - 1}
+              className={`px-4 py-2 border border-blue-600/50 hover:bg-blue-900/40 border-dashed rounded-lg text-xs font-bold ${syncing || data.currentRaceIndex >= races.length - 1 ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-blue-300 hover:text-white'} transition-colors flex items-center gap-1`}
+            >
+              {t({ en: 'Next ⏩', it: 'Avanti ⏩' })}
+            </button>
+          </div>
+        </div>
+      )}
 
         {/* Global Standings Card */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
@@ -2190,7 +2297,7 @@ const App: React.FC = () => {
               <button
                 onClick={handleSyncOpenF1}
                 disabled={syncing}
-                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${syncing ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-900/20'}`}
+                className={`w-full py-3 mb-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${syncing ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-900/20'}`}
               >
                 {syncing ? (
                   <>
@@ -2201,6 +2308,24 @@ const App: React.FC = () => {
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     {t({ en: 'Sync results with OpenF1', it: 'Sincronizza risultati OpenF1', fr: 'Sync résultats avec OpenF1', de: 'Ergebnisse mit OpenF1 sync.', es: 'Sincronizar resultados OpenF1', ru: 'Синхр. результаты OpenF1', zh: '同步OpenF1结果', ar: 'مزامنة نتائج OpenF1', ja: 'OpenF1と同期' })}
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleSimulateRace}
+                disabled={syncing}
+                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${syncing ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-purple-900/20'}`}
+              >
+                {syncing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                    {t({ en: 'Simulating...', it: 'Simulazione...', fr: 'Sim...', de: 'Sim...', es: 'Simulando...', ru: 'Симуляция...', zh: '模拟中...', ar: 'محاكاة...', ja: 'シミュレート中...' })}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xl">🎲</span>
+                    {t({ en: 'Simulate Random Results (2026)', it: 'Simula Risultati Casuali (Test 2026)', fr: 'Simuler Résultats', de: 'Ergebnisse Simulieren', es: 'Simular Resultados', ru: 'Сим. Результаты', zh: '模拟随机结果', ar: 'محاكاة نتائج', ja: '結果をシミュレート' })}
                   </>
                 )}
               </button>

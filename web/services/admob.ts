@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { ADMOB_IDS, IS_TEST_MODE } from '../constants_ads';
 
 // Official Google Test IDs — guaranteed to return ads
+export const ADS_ENABLED = false; // Set to false to disable all ads during testing
 const TEST_IDS = {
   ANDROID: {
     BANNER: 'ca-app-pub-3940256099942544/6300978111',
@@ -35,7 +36,7 @@ const getAdId = (type: 'BANNER' | 'INTERSTITIAL' | 'REWARDED' | 'APP_OPEN') => {
 let currentInterstitialSlot: 'APP_OPEN' | 'INTERSTITIAL' | null = null;
 
 export const initializeAdMob = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
 
   try {
     console.log('AdMob: Initializing...');
@@ -58,7 +59,7 @@ export const initializeAdMob = async () => {
 // ─── BANNER ──────────────────────────────────────────────────────────────────
 // Moved to TOP_CENTER so it doesn't overlap the bottom tab bar.
 export const showBanner = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
   const adId = getAdId('BANNER');
   try {
     console.log('AdMob: Showing Banner (TOP)', adId);
@@ -75,7 +76,7 @@ export const showBanner = async () => {
 };
 
 export const hideBanner = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
   try {
     await AdMob.hideBanner();
     await AdMob.removeBanner();
@@ -86,7 +87,7 @@ export const hideBanner = async () => {
 
 // ─── INTERSTITIAL (regular) ──────────────────────────────────────────────────
 export const prepareInterstitial = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
   const adId = getAdId('INTERSTITIAL');
   try {
     console.log(`AdMob: Preparing Interstitial (${adId})`);
@@ -100,7 +101,7 @@ export const prepareInterstitial = async () => {
 };
 
 export const showInterstitial = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
   try {
     if (currentInterstitialSlot !== 'INTERSTITIAL') {
       console.log('AdMob: No interstitial loaded, preparing first...');
@@ -123,7 +124,7 @@ export const showInterstitial = async () => {
 // ─── APP OPEN (startup) ──────────────────────────────────────────────────────
 // Uses the interstitial slot with a different ad ID (App Open test ID)
 export const prepareAppOpen = async () => {
-    if (Capacitor.getPlatform() === 'web') return;
+    if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
     const adId = getAdId('APP_OPEN');
     console.log(`AdMob: Preparing Startup Ad (ID: ${adId})`);
     try {
@@ -137,7 +138,7 @@ export const prepareAppOpen = async () => {
 }
 
 export const showAppOpen = async () => {
-    if (Capacitor.getPlatform() === 'web') return;
+    if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
     try {
         if (currentInterstitialSlot !== 'APP_OPEN') {
             console.log('AdMob: Startup Ad not loaded, preparing...');
@@ -160,7 +161,7 @@ export const showAppOpen = async () => {
 
 // ─── PROBABILITY ─────────────────────────────────────────────────────────────
 export const showInterstitialWithProbability = async (probability: number = 0.5) => {
-    if (Capacitor.getPlatform() === 'web') return;
+    if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
     if (Math.random() < probability) {
         console.log(`AdMob: Probability ${probability} hit`);
         await showInterstitial();
@@ -174,7 +175,7 @@ export const showInterstitialWithProbability = async (probability: number = 0.5)
 
 // ─── REWARD VIDEO ────────────────────────────────────────────────────────────
 export const prepareRewardVideo = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
   const adId = getAdId('REWARDED');
   try {
     await AdMob.prepareRewardVideoAd({ adId, isTesting: IS_TEST_MODE });
