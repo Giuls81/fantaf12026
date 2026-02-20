@@ -72,12 +72,12 @@ app.post("/auth/register", async (c) => {
       return c.json({ error: "weak_password", message: "Password must be at least 3 characters." }, 400);
     }
 
-    // Check if name exists
-    const [existing] = await sql`SELECT id FROM "User" WHERE "displayName" = ${displayName}`;
+    // Check if name exists (case-insensitive)
+    const [existing] = await sql`SELECT id FROM "User" WHERE LOWER("displayName") = LOWER(${displayName})`;
     if (existing) {
       return c.json({ 
         error: "name_taken", 
-        message: "Questo nome è già in uso. Scegline un altro o fai il Login." 
+        message: "Questo nome è già in uso (anche con diversa combinazione di maiuscole/minuscole). Scegline un altro o fai il Login." 
       }, 400); 
     }
 
