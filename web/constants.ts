@@ -4,7 +4,7 @@ export const APP_VERSION = "1.0.0 (103)"; // Build number for display
 export const DEFAULT_SCORING_RULES: ScoringRules = {
   // Race Classifica (padded to 22 positions)
   racePositionPoints: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  raceFastestLap: 0, // Not explicitly requested in new list, setting to 0 (or 1 if preferred)
+  raceFastestLap: 0, 
   raceLastPlaceMalus: -3,
 
   // Quali
@@ -12,7 +12,7 @@ export const DEFAULT_SCORING_RULES: ScoringRules = {
   qualiQ2Reached: 1,     // 16-11
   qualiQ3Reached: 3,     // 10-1
   qualiPole: 3,
-  qualiGridPenalty: -3,
+  qualiGridPenalty: 0,
 
   // Race Bonus/Malus
   raceDNF: -5,

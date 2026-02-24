@@ -1118,9 +1118,18 @@ const App: React.FC = () => {
           const isFantasyTab = activeResultSession === 'fantasyPts';
           const isRaceTab = activeResultSession === 'race';
           const isQualiTab = activeResultSession === 'quali';
+          const isSprintTab = activeResultSession === 'sprint' || activeResultSession === 'sprintQuali';
+          
+          const driverSprintPtsMap: Record<string, number> = resultsJson.driverSprintPoints || {};
+          const driverSprintQualiPtsMap: Record<string, number> = resultsJson.driverSprintQualiPoints || {};
           
           // Determine which points map to use for this tab
-          const tabPointsMap = isFantasyTab ? driverPointsMap : isRaceTab ? driverRacePtsMap : isQualiTab ? driverQualiPtsMap : {};
+          const tabPointsMap = isFantasyTab ? driverPointsMap 
+             : isRaceTab ? driverRacePtsMap 
+             : isQualiTab ? driverQualiPtsMap 
+             : activeResultSession === 'sprint' ? driverSprintPtsMap
+             : activeResultSession === 'sprintQuali' ? driverSprintQualiPtsMap
+             : {};
           const hasTabPoints = Object.keys(tabPointsMap).length > 0;
           
           const currentSessionData = isFantasyTab ? (resultsJson.race || {}) 
@@ -1160,46 +1169,46 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Session Selection */}
-                  <div className="p-3 bg-slate-800/30 border-b border-slate-800 flex gap-2 overflow-x-auto no-scrollbar">
+                  <div className="px-4 py-3 bg-slate-800/30 border-b border-slate-800 flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
                      <button 
                        onClick={() => setActiveResultSession('race')}
-                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'race' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeResultSession === 'race' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                      >
-                       🏁 {t({ en: 'Race', it: 'Gara' })}
+                       <span className="text-xs">🏁</span> {t({ en: 'Race', it: 'Gara' })}
                      </button>
                      <button 
                        onClick={() => setActiveResultSession('quali')}
-                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'quali' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeResultSession === 'quali' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                      >
-                       ⏱️ {t({ en: 'Qualifying', it: 'Qualifiche' })}
+                       <span className="text-xs">⏱️</span> {t({ en: 'Quali', it: 'Quali' })}
                      </button>
                      {race.isSprint && (
                        <>
                          <button 
                            onClick={() => setActiveResultSession('sprint')}
-                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'sprint' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeResultSession === 'sprint' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                          >
                            Sprint
                          </button>
                          <button 
                            onClick={() => setActiveResultSession('sprintQuali')}
-                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'sprintQuali' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeResultSession === 'sprintQuali' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                          >
-                           Sprint Quali
+                           S.Quali
                          </button>
                        </>
                      )}
                       <button 
                         onClick={() => setActiveResultSession('fantasyPts')}
-                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'fantasyPts' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeResultSession === 'fantasyPts' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                       >
-                        ⭐ {t({ en: 'Total', it: 'Totale' })}
+                        <span className="text-xs">⭐</span> {t({ en: 'Total', it: 'Totale' })}
                       </button>
                       <button 
                         onClick={() => setActiveResultSession('breakdown')}
-                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${activeResultSession === 'breakdown' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-500'}`}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeResultSession === 'breakdown' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'} mr-4`}
                       >
-                        📊 {t({ en: 'Breakdown', it: 'Dettagli' })}
+                        <span className="text-xs">📊</span> {t({ en: 'Details', it: 'Dettagli' })}
                       </button>
                   </div>
 
@@ -1218,32 +1227,40 @@ const App: React.FC = () => {
                         <table className="w-full text-left text-xs text-slate-300">
                           <thead>
                             <tr className="border-b border-slate-700 text-slate-500 uppercase leading-normal">
-                              <th className="p-3 whitespace-nowrap">Pos</th>
-                              <th className="p-3 whitespace-nowrap">Driver</th>
-                              <th className="p-3 text-center">Pos.Pts</th>
-                              <th className="p-3 text-center">Overt</th>
-                              <th className="p-3 text-center">Mate</th>
-                              <th className="p-3 text-center">DNF</th>
-                              <th className="p-3 text-center">Pole</th>
-                              <th className="p-3 text-center">Sess</th>
-                              <th className="p-3 text-center">×Mult</th>
-                              <th className="p-3 text-right">Total</th>
+                              <th className="p-3 whitespace-nowrap">#</th>
+                              <th className="p-3 whitespace-nowrap">Pilota</th>
+                              <th className="p-3 text-center" title="Punti Posizione Gara">Gara</th>
+                              <th className="p-3 text-center" title="Punti Sprint">Spr</th>
+                              <th className="p-3 text-center" title="Punti Sorpassi/Overtakes">Sor</th>
+                              <th className="p-3 text-center" title="Confronto Compagno">Cmp</th>
+                              <th className="p-3 text-center" title="Ritiro / DNF">Rit</th>
+                              <th className="p-3 text-center" title="Pole Position / Sprint Pole">Pol</th>
+                              <th className="p-3 text-center" title="Sessione Qualifiche">Qua</th>
+                              <th className="p-3 text-center" title="Moltiplicatore Costruttore">Mul</th>
+                              <th className="p-3 text-right">Tot</th>
                             </tr>
                           </thead>
                           <tbody>
                             {sortedDriverIds.map((dId, idx) => {
                                const bd = (resultsJson.driverBreakdown || {})[dId] || {};
                                const driver = fetchedDrivers.find(d => d.id === dId);
-                               const f = (n: number) => n > 0 ? `+${n}` : n === 0 ? '-' : `${n}`;
+                               const f = (n: number) => {
+                                 const rounded = Math.round(n * 10) / 10;
+                                 return rounded > 0 ? `+${rounded}` : rounded === 0 ? '-' : `${rounded}`;
+                               };
                                return (
                                  <tr key={dId} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                                    <td className="p-2">{idx+1}</td>
                                    <td className="p-2 font-bold text-white whitespace-nowrap">{driver?.name || dId}</td>
                                    <td className="p-2 text-center text-emerald-400">{f(bd.racePosition)}</td>
+                                   <td className="p-2 text-center text-blue-400">{f(bd.sprint)}</td>
                                    <td className="p-2 text-center">{f(bd.overtakes)}</td>
                                    <td className="p-2 text-center">{f(bd.teammate)}</td>
                                    <td className="p-2 text-center text-red-400">{f(bd.dnf)}</td>
-                                   <td className="p-2 text-center text-purple-400">{f(bd.qualiPole)}</td>
+                                   <td className="p-2 text-center text-purple-400">
+                                     {f(bd.qualiPole)}
+                                     {bd.sprintPole > 0 && <span className="text-[10px] ml-1 opacity-70">+{bd.sprintPole}</span>}
+                                   </td>
                                    <td className="p-2 text-center text-purple-400">{f(bd.qualiSession)}</td>
                                    <td className="p-2 text-center text-amber-400">×{bd.constructorMult || 1}</td>
                                    <td className="p-2 text-right font-bold text-white">{bd.total}</td>
@@ -1282,7 +1299,10 @@ const App: React.FC = () => {
                               {hasTabPoints && (
                                 <div className="col-span-3 text-right">
                                   <span className={`text-sm font-mono font-bold ${tabPts !== undefined && tabPts > 0 ? 'text-emerald-400' : tabPts !== undefined && tabPts < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                    {tabPts !== undefined ? (tabPts > 0 ? `+${tabPts}` : tabPts) : '-'}
+                                    {tabPts !== undefined ? (() => {
+                                      const rounded = Math.round(tabPts * 10) / 10;
+                                      return rounded > 0 ? `+${rounded}` : rounded;
+                                    })() : '-'}
                                   </span>
                                 </div>
                               )}
