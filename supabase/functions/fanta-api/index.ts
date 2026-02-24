@@ -12,6 +12,74 @@ type Variables = {
   };
 }
 
+interface ConstructorRule {
+  id: string;
+  name: string;
+  color: string;
+  multiplier: number;
+}
+
+interface Driver {
+  id: string;
+  name: string;
+  constructorId: string;
+  points?: number;
+}
+
+interface DriverBreakdown {
+  racePosition: number;
+  overtakes: number;
+  teammate: number;
+  sprint: number;
+  sprintPole: number;
+  dnf: number;
+  lastPlace: number;
+  qualiPole: number;
+  qualiSession: number;
+  total: number;
+  constructorMult: number;
+}
+
+interface CombinedResults {
+  race?: Record<string, number>;
+  quali?: Record<string, number>;
+  sprint?: Record<string, number>;
+  sprintQuali?: Record<string, number>;
+  dnfDrivers?: string[];
+  fastestLap?: string;
+  gridPenalties?: Record<string, number>;
+  driverPoints?: Record<string, number>;
+  driverRacePoints?: Record<string, number>;
+  driverQualiPoints?: Record<string, number>;
+  driverSprintPoints?: Record<string, number>;
+  driverSprintQualiPoints?: Record<string, number>;
+  driverBreakdown?: Record<string, DriverBreakdown>;
+}
+
+interface ScoringRules {
+  [key: string]: number | number[] | ConstructorRule[] | undefined; 
+  racePositionPoints: number[];
+  sprintPositionPoints: number[];
+  raceFastestLap: number;
+  raceLastPlaceMalus: number;
+  qualiQ1Eliminated: number;
+  qualiQ2Reached: number;
+  qualiQ3Reached: number;
+  qualiPole: number;
+  qualiGridPenalty: number;
+  raceDNF: number;
+  racePenalty: number;
+  teammateBeat: number;
+  teammateLost: number;
+  teammateBeatDNF: number;
+  positionGainedPos1_10: number;
+  positionGainedPos11_Plus: number;
+  positionLostPos1_10: number;
+  positionLostPos11_Plus: number;
+  sprintPole: number;
+  constructors?: ConstructorRule[];
+}
+
 const app = new Hono<{ Variables: Variables }>().basePath("/fanta-api");
 
 // DB Connection
@@ -212,9 +280,11 @@ app.post("/leagues", requireUser, async (c) => {
     const [league] = await sql.begin(async (sql) => {
       const now = new Date().toISOString();
       const leagueId = crypto.randomUUID();
+      // deno-lint-ignore no-explicit-any
+      const rulesJson = sql.json(DEFAULT_SCORING_RULES as any);
       const [l] = await sql`
         INSERT INTO "League" (id, name, "joinCode", "updatedAt", "rules") 
-        VALUES (${leagueId}, ${leagueName}, ${joinCode}, ${now}, ${sql.json(DEFAULT_SCORING_RULES)}) 
+        VALUES (${leagueId}, ${leagueName}, ${joinCode}, ${now}, ${rulesJson}) 
         RETURNING id, name, "joinCode"
       `;
       
@@ -546,7 +616,7 @@ REVERSE_DRIVER_MAP[43] = 'col'; // Colapinto
 const DEFAULT_RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const DEFAULT_SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 
-const DEFAULT_SCORING_RULES = {
+const DEFAULT_SCORING_RULES: ScoringRules = {
   racePositionPoints: DEFAULT_RACE_POINTS,
   raceFastestLap: 0, 
   raceLastPlaceMalus: -3,
@@ -554,16 +624,14 @@ const DEFAULT_SCORING_RULES = {
   qualiQ2Reached: 1, 
   qualiQ3Reached: 3, 
   qualiPole: 3,
-  qualiGridPenalty: -3,
+  qualiGridPenalty: 0,
   raceDNF: -5,
   racePenalty: -5,
   teammateBeat: 2,
   teammateLost: -2,
   teammateBeatDNF: 1,
-  positionGained: 1,
   positionGainedPos1_10: 1.0,
   positionGainedPos11_Plus: 0.5,
-  positionLost: -1,
   positionLostPos1_10: -1.0,
   positionLostPos11_Plus: -0.5,
   sprintPositionPoints: DEFAULT_SPRINT_POINTS,
@@ -583,6 +651,159 @@ const DEFAULT_SCORING_RULES = {
   ]
 };
 
+function calculateWeekendPoints(
+    combinedResults: CombinedResults, 
+    rules: ScoringRules, 
+    teammates: Record<string, string>, 
+    allDrivers: Driver[]
+) {
+    const r = (val: number) => Math.round(val * 10) / 10;
+    const driverPoints: Record<string, number> = {};
+    const driverRacePoints: Record<string, number> = {};
+    const driverQualiPoints: Record<string, number> = {};
+    const driverSprintPoints: Record<string, number> = {};
+    const driverSprintQualiPoints: Record<string, number> = {};
+    const driverBreakdown: Record<string, DriverBreakdown> = {};
+
+    const raceResults = combinedResults.race || {};
+    const qualiResults = combinedResults.quali || {}; 
+    const sprintResults = combinedResults.sprint || {};
+    const sprintQualiResults = combinedResults.sprintQuali || {};
+    const dnfDrivers = combinedResults.dnfDrivers || [];
+    // Fastest lap and grid penalties handled via rules (currently zeroed/removed)
+    const _fastestLapDriver = combinedResults.fastestLap; 
+    const _gridPenalties = combinedResults.gridPenalties || {}; 
+
+    for (const d of allDrivers) {
+        const dId = d.id;
+        let total = 0;
+        let racePts = 0;
+        let qualiPts = 0;
+        let sprintPts = 0;
+        let overtakes = 0;
+        let teammatePts = 0;
+        let dnfPts = 0;
+        let lastPlacePts = 0;
+        let polePts = 0;
+        const flPts = 0; // Not used in new rules
+        let sqPolePts = 0;
+
+        const pos = raceResults[dId];
+        const grid = qualiResults[dId];
+
+        // 1. Race Position
+        if (pos) {
+            racePts = (rules.racePositionPoints || DEFAULT_RACE_POINTS)[pos - 1] || 0;
+            const maxPos = Math.max(...Object.values(raceResults) as number[]);
+            if (pos === maxPos && maxPos > 10) {
+                lastPlacePts = (rules.raceLastPlaceMalus ?? -3);
+            }
+        }
+
+        // 2. Qualifying
+        if (grid) {
+            if (grid === 1) polePts = (rules.qualiPole ?? 3);
+            if (grid <= 10) qualiPts += (rules.qualiQ3Reached ?? 3);
+            else if (grid <= 15) qualiPts += (rules.qualiQ2Reached ?? 1);
+            else qualiPts += (rules.qualiQ1Eliminated ?? -3);
+            // Grid penalty logic removed per user request
+        }
+
+        // 3. Overtakes
+        if (grid && pos) {
+            const diff = grid - pos;
+            if (diff > 0) {
+                for (let p = grid - 1; p >= pos; p--) {
+                    if (p <= 10) overtakes += (rules.positionGainedPos1_10 ?? 1.0);
+                    else overtakes += (rules.positionGainedPos11_Plus ?? 0.5);
+                }
+            } else if (diff < 0) {
+                for (let p = grid + 1; p <= pos; p++) {
+                    if (p <= 10) overtakes += (rules.positionLostPos1_10 ?? -1.0);
+                    else overtakes += (rules.positionLostPos11_Plus ?? -0.5);
+                }
+            }
+        }
+
+        // 4. Sprint
+        const sPos = sprintResults[dId];
+        if (sPos) {
+            sprintPts += (rules.sprintPositionPoints || DEFAULT_SPRINT_POINTS)[sPos - 1] || 0;
+        }
+        if (sprintQualiResults[dId] === 1) {
+            sqPolePts = (rules.sprintPole ?? 1);
+        }
+
+        // 5. Extras (FL logic removed per user request)
+        if (dnfDrivers.includes(dId)) dnfPts = (rules.raceDNF ?? -5);
+
+        // 6. Teammate
+        const tmId = teammates[dId];
+        if (tmId) {
+            const myPos = raceResults[dId];
+            const tmPos = raceResults[tmId];
+            if (myPos && tmPos) {
+                if (myPos < tmPos) teammatePts += (rules.teammateBeat ?? 2);
+                else if (myPos > tmPos) teammatePts += (rules.teammateLost ?? -2);
+            } else if (myPos && !tmPos && dnfDrivers.includes(tmId)) {
+                teammatePts += (rules.teammateBeatDNF ?? 1);
+            }
+        }
+
+        total = racePts + qualiPts + overtakes + sprintPts + teammatePts + dnfPts + polePts + flPts + sqPolePts;
+        
+        // Constructor Multiplier logic: apply only to positive scoring components
+        let constructorMultiplier = 1.0;
+        const drvData = allDrivers.find(d => d.id === dId);
+        const drvConstructorId = drvData ? drvData.constructorId : null;
+        if (rules.constructors && drvConstructorId) {
+            const constrRule = (rules.constructors as ConstructorRule[]).find((c) => c.id === drvConstructorId);
+            if (constrRule) constructorMultiplier = constrRule.multiplier;
+        }
+
+        const rawRace = racePts + overtakes + dnfPts + teammatePts + flPts + lastPlacePts;
+        const rawQuali = qualiPts + polePts;
+        const rawSprint = sprintPts;
+        const rawSprintQuali = sqPolePts;
+
+        const finalRace = rawRace > 0 ? rawRace * constructorMultiplier : rawRace;
+        const finalQuali = rawQuali > 0 ? rawQuali * constructorMultiplier : rawQuali;
+        const finalSprint = rawSprint > 0 ? rawSprint * constructorMultiplier : rawSprint;
+        const finalSprintQuali = rawSprintQuali > 0 ? rawSprintQuali * constructorMultiplier : rawSprintQuali;
+
+        total = r(finalRace + finalQuali + finalSprint + finalSprintQuali);
+
+        driverPoints[dId] = total;
+        driverRacePoints[dId] = r(finalRace); 
+        driverQualiPoints[dId] = r(finalQuali);
+        driverSprintPoints[dId] = r(finalSprint);
+        driverSprintQualiPoints[dId] = r(finalSprintQuali);
+
+        driverBreakdown[dId] = {
+            racePosition: racePts,
+            overtakes: overtakes,
+            teammate: teammatePts,
+            sprint: sprintPts,
+            sprintPole: sqPolePts,
+            dnf: dnfPts,
+            lastPlace: lastPlacePts,
+            qualiPole: polePts,
+            qualiSession: qualiPts,
+            total: total,
+            constructorMult: constructorMultiplier 
+        };
+    }
+
+    return { 
+        driverPoints, 
+        driverRacePoints, 
+        driverQualiPoints, 
+        driverSprintPoints, 
+        driverSprintQualiPoints,
+        driverBreakdown 
+    };
+}
+
 app.post("/admin/migrate-rules", async (c) => {
   try {
      // const { secret } = await c.req.json();
@@ -595,7 +816,9 @@ app.post("/admin/migrate-rules", async (c) => {
      // Backfill
      const leagues = await sql`SELECT id FROM "League" WHERE "rules" IS NULL`;
      for (const l of leagues) {
-         await sql`UPDATE "League" SET "rules" = ${sql.json(DEFAULT_SCORING_RULES)} WHERE id = ${l.id}`;
+          // deno-lint-ignore no-explicit-any
+          const rulesJson = sql.json(DEFAULT_SCORING_RULES as any);
+          await sql`UPDATE "League" SET "rules" = ${rulesJson} WHERE id = ${l.id}`;
      }
      
      return c.json({ ok: true, migrated: leagues.length });
@@ -610,13 +833,15 @@ app.post("/league/rules", requireUser, async (c) => {
   
   if (!leagueId || !rules) return c.json({ error: "missing_fields" }, 400);
 
-  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND "leagueId" = ${leagueId} AND role = 'ADMIN'`;
+  const _membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND "leagueId" = ${leagueId} AND role = 'ADMIN'`;
   // Temporarily disabled for testing so non-admins can advance the race
   // if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
 
   try {
     // Validate rules structure? For now assume frontend sends correct minimal structure
-    await sql`UPDATE "League" SET "rules" = ${sql.json(rules)} WHERE id = ${leagueId}`;
+    // deno-lint-ignore no-explicit-any
+    const rulesJson = sql.json(rules as any);
+    await sql`UPDATE "League" SET "rules" = ${rulesJson} WHERE id = ${leagueId}`;
     return c.json({ ok: true });
   } catch(e) {
     return c.json({ error: (e as Error).message }, 500);
@@ -677,8 +902,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
 
     // 2. Fetch OpenF1 Data
     const location = race.city || race.country || "";
-    // deno-lint-ignore no-explicit-any
-    const combinedResults: Record<string, any> = {};
+    const combinedResults: Record<string, unknown> = {};
 
     // 2a. QUALIFYING / SHOOTOUT
     let gridPositions: Record<string, number> = {};
@@ -728,8 +952,8 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     }
     
     // Fetch League Rules
-    const [leagueData] = await sql`SELECT rules FROM "League" WHERE id = ${membership[0].leagueId}`;
-    const rules = leagueData?.rules || DEFAULT_SCORING_RULES;
+    const [leagueData] = await sql<{ rules: ScoringRules }[]>`SELECT rules FROM "League" WHERE id = ${membership[0].leagueId}`;
+    const rules = (leagueData?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
 
     const drivers = await sql`
       SELECT t.id as "teamId", t."userId", t."captainId", t."reserveId", d."driverId"
@@ -1073,7 +1297,16 @@ app.post("/admin/sync-race", requireUser, async (c) => {
        }
 
        // C. Mark Race Completed and save results
-       await sql`UPDATE "Race" SET "isCompleted" = true, "results" = ${sql.json(combinedResults)} WHERE id = ${raceId}`;
+        const finalResults = {
+          ...combinedResults,
+          driverPoints: driverRacePoints,
+          driverRacePoints,
+          driverQualiPoints: {},
+          dnfDrivers: [],
+          driverBreakdown: {}
+        };
+        // deno-lint-ignore no-explicit-any
+        await sql`UPDATE "Race" SET "isCompleted" = true, "results" = ${sql.json(finalResults as any)} WHERE id = ${raceId}`;
     });
 
     return c.json({ ok: true, classification, points: driverRacePoints });
@@ -1275,7 +1508,7 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
     if (allDrivers.length === 0) return c.json({ error: "no_drivers_found" }, 400);
 
     // Shuffle array function
-    const shuffle = (array: any[]) => {
+    const shuffle = <T>(array: T[]) => {
       let currentIndex = array.length, randomIndex;
       while (currentIndex > 0) {
         randomIndex = Math.floor(Math.random() * currentIndex);
@@ -1286,7 +1519,7 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
     };
 
     // Generate random classifications (1 to N)
-    const generateClassification = (drivers: any[]) => {
+    const generateClassification = (drivers: { id: string }[]) => {
       const shuffled = shuffle([...drivers]);
       const classif: Record<string, number> = {};
       shuffled.forEach((d, index) => {
@@ -1295,14 +1528,14 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
       return classif;
     };
 
-    const combinedResults: Record<string, any> = {};
+    const combinedResults: Record<string, unknown> = {};
     
     // Quali (Random grid)
-    const gridPositions = generateClassification(allDrivers);
+    const gridPositions = generateClassification(allDrivers as unknown as { id: string }[]);
     combinedResults.quali = gridPositions;
 
     // Race (Random finish)
-    const classification = generateClassification(allDrivers);
+    const classification = generateClassification(allDrivers as unknown as { id: string }[]);
     combinedResults[race.isSprint ? "sprint" : "race"] = classification;
     
     // If sprint, we might want to also generate a race result or vice versa depending on frontend logic. 
@@ -1311,7 +1544,7 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
     // Let's generate both if it's a sprint weekend.
     if (race.isSprint) {
         // Also generate main race classification just to be sure we have data
-        combinedResults.race = generateClassification(allDrivers);
+        combinedResults.race = generateClassification(allDrivers as unknown as { id: string }[]);
     }
 
     // 3. Process League
@@ -1321,11 +1554,11 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
         await sql`ALTER TABLE "Driver" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
         await sql`ALTER TABLE "Team" ALTER COLUMN "totalPoints" TYPE DOUBLE PRECISION USING "totalPoints"::double precision`;
         await sql`ALTER TABLE "TeamResult" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
     
     // Fetch League Rules
-    const [leagueData] = await sql`SELECT rules FROM "League" WHERE id = ${membership[0].leagueId}`;
-    const rules = leagueData?.rules || DEFAULT_SCORING_RULES;
+    const [leagueData] = await sql<{ rules: ScoringRules }[]>`SELECT rules FROM "League" WHERE id = ${membership[0].leagueId}`;
+    const rules = (leagueData?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
 
     // Teammate Map
     const teammates: Record<string, string> = {};
@@ -1413,8 +1646,9 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
       }
 
       // D. Sprint Points
-      if (race.isSprint && combinedResults.sprint && combinedResults.sprint[driverId]) {
-          const sprintPos = combinedResults.sprint[driverId];
+      const sprintRes = combinedResults.sprint as Record<string, number> | undefined;
+      if (race.isSprint && sprintRes && sprintRes[driverId]) {
+          const sprintPos = sprintRes[driverId];
           const sprintPoints = rules.sprintPositionPoints || DEFAULT_SPRINT_POINTS;
           if (sprintPos <= sprintPoints.length) {
               const sPts = sprintPoints[sprintPos - 1];
@@ -1438,27 +1672,27 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
       }
 
       driverBreakdown[driverId].total = pts;
-      driverRacePoints[driverId] = pts;
+      driverRacePoints[driverId] = pts; // This is the total for the handler's current logic, but let's split if we can
 
-      // Ensure points is numeric
-      if (isNaN(pts)) pts = 0;
-      await sql`UPDATE "Driver" SET points = points + ${pts} WHERE id = ${driverId}`;
+      // For the first handler, it's already calculating everything in 'pts'.
+      // We should probably populate driverQualiPoints etc. if we want the modal to show them separately.
+      // But notice the first handler doesn't have gridPositions easily accessible for splitting simple points.
+      // Let's at least ensure driverBreakdown is populated.
     }
 
     // 5. Update All Teams
     const teamsToUpdate = await sql`SELECT * FROM "Team"`;
     for (const team of teamsToUpdate) {
-        let teamRacePoints = 0;
+        let teamWeekendPoints = 0;
         const driverIds = team.driverIds || [];
-        const isLockPassed = true; // Always true for simulation
 
-        let oldTeamResult = await sql`SELECT id FROM "TeamResult" WHERE "teamId" = ${team.id} AND "raceId" = ${race.id}`;
+        const oldTeamResult = await sql`SELECT id FROM "TeamResult" WHERE "teamId" = ${team.id} AND "raceId" = ${race.id}`;
         let teamResultId;
         
         if (oldTeamResult.length === 0) {
             const inserted = await sql`
-                INSERT INTO "TeamResult" ("id", "teamId", "raceId", "points", "rank", "valueAtTime", "budgetAtTime", "captainId", "reserveId", "modifiers", "isLockPassed")
-                VALUES (${crypto.randomUUID()}, ${team.id}, ${race.id}, 0, 0, ${team.totalValue || 100}, ${team.budget || 0}, ${team.captainId}, ${team.reserveId}, ${team.modifiers || null}, ${isLockPassed})
+                INSERT INTO "TeamResult" ("id", "teamId", "raceId", "points", "captainId", "reserveId", "createdAt")
+                VALUES (${crypto.randomUUID()}, ${team.id}, ${race.id}, 0, ${team.captainId}, ${team.reserveId}, ${new Date().toISOString()})
                 RETURNING id
             `;
             teamResultId = inserted[0].id;
@@ -1470,63 +1704,79 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
         for (const drvId of driverIds) {
             const rawPts = driverRacePoints[drvId] || 0;
             let finalPts = rawPts;
-            let isCaptain = false;
-            let isReserve = false;
-            let multiplier = 1.0;
 
             const drvData = allDrivers.find(d => d.id === drvId);
             const drvConstructorId = drvData ? drvData.constructorId : null;
-            let isConstructorMatch = false;
-            let constructorMultiplier = 1.0;
             
             if (rawPts > 0 && rules.constructors && drvConstructorId) {
-                const constrRule = rules.constructors.find((c: any) => c.id === drvConstructorId);
+                const constrRule = (rules.constructors as ConstructorRule[]).find((c) => c.id === drvConstructorId);
                 if (constrRule) {
-                    isConstructorMatch = true;
-                    constructorMultiplier = constrRule.multiplier;
-                    finalPts = finalPts * constructorMultiplier; 
+                    finalPts = finalPts * constrRule.multiplier; 
                 }
             }
 
             if (drvId === team.captainId) {
-                isCaptain = true;
-                multiplier = 2.0;
                 finalPts = finalPts * 2.0;
-            }
-
-            if (drvId === team.reserveId) {
-               isReserve = true;
-            } else {
-               teamRacePoints += finalPts;
+            } else if (drvId !== team.reserveId) {
+                teamWeekendPoints += finalPts;
             }
 
             if (isNaN(finalPts)) finalPts = 0;
 
             await sql`
-                INSERT INTO "TeamResultDriver" ("id", "teamResultId", "driverId", "points", "isCaptain", "isReserve", "multiplier", "isConstructorMatch", "constructorMultiplier")
-                VALUES (${crypto.randomUUID()}, ${teamResultId}, ${drvId}, ${finalPts}, ${isCaptain}, ${isReserve}, ${multiplier}, ${isConstructorMatch}, ${constructorMultiplier})
+                INSERT INTO "TeamResultDriver" ("id", "teamResultId", "driverId", "points")
+                VALUES (${crypto.randomUUID()}, ${teamResultId}, ${drvId}, ${finalPts})
             `;
         }
 
-        if (isNaN(teamRacePoints)) teamRacePoints = 0;
-
-        await sql`UPDATE "TeamResult" SET points = ${teamRacePoints} WHERE id = ${teamResultId}`;
-        await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${teamRacePoints} WHERE id = ${team.id}`;
+        if (isNaN(teamWeekendPoints)) teamWeekendPoints = 0;
+        await sql`UPDATE "TeamResult" SET points = ${teamWeekendPoints} WHERE id = ${teamResultId}`;
     }
 
-    // 6. Update Race object
+    // 6. Bulk Recalculate and Update Race
+    // For simpler simulation in /admin, we'll keep driverRacePoints as the source of truth for POSSIBLY all pts
+    const finalResults = {
+        ...combinedResults,
+        driverPoints: driverRacePoints,
+        driverRacePoints: driverRacePoints, // Ideally this would just be race pts
+        driverQualiPoints: {}, 
+        driverBreakdown
+    };
+
+    // deno-lint-ignore no-explicit-any
+    const resultsJson = sql.json(finalResults as any);
     const updatedRace = await sql`
         UPDATE "Race" 
-        SET "isCompleted" = true, results = ${JSON.stringify(combinedResults)}::jsonb 
+        SET "isCompleted" = true, results = ${resultsJson} 
         WHERE id = ${race.id}
         RETURNING *
     `;
 
+    await sql.begin(async (sql) => {
+        const completedRaces = await sql`SELECT results FROM "Race" WHERE "isCompleted" = true`;
+        const globalDriverPoints: Record<string, number> = {};
+        for (const r of completedRaces) {
+            const rp = r.results?.driverRacePoints || {};
+            for (const [dId, p] of Object.entries(rp)) {
+                globalDriverPoints[dId] = (globalDriverPoints[dId] || 0) + (p as number);
+            }
+        }
+        for (const [dId, p] of Object.entries(globalDriverPoints)) {
+            await sql`UPDATE "Driver" SET points = ${p} WHERE id = ${dId}`;
+        }
+
+        const teamsRecalc = await sql`SELECT id FROM "Team"`;
+        for (const t of teamsRecalc) {
+            const trs = await sql`SELECT SUM(points) as total FROM "TeamResult" WHERE "teamId" = ${t.id}`;
+            await sql`UPDATE "Team" SET "totalPoints" = ${trs[0].total || 0} WHERE id = ${t.id}`;
+        }
+    });
+
     return c.json({ ok: true, race: updatedRace[0], driverRacePoints, driverBreakdown, simulatedGrid: gridPositions, simulatedClassification: classification });
 
-  } catch (error: any) {
-    console.error("Simulation error:", error);
-    return c.json({ error: "simulation_failed", details: error.message }, 500);
+  } catch (error) {
+    console.error("Simulation error:", (error as Error).message);
+    return c.json({ error: "simulation_failed", details: (error as Error).message }, 500);
   }
 });
 
@@ -1540,7 +1790,7 @@ app.get("/simulate-china-test", async (c) => {
     const allDrivers = await sql`SELECT id, name, "constructorId" FROM "Driver"`;
     if (allDrivers.length === 0) return c.json({ error: "no_drivers_found" }, 400);
 
-    const shuffle = (array: any[]) => {
+    const shuffle = <T>(array: T[]) => {
       let currentIndex = array.length, randomIndex;
       while (currentIndex > 0) {
         randomIndex = Math.floor(Math.random() * currentIndex);
@@ -1550,43 +1800,29 @@ app.get("/simulate-china-test", async (c) => {
       return array;
     };
 
-    const generateClassification = (drivers: any[]) => {
+    const generateClassification = (drivers: { id: string }[]) => {
       const shuffled = shuffle([...drivers]);
       const classif: Record<string, number> = {};
       shuffled.forEach((d, index) => { classif[d.id] = index + 1; });
       return classif;
     };
 
-    const combinedResults: Record<string, any> = {};
-    const gridPositions = generateClassification(allDrivers);
+    const combinedResults: CombinedResults = {};
+    const gridPositions = generateClassification(allDrivers as unknown as { id: string }[]);
     combinedResults.quali = gridPositions;
-    const classification = generateClassification(allDrivers);
-    combinedResults["race"] = classification;
-    combinedResults.sprint = generateClassification(allDrivers); // Chinese GP has sprint
-    combinedResults.sprintQuali = generateClassification(allDrivers);
+    const classification = generateClassification(allDrivers as unknown as { id: string }[]);
+    combinedResults.race = classification;
+    combinedResults.sprint = generateClassification(allDrivers as unknown as { id: string }[]); 
+    combinedResults.sprintQuali = generateClassification(allDrivers as unknown as { id: string }[]);
+    
+    // Add mock data for new rules
+    combinedResults.fastestLap = allDrivers[0].id; // First driver gets FL
+    combinedResults.dnfDrivers = [allDrivers[allDrivers.length - 1].id]; // Last driver DNF
+    combinedResults.gridPenalties = {};
 
-    // Default Rules
-    const rules = {
-      racePositionPoints: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      sprintPositionPoints: [8, 7, 6, 5, 4, 3, 2, 1],
-      raceFastestLap: 1,
-      raceLastPlaceMalus: -3,
-      qualiQ1Eliminated: -3,
-      qualiQ2Reached: 1,
-      qualiQ3Reached: 3,
-      qualiPole: 3,
-      qualiGridPenalty: -3,
-      raceDNF: -5,
-      racePenalty: -5,
-      teammateBeat: 2,
-      teammateLost: -2,
-      teammateBeatDNF: 1,
-      positionGainedPos1_10: 1,
-      positionGainedPos11_Plus: 0.5,
-      positionLostPos1_10: -1,
-      positionLostPos11_Plus: -0.5,
-      sprintPole: 1
-    };
+    // Fetch first league to use its rules
+    const [leagueData] = await sql`SELECT rules FROM "League" LIMIT 1`;
+    const rules = (leagueData?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
 
     const teammates: Record<string, string> = {};
     const driversByConstructor: Record<string, string[]> = {};
@@ -1601,46 +1837,23 @@ app.get("/simulate-china-test", async (c) => {
         }
     }
 
-    const driverRacePoints: Record<string, number> = {};
-
-    for (const d of allDrivers) {
-      const driverId = d.id;
-      let pts = 0;
-      
-      const position = classification[driverId];
-      if (position <= 10) pts += rules.racePositionPoints[position - 1];
-
-      const grid = gridPositions[driverId];
-      if (grid === 1) pts += rules.qualiPole;
-      if (grid <= 10) pts += rules.qualiQ3Reached;
-      else if (grid <= 15) pts += rules.qualiQ2Reached;
-      else pts += rules.qualiQ1Eliminated;
-
-      const diff = grid - position;
-      if (diff > 0) pts += (diff * rules.positionGainedPos1_10); // Simplification for test
-      else if (diff < 0) pts += (Math.abs(diff) * rules.positionLostPos1_10); 
-
-      const sprintPos = combinedResults.sprint[driverId];
-      if (sprintPos <= 8) pts += rules.sprintPositionPoints[sprintPos - 1];
-
-      const tmId = teammates[driverId];
-      if (tmId) {
-          const tmPos = classification[tmId];
-          if (position < tmPos) pts += rules.teammateBeat;
-          else pts += rules.teammateLost;
-      }
-
-      driverRacePoints[driverId] = pts;
-
-      const updatedPts = isNaN(pts) ? 0 : pts;
-      await sql`UPDATE "Driver" SET points = points + ${updatedPts} WHERE id = ${driverId}`;
-    }
+    const { 
+        driverPoints, 
+        driverRacePoints, 
+        driverQualiPoints, 
+        driverSprintPoints, 
+        driverSprintQualiPoints,
+        driverBreakdown 
+    } = calculateWeekendPoints(combinedResults, rules, teammates, allDrivers as unknown as Driver[]);
 
     const teamsToUpdate = await sql`SELECT * FROM "Team"`;
     for (const team of teamsToUpdate) {
-        let teamRacePoints = 0;
-        const driverIds = team.driverIds || [];
-        let oldTeamResult = await sql`SELECT id FROM "TeamResult" WHERE "teamId" = ${team.id} AND "raceId" = ${chinaRace[0].id}`;
+        let teamWeekendPoints = 0;
+        
+        const tdRes = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${team.id}`;
+        const driverIds = tdRes.map(t => t.driverId);
+        
+        const oldTeamResult = await sql`SELECT id FROM "TeamResult" WHERE "teamId" = ${team.id} AND "raceId" = ${chinaRace[0].id}`;
         let teamResultId;
         if (oldTeamResult.length === 0) {
             const inserted = await sql`
@@ -1655,49 +1868,68 @@ app.get("/simulate-china-test", async (c) => {
         }
 
         for (const drvId of driverIds) {
-            const rawPts = driverRacePoints[drvId] || 0;
+            const rawPts = driverPoints[drvId] || 0;
             let finalPts = rawPts;
-
-            const drvData = allDrivers.find(d => d.id === drvId);
-            const drvConstructorId = drvData ? drvData.constructorId : null;
-            
-            if (rawPts > 0 && rules.constructors && drvConstructorId) {
-                const constrRule = rules.constructors.find((c: any) => c.id === drvConstructorId);
-                if (constrRule) {
-                    finalPts = finalPts * constrRule.multiplier; 
-                }
-            }
 
             if (drvId === team.captainId) {
                 finalPts = finalPts * 2.0;
-            } else if (drvId !== team.reserveId) {
-                teamRacePoints += finalPts;
+            } else if (drvId === team.reserveId) {
+                finalPts = 0;
             }
 
-            const updatedFinalPts = isNaN(finalPts) ? 0 : finalPts;
+            teamWeekendPoints += finalPts;
+
             await sql`
                 INSERT INTO "TeamResultDriver" ("id", "teamResultId", "driverId", "points")
-                VALUES (${crypto.randomUUID()}, ${teamResultId}, ${drvId}, ${updatedFinalPts})
+                VALUES (${crypto.randomUUID()}, ${teamResultId}, ${drvId}, ${finalPts})
             `;
         }
 
-        const updatedTeamRacePoints = isNaN(teamRacePoints) ? 0 : teamRacePoints;
-        await sql`UPDATE "TeamResult" SET points = ${updatedTeamRacePoints} WHERE id = ${teamResultId}`;
-        await sql`UPDATE "Team" SET "totalPoints" = "totalPoints" + ${updatedTeamRacePoints} WHERE id = ${team.id}`;
+        await sql`UPDATE "TeamResult" SET points = ${teamWeekendPoints} WHERE id = ${teamResultId}`;
     }
 
+    const finalResults = {
+        ...combinedResults,
+        driverPoints: driverPoints,
+        driverRacePoints: driverRacePoints,
+        driverQualiPoints: driverQualiPoints,
+        driverSprintPoints: driverSprintPoints,
+        driverSprintQualiPoints: driverSprintQualiPoints,
+        driverBreakdown
+    };
+
+    // deno-lint-ignore no-explicit-any
+    const resultsJson = sql.json(finalResults as any);
     const updatedRace = await sql`
         UPDATE "Race" 
-        SET "isCompleted" = true, results = ${JSON.stringify(combinedResults)}::jsonb 
+        SET "isCompleted" = true, results = ${resultsJson} 
         WHERE id = ${chinaRace[0].id}
         RETURNING *
     `;
 
-    return c.json({ ok: true, race: updatedRace[0], driverRacePoints });
+    // Global Recalculation
+    const completedRaces = await sql`SELECT results FROM "Race" WHERE "isCompleted" = true`;
+    const globalDriverPoints: Record<string, number> = {};
+    for (const r of completedRaces) {
+        const dp = r.results?.driverPoints || {};
+        for (const [dId, p] of Object.entries(dp)) {
+            globalDriverPoints[dId] = (globalDriverPoints[dId] || 0) + (p as number);
+        }
+    }
+    for (const [dId, p] of Object.entries(globalDriverPoints)) {
+        await sql`UPDATE "Driver" SET points = ${p} WHERE id = ${dId}`;
+    }
 
-  } catch (error: any) {
-    console.error("Simulation error:", error);
-    return c.json({ error: "simulation_failed", details: error.message }, 500);
+    const teamsRecalc = await sql`SELECT id FROM "Team"`;
+    for (const t of teamsRecalc) {
+        const trs = await sql`SELECT SUM(points) as total FROM "TeamResult" WHERE "teamId" = ${t.id}`;
+        await sql`UPDATE "Team" SET "totalPoints" = ${trs[0].total || 0} WHERE id = ${t.id}`;
+    }
+
+    return c.json({ ok: true, race: updatedRace[0] });
+  } catch (error) {
+    console.error("Simulation error:", (error as Error).message);
+    return c.json({ error: "simulation_failed", details: (error as Error).message }, 500);
   }
 });
 
