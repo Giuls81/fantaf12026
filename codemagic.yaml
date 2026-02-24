@@ -20,7 +20,7 @@ workflows:
         - push
     scripts:
       - name: Install deps
-        script: npm ci
+        script: npm ci --omit=dev
       - name: Build web
         script: |
           cd web
@@ -129,7 +129,7 @@ workflows:
         - push
     scripts:
       - name: Install deps
-        script: npm ci
+        script: npm ci --omit=dev
       - name: Build web
         script: |
           cd web
