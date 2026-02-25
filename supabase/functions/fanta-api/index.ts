@@ -761,12 +761,12 @@ function calculateWeekendPoints(
             if (constrRule) constructorMultiplier = constrRule.multiplier;
         }
 
-        const rawRace = racePts + overtakes + dnfPts + teammatePts + flPts + lastPlacePts;
+        const rawRace = racePts + overtakes + dnfPts + flPts + lastPlacePts;
         const rawQuali = qualiPts + polePts;
         const rawSprint = sprintPts;
         const rawSprintQuali = sqPolePts;
 
-        const finalRace = rawRace > 0 ? rawRace * constructorMultiplier : rawRace;
+        const finalRace = (rawRace > 0 ? rawRace * constructorMultiplier : rawRace) + teammatePts;
         const finalQuali = rawQuali > 0 ? rawQuali * constructorMultiplier : rawQuali;
         const finalSprint = rawSprint > 0 ? rawSprint * constructorMultiplier : rawSprint;
         const finalSprintQuali = rawSprintQuali > 0 ? rawSprintQuali * constructorMultiplier : rawSprintQuali;
