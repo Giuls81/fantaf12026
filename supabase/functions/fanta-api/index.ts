@@ -742,11 +742,27 @@ function calculateWeekendPoints(
         if (tmId) {
             const myPos = raceResults[dId];
             const tmPos = raceResults[tmId];
+            const amIdnf = dnfDrivers.includes(dId);
+            const isTmDnf = dnfDrivers.includes(tmId);
+
             if (myPos && tmPos) {
-                if (myPos < tmPos) teammatePts += (rules.teammateBeat ?? 2);
-                else if (myPos > tmPos) teammatePts += (rules.teammateLost ?? -2);
-            } else if (myPos && !tmPos && dnfDrivers.includes(tmId)) {
-                teammatePts += (rules.teammateBeatDNF ?? 1);
+                if (amIdnf && !isTmDnf) {
+                    // I DNF'd, teammate finished: I lose
+                    teammatePts += (rules.teammateLost ?? -2);
+                } else if (!amIdnf && isTmDnf) {
+                    // I finished, teammate DNF'd: I win
+                    // Using teammateBeatDNF or fallback to teammateBeat
+                    teammatePts += (rules.teammateBeatDNF !== undefined ? rules.teammateBeatDNF : (rules.teammateBeat ?? 2));
+                } else {
+                    // Both finished, OR both DNF'd.
+                    // In F1, if both DNF, the one who completed more laps is classified higher.
+                    // So we can still rely on official classification (myPos vs tmPos).
+                    if (myPos < tmPos) teammatePts += (rules.teammateBeat ?? 2);
+                    else if (myPos > tmPos) teammatePts += (rules.teammateLost ?? -2);
+                }
+            } else if (myPos && !tmPos && isTmDnf) {
+                 // Fallback: Teammate didn't even get classified but is in DNF list
+                 teammatePts += (rules.teammateBeatDNF !== undefined ? rules.teammateBeatDNF : (rules.teammateBeat ?? 2));
             }
         }
 
