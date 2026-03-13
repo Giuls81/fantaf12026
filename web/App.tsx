@@ -971,6 +971,8 @@ const App: React.FC = () => {
   };
 
   const renderStandings = () => {
+    const selectedRaceForResults = racesWithResults.find((race) => race.id === selectedRaceId) || racesWithResults[0] || null;
+
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -980,8 +982,47 @@ const App: React.FC = () => {
       {/* Official Results Button Area */}
       <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col gap-3">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">{t({ en: 'Race Results', it: 'Risultati Gara', fr: 'Résultats', de: 'Ergebnisse', es: 'Resultados', ru: 'Результаты', zh: '比赛结果', ar: 'النتائج', ja: 'レース結果' })}</h2>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar items-center">
-          {racesWithResults.map(r => (
+        <div className="flex flex-col gap-3">
+          {racesWithResults.length > 0 && (
+            <>
+              <label className="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">
+                {t({ en: 'Selected Race', it: 'Gara Selezionata' })}
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <select
+                    value={selectedRaceForResults?.id || ''}
+                    onChange={(e) => setSelectedRaceId(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-slate-600 bg-slate-900/90 px-4 py-3 pr-12 text-sm font-bold text-white outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                  >
+                    {racesWithResults.map((race) => (
+                      <option key={race.id} value={race.id}>
+                        {race.name.replace(' Grand Prix', '')}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                    <span className="text-xs">v</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!selectedRaceForResults) return;
+                    setViewingOfficialResultsRaceId(selectedRaceForResults.id);
+                    setActiveResultSession(getDefaultResultSession(selectedRaceForResults));
+                  }}
+                  className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                  disabled={!selectedRaceForResults}
+                >
+                  {t({ en: 'Open Results', it: 'Apri Risultati' })}
+                </button>
+              </div>
+            </>
+          )}
+          {!racesWithResults.length && (
+            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No race results available yet.', it: 'Nessun risultato disponibile.' })}</div>
+          )}
+          {false && racesWithResults.map((r) => (
             <button 
               key={r.id}
               onClick={() => {
@@ -998,7 +1039,7 @@ const App: React.FC = () => {
               🏁 {r.name.replace(' Grand Prix', '')}
             </button>
           ))}
-          {racesWithResults.length === 0 && (
+          {false && racesWithResults.length === 0 && (
             <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No race results available yet.', it: 'Nessun risultato disponibile.' })}</div>
           )}
         </div>
