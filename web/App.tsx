@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
 import { initializeAdMob, showAppOpen, showRewardVideo, showInterstitialWithProbability } from './services/admob';
@@ -1151,9 +1151,9 @@ const App: React.FC = () => {
 
                 const pA = (typeof valA === 'number') ? valA : 999; 
                 const pB = (typeof valB === 'number') ? valB : 999;
-                // If pos is 0 (DNF), treat as very large number to sort at bottom
-                const vA = pA === 0 ? 999 : pA;
-                const vB = pB === 0 ? 999 : pB;
+                // If pos is 0 or 999 (DNF/Unclassified), treat as very large number to sort at bottom
+                const vA = (pA === 0 || pA === 999) ? 999 : pA;
+                const vB = (pB === 0 || pB === 999) ? 999 : pB;
                 return vA - vB;
             });
           
@@ -1278,8 +1278,8 @@ const App: React.FC = () => {
                           const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
                           const tabPts = tabPointsMap[dId];
-                          // Show DNF if pos is 0/undefined OR if driver is in dnfDrivers list
-                          const displayPos = (pos === 0 || !pos || dnfDrivers.includes(dId)) ? 'DNF' : pos;
+                          // Show DNF if pos is 0, 999 (unclassified/DNF), undefined OR if driver is in dnfDrivers list
+                          const displayPos = (pos === 0 || pos === 999 || !pos || dnfDrivers.includes(dId)) ? 'DNF' : pos;
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">
