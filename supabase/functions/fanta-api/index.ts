@@ -643,7 +643,7 @@ async function fetchOpenF1Json(url: string): Promise<unknown | null> {
 }
 
 const DRIVER_NUMBER_FALLBACK: Record<number, string> = {
-  1: "ver", 4: "nor", 5: "bor", 6: "had", 10: "gas", 11: "per", 12: "ant", 14: "alo", 16: "lec", 18: "str",
+  1: "nor", 3: "ver", 5: "bor", 6: "had", 10: "gas", 11: "per", 12: "ant", 14: "alo", 16: "lec", 18: "str",
   22: "tsu", 23: "alb", 27: "hul", 30: "law", 31: "oco", 41: "lin", 43: "col", 44: "ham", 55: "sai",
   63: "rus", 77: "bot", 81: "pia", 87: "bea", 38: "bea", 50: "bea"
 };
@@ -753,8 +753,9 @@ const DEFAULT_SCORING_RULES: ScoringRules = {
     { id: 'alp', name: 'Alpine', color: '#2293D1', multiplier: 1.3 },
     { id: 'wil', name: 'Williams', color: '#37BEDD', multiplier: 1.3 },
     { id: 'rb', name: 'Racing Bulls', color: '#6692FF', multiplier: 1.3 },
-    { id: 'sau', name: 'Sauber', color: '#52E252', multiplier: 1.3 },
-    { id: 'has', name: 'Haas', color: '#B6BABD', multiplier: 1.3 },
+    { id: 'haa', name: 'Haas', color: '#B6BABD', multiplier: 1.3 },
+    { id: 'sau', name: 'Audi', color: '#000000', multiplier: 1.5 },
+    { id: 'cad', name: 'Cadillac', color: '#E5C25B', multiplier: 1.6 },
   ]
 };
 
@@ -814,6 +815,7 @@ async function getOpenF1SessionKey(year: number, location: string, type: 'Race' 
 
 async function getOpenF1Classification(sessionKey: number, sessionDriverMap: Record<number, string>, knownDriverIds: Set<string>): Promise<Record<string, number>> {
   const results: Record<string, number> = {};
+  let hasActualClassification = false;
   try {
     const data = await fetchOpenF1Json(`${OPENF1_BASE}/position?session_key=${sessionKey}`);
     if (Array.isArray(data)) {
@@ -825,7 +827,10 @@ async function getOpenF1Classification(sessionKey: number, sessionDriverMap: Rec
       }
       for (const [n, p] of Object.entries(latest)) {
         const id = resolveDriverIdByNumber(Number(n), sessionDriverMap, knownDriverIds);
-        if (id) results[id] = p;
+        if (id) {
+          results[id] = p;
+          hasActualClassification = true;
+        }
       }
     }
   } catch (e) { console.error("pos_err", e); }
@@ -836,19 +841,23 @@ async function getOpenF1Classification(sessionKey: number, sessionDriverMap: Rec
         const n = Number(r.driver_number); const p = Number(r.position);
         if (Number.isFinite(n) && Number.isFinite(p) && p > 0) {
           const id = resolveDriverIdByNumber(n, sessionDriverMap, knownDriverIds);
-          if (id && !results[id]) results[id] = p;
+          if (id && !results[id]) {
+            results[id] = p;
+            hasActualClassification = true;
+          }
         }
       }
     }
   } catch (e) { console.error("res_err", e); }
 
-  // New Fix: Ensure all 22 drivers from the session map are IN the results object, 
-  // even if they don't have a position. We use 999 (instead of 0) so they aren't 
-  // stripped out of JSON or filtered as falsy. Later scoring/frontend logic treats
-  // 999 correctly as DNF or "last".
-  for (const driverId of knownDriverIds) {
+  if (!hasActualClassification) {
+    return {};
+  }
+
+  // Keep unclassified drivers visible in the UI without turning 999 into a real grid slot.
+  for (const driverId of new Set(Object.values(sessionDriverMap))) {
     if (!results[driverId]) {
-      results[driverId] = 999; 
+      results[driverId] = 999;
     }
   }
 
@@ -898,20 +907,24 @@ function calculateWeekendPoints(combinedResults: CombinedResults, rules: Scoring
     const dId = d.id;
     let racePts = 0; let qualiPts = 0; let sprintPts = 0; let overtakes = 0; let teammatePts = 0; let dnfPts = 0; let lastPts = 0; let polePts = 0; let sqPolePts = 0;
     const pos = raceRes[dId]; const grid = qualiRes[dId];
-    if (pos) {
+    const hasValidRacePos = Number.isFinite(pos) && Number(pos) > 0 && Number(pos) < 900;
+    const hasValidGridPos = Number.isFinite(grid) && Number(grid) > 0 && Number(grid) < 900;
+    const hasUnclassifiedGrid = Number.isFinite(grid) && Number(grid) >= 900;
+
+    if (hasValidRacePos) {
       racePts = (rules.racePositionPoints || DEFAULT_RACE_POINTS)[pos - 1] || 0;
-      const vps = Object.values(raceRes).filter(v => typeof v === 'number') as number[];
+      const vps = Object.values(raceRes).filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 900) as number[];
       const mx = vps.length > 0 ? Math.max(...vps) : 0;
       if (pos === mx && mx > 10) lastPts = (rules.raceLastPlaceMalus ?? -3);
     }
-    if (grid) {
+    if (hasValidGridPos || hasUnclassifiedGrid) {
       if (grid === 1) polePts = (rules.qualiPole ?? 3);
-      if (grid <= 10) qualiPts += (rules.qualiQ3Reached ?? 3);
-      else if (grid <= 16) qualiPts += (rules.qualiQ2Reached ?? 1);
+      if (hasValidGridPos && grid <= 10) qualiPts += (rules.qualiQ3Reached ?? 3);
+      else if (hasValidGridPos && grid <= 16) qualiPts += (rules.qualiQ2Reached ?? 1);
       else qualiPts += (rules.qualiQ1Eliminated ?? -3);
     }
     const retired = dnfL.includes(dId) || dnsL.includes(dId);
-    if (grid && pos && !retired) {
+    if (hasValidGridPos && hasValidRacePos && !retired) {
       const diff = grid - pos;
       if (diff > 0) {
         for (let p = grid - 1; p >= pos; p--) overtakes += (p <= 10 ? (rules.positionGainedPos1_10 ?? 1.0) : (rules.positionGainedPos11_Plus ?? 0.5));
@@ -927,7 +940,9 @@ function calculateWeekendPoints(combinedResults: CombinedResults, rules: Scoring
       const myP = raceRes[dId]; const tmP = raceRes[tmId];
       const isMyR = retired;
       const isTmR = dnfL.includes(tmId) || dnsL.includes(tmId);
-      if (myP && tmP) {
+      const myHasValidPos = Number.isFinite(myP) && Number(myP) > 0 && Number(myP) < 900;
+      const tmHasValidPos = Number.isFinite(tmP) && Number(tmP) > 0 && Number(tmP) < 900;
+      if (myHasValidPos && tmHasValidPos) {
         if (isMyR && !isTmR) teammatePts += (rules.teammateLost ?? -2);
         else if (!isMyR && isTmR) teammatePts += (rules.teammateBeatDNF !== undefined ? rules.teammateBeatDNF : (rules.teammateBeat ?? 2));
         else if (myP < tmP) teammatePts += (rules.teammateBeat ?? 2);
@@ -954,6 +969,63 @@ function calculateWeekendPoints(combinedResults: CombinedResults, rules: Scoring
   }
   return { driverPoints, driverRacePoints, driverQualiPoints, driverSprintPoints, driverSprintQualiPoints, driverBreakdown };
 }
+
+app.get("/leagues/:leagueId/breakdown/:raceId", requireUser, async (c) => {
+  const user = c.get("user");
+  const { leagueId, raceId } = c.req.param();
+
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND "leagueId" = ${leagueId} LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_member" }, 403);
+
+  const [race] = await sql`SELECT id, name, results, "isCompleted" FROM "Race" WHERE id = ${raceId}`;
+  if (!race) return c.json({ error: "race_not_found" }, 404);
+  if (!race.results) return c.json({ error: "no_results_stored" }, 404);
+
+  const [league] = await sql<{ rules: ScoringRules }[]>`SELECT rules FROM "League" WHERE id = ${leagueId}`;
+  const rules = (league?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
+  const allDrivers = await sql<Driver[]>`SELECT id, name, "constructorId" FROM "Driver"`;
+
+  const teammates: Record<string, string> = {};
+  const byConstructor: Record<string, string[]> = {};
+  for (const d of allDrivers) {
+    if (!byConstructor[d.constructorId]) byConstructor[d.constructorId] = [];
+    byConstructor[d.constructorId].push(d.id);
+  }
+  for (const drivers of Object.values(byConstructor)) {
+    if (drivers.length === 2) {
+      teammates[drivers[0]] = drivers[1];
+      teammates[drivers[1]] = drivers[0];
+    }
+  }
+
+  const stored = race.results as Record<string, unknown>;
+  const combinedResults: CombinedResults = {
+    race: typeof stored.race === "object" && stored.race !== null ? stored.race as Record<string, number> : undefined,
+    quali: typeof stored.quali === "object" && stored.quali !== null ? stored.quali as Record<string, number> : undefined,
+    sprint: typeof stored.sprint === "object" && stored.sprint !== null ? stored.sprint as Record<string, number> : undefined,
+    sprintQuali: typeof stored.sprintQuali === "object" && stored.sprintQuali !== null ? stored.sprintQuali as Record<string, number> : undefined,
+    dnfDrivers: Array.isArray(stored.dnfDrivers) ? stored.dnfDrivers.filter((x): x is string => typeof x === "string") : [],
+    dnsDrivers: Array.isArray(stored.dnsDrivers) ? stored.dnsDrivers.filter((x): x is string => typeof x === "string") : [],
+  };
+
+  const points = calculateWeekendPoints(combinedResults, rules, teammates, allDrivers);
+
+  return c.json({
+    raceId: race.id,
+    raceName: race.name,
+    isCompleted: Boolean(race.isCompleted),
+    results: {
+      ...combinedResults,
+      driverPoints: points.driverPoints,
+      driverRacePoints: points.driverRacePoints,
+      driverQualiPoints: points.driverQualiPoints,
+      driverSprintPoints: points.driverSprintPoints,
+      driverSprintQualiPoints: points.driverSprintQualiPoints,
+      driverBreakdown: points.driverBreakdown,
+    }
+  });
+});
+
 app.post("/admin/sync-race", requireUser, async (c) => {
   const user = c.get("user");
   const membership = await sql`SELECT "leagueId", role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
@@ -1186,6 +1258,15 @@ app.post("/cron/sync-all", async (c) => {
         const rules = (l.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
         const pts = calculateWeekendPoints(cRes, rules, teammates, allD);
         const teams = await sql`SELECT id, "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${l.id}`;
+        const teamIds = teams.map((t) => t.id);
+        if (teamIds.length > 0) {
+          const old = await sql`SELECT id FROM "TeamResult" WHERE "raceId" = ${race.id} AND "teamId" IN ${sql(teamIds)}`;
+          if (old.length > 0) {
+            const oldIds = old.map((r) => r.id);
+            await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" IN ${sql(oldIds)}`;
+            await sql`DELETE FROM "TeamResult" WHERE id IN ${sql(oldIds)}`;
+          }
+        }
         for (const t of teams) {
           const td = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${t.id}`;
           const dnsS = new Set<string>(cRes.dnsDrivers || []); const resA = isReserveActivatedByDns(td.map(x=>x.driverId), t.reserveId, dnsS);

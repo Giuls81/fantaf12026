@@ -197,6 +197,15 @@ export async function getRaceResults(leagueId: string, raceId: string) {
   return apiGet<{ userId: string; userName: string; points: number; captainId: string; reserveId: string; drivers: { id: string; name: string; points: number }[] }[]>(`/leagues/${leagueId}/results/${raceId}`);
 }
 
+export async function getRaceBreakdown(leagueId: string, raceId: string) {
+  return apiGet<{
+    raceId: string;
+    raceName: string;
+    isCompleted: boolean;
+    results: any;
+  }>(`/leagues/${leagueId}/breakdown/${raceId}`);
+}
+
 export async function updateLeagueRules(leagueId: string, rules: any) {
   return apiPost<{ ok: true }>("/league/rules", { leagueId, rules });
 }

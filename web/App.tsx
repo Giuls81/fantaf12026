@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, kickMember, deleteLeague, addPenalty, updateLeagueRules, recalculateRace, simulateRaceResults } from "./api";
+import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules, recalculateRace, simulateRaceResults } from "./api";
 import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 // RACES_2026 removed
@@ -252,6 +252,9 @@ const App: React.FC = () => {
   const [loadingResults, setLoadingResults] = useState(false);
   const [viewingResult, setViewingResult] = useState<any | null>(null);
   const [viewingOfficialResultsRaceId, setViewingOfficialResultsRaceId] = useState<string | null>(null);
+  const [officialResultsData, setOfficialResultsData] = useState<any | null>(null);
+  const [loadingOfficialResults, setLoadingOfficialResults] = useState(false);
+  const [officialResultsError, setOfficialResultsError] = useState<string | null>(null);
   const [activeResultSession, setActiveResultSession] = useState<'quali' | 'race' | 'sprintQuali' | 'sprint' | 'fantasyPts' | 'breakdown'>('race');
 
   // Fetch Standings
@@ -287,10 +290,42 @@ const App: React.FC = () => {
         .catch(e => {
           console.error("Failed to load results", e);
           alert(`Debug RaceResults Error: ${e.message}`);
-        })
-        .finally(() => setLoadingResults(false));
+       })
+       .finally(() => setLoadingResults(false));
     }
   }, [selectedRaceId, data?.user?.leagueId]);
+
+  useEffect(() => {
+    if (!viewingOfficialResultsRaceId || !data?.user?.leagueId) {
+      setOfficialResultsData(null);
+      setLoadingOfficialResults(false);
+      setOfficialResultsError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingOfficialResults(true);
+    setOfficialResultsError(null);
+    setOfficialResultsData(null);
+
+    getRaceBreakdown(data.user.leagueId, viewingOfficialResultsRaceId)
+      .then((payload) => {
+        if (!cancelled) setOfficialResultsData(payload.results || null);
+      })
+      .catch((e: any) => {
+        if (!cancelled) {
+          console.error("Failed to load league breakdown", e);
+          setOfficialResultsError(e?.message || "breakdown_fetch_failed");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOfficialResults(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewingOfficialResultsRaceId, data?.user?.leagueId]);
 
   // Login Form State
   const [username, setUsername] = useState('');
@@ -1110,11 +1145,13 @@ const App: React.FC = () => {
         {viewingOfficialResultsRaceId && (() => {
           const race = races.find(r => r.id === viewingOfficialResultsRaceId);
           if (!race) return null;
-          const resultsJson = (race as any).results || {};
+          const storedResults = (race as any).results || {};
+          const resultsJson = officialResultsData || storedResults;
           const driverPointsMap: Record<string, number> = resultsJson.driverPoints || {};
           const driverRacePtsMap: Record<string, number> = resultsJson.driverRacePoints || {};
           const driverQualiPtsMap: Record<string, number> = resultsJson.driverQualiPoints || {};
           const dnfDrivers: string[] = resultsJson.dnfDrivers || [];
+          const dnsDrivers: string[] = resultsJson.dnsDrivers || [];
           const isFantasyTab = activeResultSession === 'fantasyPts';
           const isRaceTab = activeResultSession === 'race';
           const isQualiTab = activeResultSession === 'quali';
@@ -1213,6 +1250,17 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {loadingOfficialResults && (
+                      <div className="rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3 text-xs text-slate-400">
+                        {t({ en: 'Loading league breakdown...', it: 'Caricamento breakdown lega...' })}
+                      </div>
+                    )}
+                    {officialResultsError && !officialResultsData && (
+                      <div className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-xs text-amber-200">
+                        {t({ en: 'League breakdown unavailable. Showing stored race data.', it: 'Breakdown lega non disponibile. Mostro i dati gara salvati.' })}
+                      </div>
+                    )}
+
                     {/* Fixed Header Row for Results (Non-Breakdown) */}
                     {activeResultSession !== 'breakdown' && sortedDriverIds.length > 0 && (
                         <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-6 py-3 border-b border-slate-800 items-center bg-slate-900 shrink-0">
@@ -1234,6 +1282,7 @@ const App: React.FC = () => {
                               <th className="p-3 text-center" title="Punti Sorpassi/Overtakes">Sor</th>
                               <th className="p-3 text-center" title="Confronto Compagno">Cmp</th>
                               <th className="p-3 text-center" title="Ritiro / DNF">Rit</th>
+                              <th className="p-3 text-center" title="Ultimo posto">Ult</th>
                               <th className="p-3 text-center" title="Pole Position / Sprint Pole">Pol</th>
                               <th className="p-3 text-center" title="Sessione Qualifiche">Qua</th>
                               <th className="p-3 text-center" title="Moltiplicatore Costruttore">Mul</th>
@@ -1257,6 +1306,7 @@ const App: React.FC = () => {
                                    <td className="p-2 text-center">{f(bd.overtakes)}</td>
                                    <td className="p-2 text-center">{f(bd.teammate)}</td>
                                    <td className="p-2 text-center text-red-400">{f(bd.dnf)}</td>
+                                   <td className="p-2 text-center text-red-300">{f(bd.lastPlace)}</td>
                                    <td className="p-2 text-center text-purple-400">
                                      {f(bd.qualiPole)}
                                      {bd.sprintPole > 0 && <span className="text-[10px] ml-1 opacity-70">+{bd.sprintPole}</span>}
@@ -1278,13 +1328,16 @@ const App: React.FC = () => {
                           const racePos = (resultsJson.race || {})[dId];
                           const driver = fetchedDrivers.find(d => d.id === dId);
                           const tabPts = tabPointsMap[dId];
-                          // Show DNF if pos is 0, 999 (unclassified/DNF), undefined OR if driver is in dnfDrivers list
-                          const displayPos = (pos === 0 || pos === 999 || !pos || dnfDrivers.includes(dId)) ? 'DNF' : pos;
+                          const displayPos = dnsDrivers.includes(dId)
+                            ? 'DNS'
+                            : (pos === 0 || pos === 999 || !pos || dnfDrivers.includes(dId))
+                              ? 'DNF'
+                              : pos;
                           return (
                             <div key={dId} className="grid grid-cols-12 gap-2 items-center p-2 bg-slate-800/50 rounded-lg border border-slate-700/30">
                               <div className="col-span-2 flex justify-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${displayPos === 1 ? 'bg-yellow-500 text-black' : displayPos === 2 ? 'bg-slate-300 text-black' : displayPos === 3 ? 'bg-orange-600 text-white' : displayPos === 'DNF' ? 'bg-red-900/50 text-red-200' : 'bg-slate-700 text-slate-300'}`}>
-                                  {isFantasyTab ? (racePos ? `P${racePos}` : 'DNF') : displayPos}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${displayPos === 1 ? 'bg-yellow-500 text-black' : displayPos === 2 ? 'bg-slate-300 text-black' : displayPos === 3 ? 'bg-orange-600 text-white' : displayPos === 'DNF' || displayPos === 'DNS' ? 'bg-red-900/50 text-red-200' : 'bg-slate-700 text-slate-300'}`}>
+                                  {isFantasyTab ? (dnsDrivers.includes(dId) ? 'DNS' : racePos ? `P${racePos}` : 'DNF') : displayPos}
                                 </div>
                               </div>
                               <div className={`${hasTabPoints ? 'col-span-7' : 'col-span-10'} flex items-center gap-3`}>
