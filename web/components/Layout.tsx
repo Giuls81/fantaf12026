@@ -33,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
     { id: Tab.ADMIN, label: getLabel(Tab.ADMIN), icon: '⚙️' },
   ];
 
-  const visibleTabs = tabs;
+  const visibleTabs = showAdmin ? tabs : tabs.filter((tab) => tab.id !== Tab.ADMIN);
 
   return (
     <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-slate-900 shadow-2xl overflow-hidden">

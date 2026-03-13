@@ -95,6 +95,26 @@ const getNextRaceIndex = (races: Race[]) => {
   return idx === -1 ? races.length - 1 : idx;
 };
 
+const raceHasResults = (race?: Race | null): boolean => {
+  const results = race?.results;
+  return !!results && typeof results === 'object' && Object.keys(results).length > 0;
+};
+
+const getDefaultResultSession = (race?: Race | null): 'quali' | 'race' | 'sprintQuali' | 'sprint' | 'fantasyPts' | 'breakdown' => {
+  const results = race?.results || {};
+
+  if (race?.isSprint) {
+    if (results.sprint && Object.keys(results.sprint).length > 0) return 'sprint';
+    if (results.sprintQuali && Object.keys(results.sprintQuali).length > 0) return 'sprintQuali';
+  }
+
+  if (results.race && Object.keys(results.race).length > 0) return 'race';
+  if (results.quali && Object.keys(results.quali).length > 0) return 'quali';
+  if (results.driverBreakdown && Object.keys(results.driverBreakdown).length > 0) return 'breakdown';
+
+  return race?.isSprint ? 'sprint' : 'race';
+};
+
 type LangCode = 'en' | 'it' | 'fr' | 'de' | 'es' | 'ru' | 'zh' | 'ar' | 'ja';
 
 const App: React.FC = () => {
@@ -109,10 +129,12 @@ const App: React.FC = () => {
   const [leagueMembers, setLeagueMembers] = useState<any[]>([]); // Added for Admin
   const [adminUpdates, setAdminUpdates] = useState<Record<string, { price: number; points: number }>>({});
   
-  // Performance Optimization: Calculate latest completed race once
-  const latestCompletedRace = useMemo(() => {
-    return [...races].reverse().find(r => r.isCompleted);
+  const racesWithResults = useMemo(() => {
+    return races
+      .filter((race) => raceHasResults(race))
+      .sort((a, b) => b.round - a.round);
   }, [races]);
+  const currentRaceIndex = data?.currentRaceIndex ?? 0;
 
   // Use constructors from rules (editable) fallback to constant if needed
   const activeConstructors = data?.rules?.constructors || CONSTRUCTORS;
@@ -273,17 +295,20 @@ const App: React.FC = () => {
 
   // Handle Tab Change
   useEffect(() => {
-    if (activeTab === Tab.STANDINGS && !selectedRaceId) {
-      const completed = races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round);
-      if (completed.length > 0) {
-        setSelectedRaceId(completed[0].id);
-      }
-    }
-  }, [activeTab, races]);
+    if (activeTab !== Tab.STANDINGS) return;
+
+    const currentRace = races[currentRaceIndex];
+    const nextRaceId = raceHasResults(currentRace)
+      ? currentRace.id
+      : racesWithResults[0]?.id || null;
+
+    setSelectedRaceId((prev) => (prev === nextRaceId ? prev : nextRaceId));
+  }, [activeTab, currentRaceIndex, races, racesWithResults]);
 
   // Fetch Race Results
   useEffect(() => {
     if (selectedRaceId && data?.user?.leagueId) {
+       setRaceResults([]);
        setLoadingResults(true);
        getRaceResults(data.user.leagueId, selectedRaceId)
         .then(setRaceResults)
@@ -292,6 +317,8 @@ const App: React.FC = () => {
           alert(`Debug RaceResults Error: ${e.message}`);
        })
        .finally(() => setLoadingResults(false));
+    } else {
+      setRaceResults([]);
     }
   }, [selectedRaceId, data?.user?.leagueId]);
 
@@ -954,20 +981,25 @@ const App: React.FC = () => {
       <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col gap-3">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">{t({ en: 'Race Results', it: 'Risultati Gara', fr: 'Résultats', de: 'Ergebnisse', es: 'Resultados', ru: 'Результаты', zh: '比赛结果', ar: 'النتائج', ja: 'レース結果' })}</h2>
         <div className="flex gap-2 overflow-x-auto no-scrollbar items-center">
-          {races.filter(r => r.isCompleted).sort((a,b) => b.round - a.round).map(r => (
+          {racesWithResults.map(r => (
             <button 
               key={r.id}
               onClick={() => {
+                setSelectedRaceId(r.id);
                 setViewingOfficialResultsRaceId(r.id);
-                setActiveResultSession(r.isSprint ? 'sprint' : 'race');
+                setActiveResultSession(getDefaultResultSession(r));
               }}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 whitespace-nowrap"
+              className={`px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 whitespace-nowrap ${
+                selectedRaceId === r.id
+                  ? 'bg-blue-700 hover:bg-blue-600'
+                  : 'bg-slate-700 hover:bg-slate-600'
+              }`}
             >
               🏁 {r.name.replace(' Grand Prix', '')}
             </button>
           ))}
-          {races.filter(r => r.isCompleted).length === 0 && (
-            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No races completed yet.', it: 'Nessuna gara conclusa.' })}</div>
+          {racesWithResults.length === 0 && (
+            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No race results available yet.', it: 'Nessun risultato disponibile.' })}</div>
           )}
         </div>
       </div>
@@ -1016,9 +1048,8 @@ const App: React.FC = () => {
            ) : (
              <div className="divide-y divide-slate-700">
                 {standings.map((s, idx) => {
-                   const completedRace = latestCompletedRace;
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
-                   const canClick = !!completedRace;
+                   const canClick = !!selectedRaceId;
                    return (
                     <div 
                       key={s.userId} 
@@ -1031,7 +1062,7 @@ const App: React.FC = () => {
                         }
                         // Otherwise, fetch on-demand
                         try {
-                          const rId = selectedRaceId || completedRace!.id;
+                          const rId = selectedRaceId!;
                           const results = await getRaceResults(data.user.leagueId, rId);
                           setRaceResults(results);
                           const found = results.find((r: any) => r.userId === s.userId);
