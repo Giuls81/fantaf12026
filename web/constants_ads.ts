@@ -19,4 +19,15 @@ export const ADMOB_IDS = {
   }
 };
 
-export const IS_TEST_MODE = true; // Set to true for development
+const parseEnvFlag = (value: string | undefined, defaultValue: boolean) => {
+  if (value === undefined) return defaultValue;
+  return value.toLowerCase() === 'true';
+};
+
+// Production defaults:
+// - Ads enabled
+// - Real ad units (test mode OFF)
+// - Verbose ad logs OFF
+export const ADS_ENABLED = parseEnvFlag(import.meta.env.VITE_ADS_ENABLED, true);
+export const IS_TEST_MODE = parseEnvFlag(import.meta.env.VITE_ADS_TEST_MODE, false);
+export const ADS_DEBUG_LOGS = parseEnvFlag(import.meta.env.VITE_ADS_DEBUG_LOGS, false);

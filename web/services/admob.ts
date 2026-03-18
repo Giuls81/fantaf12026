@@ -1,10 +1,17 @@
-
-import { AdMob, BannerAdSize, BannerAdPosition, AdOptions, AdLoadInfo, InterstitialAdPluginEvents, RewardAdOptions, RewardAdPluginEvents, AdMobRewardItem } from '@capacitor-community/admob';
+import {
+  AdMob,
+  AdMobRewardItem,
+  BannerAdPosition,
+  BannerAdSize,
+  RewardAdPluginEvents,
+} from '@capacitor-community/admob';
 import { Capacitor } from '@capacitor/core';
-import { ADMOB_IDS, IS_TEST_MODE } from '../constants_ads';
+import { ADMOB_IDS, ADS_DEBUG_LOGS, ADS_ENABLED, IS_TEST_MODE } from '../constants_ads';
 
-// Official Google Test IDs — guaranteed to return ads
-export const ADS_ENABLED = false; // Set to false to disable all ads during testing
+type AdType = 'BANNER' | 'INTERSTITIAL' | 'REWARDED' | 'APP_OPEN';
+type InterstitialSlot = 'APP_OPEN' | 'INTERSTITIAL' | null;
+type PluginListener = { remove: () => void | Promise<void> };
+
 const TEST_IDS = {
   ANDROID: {
     BANNER: 'ca-app-pub-3940256099942544/6300978111',
@@ -17,52 +24,48 @@ const TEST_IDS = {
     INTERSTITIAL: 'ca-app-pub-3940256099942544/4411468910',
     REWARDED: 'ca-app-pub-3940256099942544/1712485313',
     APP_OPEN: 'ca-app-pub-3940256099942544/5575463023',
+  },
+} as const;
+
+let currentInterstitialSlot: InterstitialSlot = null;
+
+const isNativeAdsEnabled = () => ADS_ENABLED && Capacitor.getPlatform() !== 'web';
+
+const adLog = (...args: unknown[]) => {
+  if (ADS_DEBUG_LOGS) {
+    console.log(...args);
   }
 };
 
-const getAdId = (type: 'BANNER' | 'INTERSTITIAL' | 'REWARDED' | 'APP_OPEN') => {
+const getAdId = (type: AdType) => {
   const platform = Capacitor.getPlatform() === 'android' ? 'ANDROID' : 'IOS';
-  if (IS_TEST_MODE) {
-    return TEST_IDS[platform][type];
-  }
+  if (IS_TEST_MODE) return TEST_IDS[platform][type];
   return ADMOB_IDS[platform][type];
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// IMPORTANT: The plugin can only hold ONE prepared interstitial at a time.
-// So we must NOT call prepareInterstitial AND prepareAppOpen simultaneously.
-// We track which "slot" is currently loaded.
-// ─────────────────────────────────────────────────────────────────────────────
-let currentInterstitialSlot: 'APP_OPEN' | 'INTERSTITIAL' | null = null;
-
 export const initializeAdMob = async () => {
-  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
+  if (!isNativeAdsEnabled()) return;
 
   try {
-    console.log('AdMob: Initializing...');
+    adLog('AdMob: Initializing...');
     await AdMob.requestTrackingAuthorization();
-    await AdMob.initialize({
-      initializeForTesting: IS_TEST_MODE,
-    });
-    console.log('AdMob: ✅ Initialized. Test Mode:', IS_TEST_MODE);
-    
-    // Pre-load ONLY the startup (App Open) interstitial.
-    // Do NOT prepare a regular interstitial here — it would overwrite this one.
+    await AdMob.initialize({ initializeForTesting: IS_TEST_MODE });
+    adLog('AdMob: Initialized. Test Mode:', IS_TEST_MODE);
+
+    // Keep app-open and reward ads ready at startup.
     await prepareAppOpen();
     await prepareRewardVideo();
-
   } catch (e) {
-    console.error('AdMob: ❌ init failed', e);
+    console.error('AdMob: init failed', e);
   }
 };
 
-// ─── BANNER ──────────────────────────────────────────────────────────────────
-// Moved to TOP_CENTER so it doesn't overlap the bottom tab bar.
 export const showBanner = async () => {
-  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
+  if (!isNativeAdsEnabled()) return;
+
   const adId = getAdId('BANNER');
   try {
-    console.log('AdMob: Showing Banner (TOP)', adId);
+    adLog('AdMob: Showing banner (TOP)', adId);
     await AdMob.showBanner({
       adId,
       adSize: BannerAdSize.ADAPTIVE_BANNER,
@@ -71,181 +74,182 @@ export const showBanner = async () => {
       isTesting: IS_TEST_MODE,
     });
   } catch (e) {
-    console.error('AdMob: Show Banner failed', e);
+    console.error('AdMob: show banner failed', e);
   }
 };
 
 export const hideBanner = async () => {
-  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
+  if (!isNativeAdsEnabled()) return;
+
   try {
     await AdMob.hideBanner();
     await AdMob.removeBanner();
   } catch (e) {
-    console.error('AdMob: Hide Banner failed', e);
+    console.error('AdMob: hide banner failed', e);
   }
 };
 
-// ─── INTERSTITIAL (regular) ──────────────────────────────────────────────────
 export const prepareInterstitial = async () => {
-  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
+  if (!isNativeAdsEnabled()) return;
+
   const adId = getAdId('INTERSTITIAL');
   try {
-    console.log(`AdMob: Preparing Interstitial (${adId})`);
+    adLog('AdMob: Preparing interstitial', adId);
     await AdMob.prepareInterstitial({ adId, isTesting: IS_TEST_MODE });
     currentInterstitialSlot = 'INTERSTITIAL';
-    console.log('AdMob: ✅ Interstitial ready');
+    adLog('AdMob: Interstitial ready');
   } catch (e) {
-     console.error('AdMob: Prepare Interstitial failed', e);
-     currentInterstitialSlot = null;
+    console.error('AdMob: prepare interstitial failed', e);
+    currentInterstitialSlot = null;
   }
 };
 
 export const showInterstitial = async () => {
-  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
+  if (!isNativeAdsEnabled()) return;
+
   try {
     if (currentInterstitialSlot !== 'INTERSTITIAL') {
-      console.log('AdMob: No interstitial loaded, preparing first...');
+      adLog('AdMob: Interstitial not loaded, preparing...');
       await prepareInterstitial();
-      // Wait a moment for the ad to load
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    console.log('AdMob: Showing Interstitial');
+
+    adLog('AdMob: Showing interstitial');
     await AdMob.showInterstitial();
     currentInterstitialSlot = null;
-    // Prepare next one
     await prepareInterstitial();
   } catch (e) {
-    console.error('AdMob: Show Interstitial failed', e);
+    console.error('AdMob: show interstitial failed', e);
     currentInterstitialSlot = null;
     await prepareInterstitial();
   }
 };
 
-// ─── APP OPEN (startup) ──────────────────────────────────────────────────────
-// Uses the interstitial slot with a different ad ID (App Open test ID)
 export const prepareAppOpen = async () => {
-    if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
-    const adId = getAdId('APP_OPEN');
-    console.log(`AdMob: Preparing Startup Ad (ID: ${adId})`);
-    try {
-        await AdMob.prepareInterstitial({ adId, isTesting: IS_TEST_MODE });
-        currentInterstitialSlot = 'APP_OPEN';
-        console.log('AdMob: ✅ Startup Ad ready');
-    } catch (e) {
-        console.error('AdMob: Prepare Startup Ad failed', e);
-        currentInterstitialSlot = null;
-    }
-}
+  if (!isNativeAdsEnabled()) return;
+
+  const adId = getAdId('APP_OPEN');
+  adLog('AdMob: Preparing app-open ad', adId);
+  try {
+    await AdMob.prepareInterstitial({ adId, isTesting: IS_TEST_MODE });
+    currentInterstitialSlot = 'APP_OPEN';
+    adLog('AdMob: App-open ad ready');
+  } catch (e) {
+    console.error('AdMob: prepare app-open ad failed', e);
+    currentInterstitialSlot = null;
+  }
+};
 
 export const showAppOpen = async () => {
-    if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
-    try {
-        if (currentInterstitialSlot !== 'APP_OPEN') {
-            console.log('AdMob: Startup Ad not loaded, preparing...');
-            await prepareAppOpen();
-            // Give it time to load the ad
-            await new Promise(r => setTimeout(r, 3000));
-        }
-        console.log('AdMob: 🎬 Showing Startup Ad NOW');
-        await AdMob.showInterstitial();
-        currentInterstitialSlot = null;
-        // After startup ad is shown, switch to regular interstitial for future use
-        await prepareInterstitial();
-    } catch (e) {
-        console.warn('AdMob: ⚠️ Startup Ad failed to show', e);
-        currentInterstitialSlot = null;
-        // Prepare regular interstitial as fallback
-        await prepareInterstitial();
-    }
-}
+  if (!isNativeAdsEnabled()) return;
 
-// ─── PROBABILITY ─────────────────────────────────────────────────────────────
-export const showInterstitialWithProbability = async (probability: number = 0.5) => {
-    if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
-    if (Math.random() < probability) {
-        console.log(`AdMob: Probability ${probability} hit`);
-        await showInterstitial();
-    } else {
-        // Just make sure one is ready for next time
-        if (currentInterstitialSlot !== 'INTERSTITIAL') {
-            await prepareInterstitial();
-        }
+  try {
+    if (currentInterstitialSlot !== 'APP_OPEN') {
+      adLog('AdMob: App-open ad not loaded, preparing...');
+      await prepareAppOpen();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
-}
 
-// ─── REWARD VIDEO ────────────────────────────────────────────────────────────
+    adLog('AdMob: Showing app-open ad');
+    await AdMob.showInterstitial();
+    currentInterstitialSlot = null;
+    await prepareInterstitial();
+  } catch (e) {
+    adLog('AdMob: app-open ad failed to show', e);
+    currentInterstitialSlot = null;
+    await prepareInterstitial();
+  }
+};
+
+export const showInterstitialWithProbability = async (probability = 0.5) => {
+  if (!isNativeAdsEnabled()) return;
+
+  if (Math.random() < probability) {
+    adLog('AdMob: Interstitial probability hit', probability);
+    await showInterstitial();
+    return;
+  }
+
+  if (currentInterstitialSlot !== 'INTERSTITIAL') {
+    await prepareInterstitial();
+  }
+};
+
 export const prepareRewardVideo = async () => {
-  if (!ADS_ENABLED || Capacitor.getPlatform() === 'web') return;
+  if (!isNativeAdsEnabled()) return;
+
   const adId = getAdId('REWARDED');
   try {
     await AdMob.prepareRewardVideoAd({ adId, isTesting: IS_TEST_MODE });
   } catch (e) {
-    console.error('AdMob: Prepare Reward Video failed', e);
+    console.error('AdMob: prepare reward video failed', e);
   }
 };
 
 export const showRewardVideo = async (): Promise<AdMobRewardItem | null> => {
-  if (Capacitor.getPlatform() === 'web') return { type: 'coin', amount: 10 }; 
-  
+  if (Capacitor.getPlatform() === 'web') return { type: 'coin', amount: 10 };
+  if (!isNativeAdsEnabled()) return null;
+
   return new Promise(async (resolve) => {
-      let resolved = false;
-      let earnedReward: AdMobRewardItem | null = null;
-      let listeners: any[] = [];
+    let resolved = false;
+    let earnedReward: AdMobRewardItem | null = null;
+    let listeners: PluginListener[] = [];
 
-      const cleanup = () => {
-        listeners.forEach(l => l.remove());
-        listeners = [];
-      };
+    const cleanup = () => {
+      listeners.forEach((listener) => listener.remove());
+      listeners = [];
+    };
 
-      // Prepare next ad in background (Fire & Forget)
-      const preloadNext = () => {
-         setTimeout(() => {
-            console.log('AdMob: Preloading next reward video...');
-            prepareRewardVideo().catch(e => console.warn('AdMob: Preload failed', e));
-         }, 1000);
-      };
+    const preloadNext = () => {
+      setTimeout(() => {
+        adLog('AdMob: Preloading next reward video...');
+        prepareRewardVideo().catch((e) => adLog('AdMob: reward preload failed', e));
+      }, 1000);
+    };
 
-      const safeResolve = (val: AdMobRewardItem | null) => {
-        if (!resolved) {
-           resolved = true;
-           cleanup();
-           clearTimeout(timer);
-           resolve(val);
-           preloadNext(); 
-        }
-      };
+    const safeResolve = (value: AdMobRewardItem | null) => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      clearTimeout(timeoutId);
+      resolve(value);
+      preloadNext();
+    };
 
-      // Safety timeout: 70s (longer than typical video)
-      const timer = setTimeout(() => {
-        console.log('AdMob: Reward Video Timeout Reached');
-        // If we timeout but have a reward, give it to them
-        safeResolve(earnedReward);
-      }, 70000);
+    const timeoutId = setTimeout(() => {
+      adLog('AdMob: Reward video timeout reached');
+      safeResolve(earnedReward);
+    }, 70000);
 
-      try {
-          console.log('AdMob: Registering Reward Listeners...');
-          
-          listeners.push(await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => {
-              console.log('AdMob: 🎁 Reward Event Fired! Storing reward.', reward);
-              earnedReward = reward;
-              // we DO NOT resolve here. We wait for Dismissed.
-          }));
+    try {
+      adLog('AdMob: Registering reward listeners...');
 
-          listeners.push(await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
-              console.log('AdMob: 🚪 Reward Video Dismissed. Earned:', earnedReward);
-              safeResolve(earnedReward);
-          }));
+      listeners.push(
+        await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => {
+          adLog('AdMob: Reward event fired', reward);
+          earnedReward = reward;
+        }),
+      );
 
-          listeners.push(await AdMob.addListener(RewardAdPluginEvents.FailedToShow, (err) => {
-              console.error('AdMob: ❌ Reward Video Failed to Show', err);
-              safeResolve(null);
-          }));
+      listeners.push(
+        await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
+          adLog('AdMob: Reward video dismissed. Earned:', earnedReward);
+          safeResolve(earnedReward);
+        }),
+      );
 
-          console.log('AdMob: Calling showRewardVideoAd()...');
-          await AdMob.showRewardVideoAd();
-      } catch (e) {
-          console.error('AdMob: Show Reward Video Exception', e);
+      listeners.push(
+        await AdMob.addListener(RewardAdPluginEvents.FailedToShow, (error) => {
+          console.error('AdMob: reward video failed to show', error);
           safeResolve(null);
-      }
+        }),
+      );
+
+      adLog('AdMob: Calling showRewardVideoAd...');
+      await AdMob.showRewardVideoAd();
+    } catch (e) {
+      console.error('AdMob: show reward video exception', e);
+      safeResolve(null);
+    }
   });
 };

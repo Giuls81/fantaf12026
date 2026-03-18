@@ -6,7 +6,7 @@ export const initializePurchases = async () => {
   if (Capacitor.getPlatform() === 'web') return;
 
   try {
-    await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG }); // Set to INFO/WARN in prod
+    await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
 
     if (Capacitor.getPlatform() === 'ios') {
       await Purchases.configure({ apiKey: REVENUECAT_API_KEYS.ios });

@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
-import { health, getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, getApiUrl, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules, recalculateRace, simulateRaceResults } from "./api";
+import { getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
 import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 // RACES_2026 removed
@@ -153,7 +153,6 @@ const App: React.FC = () => {
             try {
               resumeListenerHandle = await CapApp.addListener('appStateChange', ({ isActive }) => {
                 if (isActive) {
-                  console.log('App resumed, checking for ad...');
                   const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
                   if (!isCurrentlyPremium) {
                      showAppOpen();
@@ -180,7 +179,6 @@ const App: React.FC = () => {
            setTimeout(async () => {
              const isCurrentlyPremium = localStorage.getItem('fantaF1Premium') === 'true';
              if (!isCurrentlyPremium) {
-                console.log('Cold start: showing Startup Ad');
                 await showAppOpen();
              }
            }, 4000); // 4 seconds should be enough for Test IDs
@@ -260,10 +258,8 @@ const App: React.FC = () => {
   const [sprintQualifyingUtcDraft, setSprintQualifyingUtcDraft] = useState('');
 
   // Admin Points Anti-NaN States
-  const [pointsError, setPointsError] = useState<{ [key: string]: string }>({});
   const [syncing, setSyncing] = useState(false);
 
-  const [showDebug, setShowDebug] = useState(false);
   const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
   
   // Standings & History States
@@ -287,7 +283,7 @@ const App: React.FC = () => {
         .then(setStandings)
         .catch(e => {
           console.error("Failed to load standings", e);
-          alert(`Debug Error: ${e.message}`);
+          alert(t({ en: 'Unable to load standings.', it: 'Impossibile caricare la classifica.' }));
         })
         .finally(() => setLoadingStandings(false));
     }
@@ -314,7 +310,7 @@ const App: React.FC = () => {
         .then(setRaceResults)
         .catch(e => {
           console.error("Failed to load results", e);
-          alert(`Debug RaceResults Error: ${e.message}`);
+          alert(t({ en: 'Unable to load race results.', it: 'Impossibile caricare i risultati gara.' }));
        })
        .finally(() => setLoadingResults(false));
     } else {
@@ -372,12 +368,8 @@ const App: React.FC = () => {
   
   // Timer for countdown
   useEffect(() => {
-    (window as any)._mountTime = Date.now();
     const interval = setInterval(() => {
-       const n = Date.now();
-       setNow(n);
-       // Log every 5s to check thread aliveness (visible in xCode logs or Safari inspector)
-       if (n % 5000 < 1000) console.log("Tick", n);
+       setNow(Date.now());
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -686,7 +678,6 @@ const App: React.FC = () => {
     setLoginMode('create');
     setIsRegistering(true);
     setShowResetConfirm(false);
-    setShowDebug(false);
   };
 
   const switchLeague = (leagueId: string) => {
@@ -922,54 +913,6 @@ const App: React.FC = () => {
 
 
 
-  const handleNextRace = async () => {
-    if (!data?.user) return;
-    if (data.currentRaceIndex >= races.length - 1) {
-      alert(t({ en: 'Already at the last race!', it: 'Sei già all\'ultima gara!' }));
-      return;
-    }
-    if (!confirm(t({ en: 'Advance league to the next race?', it: 'Passare alla prossima gara?' }))) return;
-    
-    try {
-      setSyncing(true);
-      await updateLeagueRules(data.user.leagueId, {
-        ...data.rules,
-        currentRaceIndex: data.currentRaceIndex + 1
-      });
-      alert(t({ en: 'Advanced to next race!', it: 'Passato alla gara successiva!' }));
-      window.location.reload();
-    } catch (e) {
-      console.error(e);
-      alert(t({ en: 'Failed to advance race', it: 'Errore nel cambio gara' }));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handlePrevRace = async () => {
-    if (!data?.user) return;
-    if (data.currentRaceIndex <= 0) {
-      alert(t({ en: 'Already at the first race!', it: 'Sei già alla prima gara!' }));
-      return;
-    }
-    if (!confirm(t({ en: 'Go back to the previous race?', it: 'Tornare alla gara precedente?' }))) return;
-    
-    try {
-      setSyncing(true);
-      await updateLeagueRules(data.user.leagueId, {
-        ...data.rules,
-        currentRaceIndex: data.currentRaceIndex - 1
-      });
-      alert(t({ en: 'Reverted to previous race!', it: 'Tornato alla gara precedente!' }));
-      window.location.reload();
-    } catch (e) {
-      console.error(e);
-      alert(t({ en: 'Failed to revert race', it: 'Errore nel cambio gara' }));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const renderStandings = () => {
     const selectedRaceForResults = racesWithResults.find((race) => race.id === selectedRaceId) || racesWithResults[0] || null;
 
@@ -1022,62 +965,8 @@ const App: React.FC = () => {
           {!racesWithResults.length && (
             <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No race results available yet.', it: 'Nessun risultato disponibile.' })}</div>
           )}
-          {false && racesWithResults.map((r) => (
-            <button 
-              key={r.id}
-              onClick={() => {
-                setSelectedRaceId(r.id);
-                setViewingOfficialResultsRaceId(r.id);
-                setActiveResultSession(getDefaultResultSession(r));
-              }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 whitespace-nowrap ${
-                selectedRaceId === r.id
-                  ? 'bg-blue-700 hover:bg-blue-600'
-                  : 'bg-slate-700 hover:bg-slate-600'
-              }`}
-            >
-              🏁 {r.name.replace(' Grand Prix', '')}
-            </button>
-          ))}
-          {false && racesWithResults.length === 0 && (
-            <div className="text-slate-600 text-xs italic py-1">{t({ en: 'No race results available yet.', it: 'Nessun risultato disponibile.' })}</div>
-          )}
         </div>
       </div>
-
-      {/* Testing Tools Panel */}
-      {data?.user && (
-        <div className="bg-slate-800/50 p-4 rounded-xl border border-blue-500/50 flex flex-col gap-3 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-          <h2 className="text-sm font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
-            ⚙️ {t({ en: 'Testing Tools', it: 'Strumenti di Test' })}
-          </h2>
-          <div className="text-xs text-slate-400">
-            {t({ 
-              en: 'Use these buttons to manually advance or revert the current race for testing 2026 data.', 
-              it: 'Usa questi pulsanti per far avanzare o retrocedere manualmente la gara per testare i dati 2026.' 
-            })}
-          </div>
-          <div className="flex gap-2 items-center mt-1">
-            <button
-              onClick={handlePrevRace}
-              disabled={syncing || data.currentRaceIndex <= 0}
-              className={`px-4 py-2 border border-blue-600/50 hover:bg-blue-900/40 border-dashed rounded-lg text-xs font-bold ${syncing || data.currentRaceIndex <= 0 ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-blue-300 hover:text-white'} transition-colors flex items-center gap-1`}
-            >
-              {t({ en: '⏪ Back', it: '⏪ Indietro' })}
-            </button>
-            <div className="flex-1 text-center text-xs font-bold text-slate-300">
-               {races[data.currentRaceIndex]?.name.replace(' Grand Prix', '') || '...'}
-            </div>
-            <button
-              onClick={handleNextRace}
-              disabled={syncing || data.currentRaceIndex >= races.length - 1}
-              className={`px-4 py-2 border border-blue-600/50 hover:bg-blue-900/40 border-dashed rounded-lg text-xs font-bold ${syncing || data.currentRaceIndex >= races.length - 1 ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-blue-300 hover:text-white'} transition-colors flex items-center gap-1`}
-            >
-              {t({ en: 'Next ⏩', it: 'Avanti ⏩' })}
-            </button>
-          </div>
-        </div>
-      )}
 
         {/* Global Standings Card */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
@@ -1540,26 +1429,7 @@ const App: React.FC = () => {
       <div className="text-xl font-bold text-white mb-2">{t({ en: 'Loading Paddock...', it: 'Caricamento Paddock...', fr: 'Chargement du Paddock...', de: 'Lade Paddock...', es: 'Cargando Paddock...', ru: 'Загрузка паддока...', zh: '正在加载围场...', ar: 'تحميل بادوك...', ja: 'パドック読み込み中...' })}</div>
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-6"></div>
       
-      <div className="text-xs font-mono text-slate-600 bg-slate-950 p-2 rounded border border-slate-800 break-all max-w-xs mb-8">
-        API: {getApiUrl()}<br/>
-        Build: {APP_VERSION}<br/>
-        Status: {loadingStatus}<br/>
-        Time: {((now - ((window as any)._mountTime || now)) / 1000).toFixed(1)}s
-        <div className="mt-2 flex gap-2">
-            <button 
-              onClick={() => { localStorage.clear(); location.reload(); }}
-              className="px-2 py-1 bg-red-900/50 rounded text-[8px] border border-red-700 hover:bg-red-800"
-            >
-              RESET ALL
-            </button>
-            <button 
-              onClick={() => { localStorage.removeItem('fantaF1Premium'); location.reload(); }}
-              className="px-2 py-1 bg-yellow-900/50 rounded text-[8px] border border-yellow-700 hover:bg-yellow-800"
-            >
-              RESET PREMIUM
-            </button>
-        </div>
-      </div>
+      <div className="text-xs text-slate-500 mb-6">{loadingStatus}</div>
 
       <div className="flex flex-col items-center opacity-30">
         <span className="text-[8px] uppercase tracking-[0.2em] text-slate-500 mb-1 font-bold">{t({ en: 'Powered BY', it: 'Sviluppato DA', fr: 'Propulsé PAR', de: 'Bereitgestellt VON', es: 'Desarrollado POR', ru: 'Разработано', zh: '由...提供', ar: 'مشغل بواسطة', ja: '提供' })}</span>
@@ -1572,46 +1442,12 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <div className="flex gap-4">
-        <button 
-          onClick={() => location.reload()}
-          className="text-xs text-blue-400 hover:text-blue-300 underline"
-        >
-          {t({ en: 'Retry Connection', it: 'Riprova Connessione', fr: 'Réessayer Connexion', de: 'Verbindung wiederholen', es: 'Reintentar Conexión', ru: 'Повторить соединение', zh: '重试连接', ar: 'إعادة الاتصال', ja: '接続を再試行' })}
-        </button>
-
-        <button 
-          onClick={() => {
-             // Force manual fetch if stuck
-             setLoadingStatus("Manual Fetching...");
-             getRaces().then(r => {
-               if (r.length > 0) {
-                 setRaces(r);
-                 setLoadingStatus("Manual Load OK");
-               } else {
-                 setStartupError("Manual Fetch: 0 Races");
-               }
-             }).catch(e => setStartupError("Manual Fail: " + e.message));
-          }}
-          className="text-xs text-green-400 hover:text-green-300 underline"
-        >
-          {t({ en: 'Force Fetch Races', it: 'Forza Aggiornamento Gare', fr: 'Forcer Récup. Courses', de: 'Rennen laden erzwingen', es: 'Forzar Obtención Carreras', ru: 'Обновить гонки', zh: '强制获取比赛', ar: 'فرض جلب السباقات', ja: 'レース強制取得' })}
-        </button>
-
-        {(now - ((window as any)._mountTime || now)) > 5000 && (
-          <button 
-            onClick={() => {
-              if (confirm("Reset App Data & Logout?")) {
-                localStorage.clear();
-                location.reload();
-              }
-            }}
-            className="text-xs text-red-400 hover:text-red-300 underline"
-          >
-            {t({ en: 'Force Reset App', it: 'Forza Reset App', fr: 'Forcer Réinit. App', de: 'App-Reset erzwingen', es: 'Forzar Reinicio App', ru: 'Сброс приложения', zh: '强制重置应用', ar: 'فرض إعادة تعيين التطبيق', ja: 'アプリ強制リセット' })}
-          </button>
-        )}
-      </div>
+      <button 
+        onClick={() => location.reload()}
+        className="text-xs text-blue-400 hover:text-blue-300 underline"
+      >
+        {t({ en: 'Retry Connection', it: 'Riprova Connessione', fr: 'Réessayer Connexion', de: 'Verbindung wiederholen', es: 'Reintentar Conexión', ru: 'Повторить соединение', zh: '重试连接', ar: 'إعادة الاتصال', ja: '接続を再試行' })}
+      </button>
     </div>
   );
 
@@ -2643,16 +2479,6 @@ const App: React.FC = () => {
     }
   };
   
-  const handleMigrateTeamName = async () => {
-    if (!confirm("Migrate all teams to have a name?")) return;
-    try {
-      const res = await import("./api").then(m => m.migrateTeamName());
-      alert("Migration: " + res.message);
-    } catch (e: any) {
-      alert("Error: " + e.message);
-    }
-  };
-
   const handleRuleChangeNumeric = (field: keyof ScoringRules, value: string) => {
       const num = parseFloat(value);
       if (isNaN(num)) return;
