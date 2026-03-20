@@ -1,5 +1,6 @@
 import {
   AdMob,
+  AdmobConsentStatus,
   AdMobRewardItem,
   BannerAdPosition,
   BannerAdSize,
@@ -28,8 +29,12 @@ const TEST_IDS = {
 } as const;
 
 let currentInterstitialSlot: InterstitialSlot = null;
+let isAdMobInitialized = false;
+let initializePromise: Promise<boolean> | null = null;
+let canRequestAds = true;
 
 const isNativeAdsEnabled = () => ADS_ENABLED && Capacitor.getPlatform() !== 'web';
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const adLog = (...args: unknown[]) => {
   if (ADS_DEBUG_LOGS) {
@@ -43,25 +48,82 @@ const getAdId = (type: AdType) => {
   return ADMOB_IDS[platform][type];
 };
 
+const ensureAdMobInitialized = async (): Promise<boolean> => {
+  if (!isNativeAdsEnabled()) return false;
+  if (isAdMobInitialized) return true;
+  if (initializePromise) return initializePromise;
+
+  initializePromise = (async () => {
+    try {
+      adLog('AdMob: Initializing...');
+      await AdMob.initialize({ initializeForTesting: IS_TEST_MODE });
+      isAdMobInitialized = true;
+      adLog('AdMob: Initialized. Test Mode:', IS_TEST_MODE);
+    } catch (e) {
+      console.error('AdMob: initialize failed', e);
+      isAdMobInitialized = false;
+      return false;
+    }
+
+    // ATT prompt should never block SDK init.
+    try {
+      await AdMob.requestTrackingAuthorization();
+    } catch (e) {
+      console.warn('AdMob: tracking authorization request failed', e);
+    }
+
+    // EEA/UK: request/update consent state before requesting ads.
+    try {
+      let consentInfo = await AdMob.requestConsentInfo();
+      canRequestAds = consentInfo.canRequestAds;
+
+      if (
+        consentInfo.status === AdmobConsentStatus.REQUIRED &&
+        consentInfo.isConsentFormAvailable &&
+        !consentInfo.canRequestAds
+      ) {
+        consentInfo = await AdMob.showConsentForm();
+        canRequestAds = consentInfo.canRequestAds;
+      }
+
+      adLog('AdMob: consent status', consentInfo.status, 'canRequestAds:', consentInfo.canRequestAds);
+    } catch (e) {
+      // Fail-open to avoid blocking ads if consent API transiently fails.
+      console.warn('AdMob: consent flow failed, continuing', e);
+      canRequestAds = true;
+    }
+
+    return true;
+  })().finally(() => {
+    initializePromise = null;
+  });
+
+  return initializePromise;
+};
+
+const canUseAds = async (): Promise<boolean> => {
+  const initialized = await ensureAdMobInitialized();
+  if (!initialized) return false;
+  if (!IS_TEST_MODE && !canRequestAds) {
+    adLog('AdMob: consent not granted, skipping ad request');
+    return false;
+  }
+  return true;
+};
+
 export const initializeAdMob = async () => {
   if (!isNativeAdsEnabled()) return;
 
-  try {
-    adLog('AdMob: Initializing...');
-    await AdMob.requestTrackingAuthorization();
-    await AdMob.initialize({ initializeForTesting: IS_TEST_MODE });
-    adLog('AdMob: Initialized. Test Mode:', IS_TEST_MODE);
+  const ready = await ensureAdMobInitialized();
+  if (!ready) return;
 
-    // Keep app-open and reward ads ready at startup.
-    await prepareAppOpen();
-    await prepareRewardVideo();
-  } catch (e) {
-    console.error('AdMob: init failed', e);
-  }
+  // Keep startup inventory warm.
+  await prepareAppOpen();
+  await prepareRewardVideo();
 };
 
 export const showBanner = async () => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
   const adId = getAdId('BANNER');
   try {
@@ -70,7 +132,8 @@ export const showBanner = async () => {
       adId,
       adSize: BannerAdSize.ADAPTIVE_BANNER,
       position: BannerAdPosition.TOP_CENTER,
-      margin: 0,
+      // iOS notch/safe-area keeps banner visible.
+      margin: Capacitor.getPlatform() === 'ios' ? 52 : 0,
       isTesting: IS_TEST_MODE,
     });
   } catch (e) {
@@ -90,7 +153,7 @@ export const hideBanner = async () => {
 };
 
 export const prepareInterstitial = async () => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
   const adId = getAdId('INTERSTITIAL');
   try {
@@ -105,13 +168,14 @@ export const prepareInterstitial = async () => {
 };
 
 export const showInterstitial = async () => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
   try {
     if (currentInterstitialSlot !== 'INTERSTITIAL') {
       adLog('AdMob: Interstitial not loaded, preparing...');
       await prepareInterstitial();
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (currentInterstitialSlot !== 'INTERSTITIAL') return;
+      await sleep(900);
     }
 
     adLog('AdMob: Showing interstitial');
@@ -126,28 +190,42 @@ export const showInterstitial = async () => {
 };
 
 export const prepareAppOpen = async () => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
-  const adId = getAdId('APP_OPEN');
-  adLog('AdMob: Preparing app-open ad', adId);
+  const appOpenAdId = getAdId('APP_OPEN');
+  adLog('AdMob: Preparing app-open ad', appOpenAdId);
   try {
-    await AdMob.prepareInterstitial({ adId, isTesting: IS_TEST_MODE });
+    await AdMob.prepareInterstitial({ adId: appOpenAdId, isTesting: IS_TEST_MODE });
     currentInterstitialSlot = 'APP_OPEN';
     adLog('AdMob: App-open ad ready');
   } catch (e) {
-    console.error('AdMob: prepare app-open ad failed', e);
-    currentInterstitialSlot = null;
+    // Plugin exposes interstitial API only; fallback to interstitial unit for "app-open moment".
+    console.error('AdMob: prepare app-open ad failed, trying interstitial fallback', e);
+    const fallbackAdId = getAdId('INTERSTITIAL');
+    if (fallbackAdId === appOpenAdId) {
+      currentInterstitialSlot = null;
+      return;
+    }
+    try {
+      await AdMob.prepareInterstitial({ adId: fallbackAdId, isTesting: IS_TEST_MODE });
+      currentInterstitialSlot = 'APP_OPEN';
+      adLog('AdMob: App-open fallback ready with interstitial unit');
+    } catch (fallbackError) {
+      console.error('AdMob: app-open fallback failed', fallbackError);
+      currentInterstitialSlot = null;
+    }
   }
 };
 
 export const showAppOpen = async () => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
   try {
     if (currentInterstitialSlot !== 'APP_OPEN') {
       adLog('AdMob: App-open ad not loaded, preparing...');
       await prepareAppOpen();
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      if (currentInterstitialSlot !== 'APP_OPEN') return;
+      await sleep(900);
     }
 
     adLog('AdMob: Showing app-open ad');
@@ -155,14 +233,14 @@ export const showAppOpen = async () => {
     currentInterstitialSlot = null;
     await prepareInterstitial();
   } catch (e) {
-    adLog('AdMob: app-open ad failed to show', e);
+    console.error('AdMob: app-open ad failed to show', e);
     currentInterstitialSlot = null;
     await prepareInterstitial();
   }
 };
 
 export const showInterstitialWithProbability = async (probability = 0.5) => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
   if (Math.random() < probability) {
     adLog('AdMob: Interstitial probability hit', probability);
@@ -176,7 +254,7 @@ export const showInterstitialWithProbability = async (probability = 0.5) => {
 };
 
 export const prepareRewardVideo = async () => {
-  if (!isNativeAdsEnabled()) return;
+  if (!(await canUseAds())) return;
 
   const adId = getAdId('REWARDED');
   try {
@@ -188,7 +266,7 @@ export const prepareRewardVideo = async () => {
 
 export const showRewardVideo = async (): Promise<AdMobRewardItem | null> => {
   if (Capacitor.getPlatform() === 'web') return { type: 'coin', amount: 10 };
-  if (!isNativeAdsEnabled()) return null;
+  if (!(await canUseAds())) return null;
 
   return new Promise(async (resolve) => {
     let resolved = false;

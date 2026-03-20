@@ -95,6 +95,12 @@ const getNextRaceIndex = (races: Race[]) => {
   return idx === -1 ? races.length - 1 : idx;
 };
 
+// Keep lineup lock logic aligned with backend: first non-completed race.
+const getActiveLockRace = (races: Race[]): Race | null => {
+  if (races.length === 0) return null;
+  return races.find(r => !r.isCompleted) || races[races.length - 1];
+};
+
 const raceHasResults = (race?: Race | null): boolean => {
   const results = race?.results;
   return !!results && typeof results === 'object' && Object.keys(results).length > 0;
@@ -855,8 +861,16 @@ const App: React.FC = () => {
     handleRuleChange('sprintPositionPoints', newPoints);
   };
 
+  const parseNumberInput = (raw: string): number | null => {
+    const normalized = raw.replace(',', '.').trim();
+    if (!normalized || normalized === '-' || normalized === '.' || normalized === '-.') return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const handleConstructorMultiplierChange = (id: string, multiplier: number) => {
     if (!data) return;
+    if (!Number.isFinite(multiplier)) return;
     const currentConstructors = data.rules.constructors || CONSTRUCTORS;
     const newConstructors = currentConstructors.map(c =>
       c.id === id ? { ...c, multiplier } : c
@@ -1575,7 +1589,8 @@ const App: React.FC = () => {
   const currentRace = races[data.currentRaceIndex] || races[0]; // Fallback to avoid crash
   if (!currentRace) return <div>Error: No Race Data</div>; // Should never happen due to check above
   
-  const lockState = getLockStatus(currentRace, now);
+  const lockRace = getActiveLockRace(races) || currentRace;
+  const lockState = getLockStatus(lockRace, now);
 
   const getStatusColor = (s: LockStatus) => {
     switch (s) {
@@ -1864,7 +1879,7 @@ const App: React.FC = () => {
               <div className="bg-red-900/50 border border-red-600 p-3 rounded text-center">
                 <div className="text-red-400 font-bold">{t({ en: 'Lineup locked.', it: 'Formazione bloccata.', fr: 'Alignement verrouillé.', de: 'Lineup gesperrt.', es: 'Alineación bloqueada.', ru: 'Состав заблокирован.', zh: '阵容已锁定。', ar: 'تم قفل التشكيل.', ja: 'ラインナップ固定済み。' })}</div>
                 <div className="text-xs text-red-200">
-                  {currentRace.isSprint
+                  {lockRace.isSprint
                     ? t({ en: 'Sprint Qualifying is about to start.', it: 'La Sprint Shootout sta per iniziare.', fr: 'Qualification Sprint commence.', de: 'Sprint-Quali beginnt.', es: 'Sprint Quali va a comenzar.', ru: 'Спринт-квалификация начинается.', zh: '冲刺排位即将开始。', ar: 'تصفيات السرعة ستبدأ قريباً.', ja: 'スプリント予選開始。' })
                     : t({ en: 'Qualifying is about to start.', it: 'Le qualifiche stanno per iniziare.', fr: 'Les qualifications vont commencer.', de: 'Qualifying beginnt bald.', es: 'La clasificación está por comenzar.', ru: 'Квалификация начинается.', zh: '排位赛即将开始。', ar: 'التصفيات ستبدأ قريباً.', ja: '予選が始まります。' })}
                 </div>
@@ -2226,7 +2241,10 @@ const App: React.FC = () => {
                         type="number"
                         step="0.1"
                         value={c.multiplier}
-                        onChange={(e) => handleConstructorMultiplierChange(c.id, Number(e.target.value))}
+                        onChange={(e) => {
+                          const parsed = parseNumberInput(e.target.value);
+                          if (parsed !== null) handleConstructorMultiplierChange(c.id, parsed);
+                        }}
                         title={`${c.name} Multiplier`}
                         className="w-full bg-transparent text-white font-mono text-sm focus:outline-none border-b border-slate-600 focus:border-blue-500"
                       />
@@ -2394,9 +2412,9 @@ const App: React.FC = () => {
   const handleSetCaptain = async (driverId: string) => {
     if (!data?.user) return;
     if (!data.team) return;
-    const currentRace = races[data.currentRaceIndex];
-    if (!currentRace) return;
-    const lockState = getLockStatus(currentRace, now);
+    const lockRace = getActiveLockRace(races);
+    if (!lockRace) return;
+    const lockState = getLockStatus(lockRace, now);
     if (lockState.status === 'locked') return;
 
     let newCaptainId = driverId;
@@ -2430,9 +2448,9 @@ const App: React.FC = () => {
   const handleSetReserve = async (driverId: string) => {
     if (!data?.user) return;
     if (!data.team) return;
-    const currentRace = races[data.currentRaceIndex];
-    if (!currentRace) return;
-    const lockState = getLockStatus(currentRace, now);
+    const lockRace = getActiveLockRace(races);
+    if (!lockRace) return;
+    const lockState = getLockStatus(lockRace, now);
     if (lockState.status === 'locked') return;
 
     let newReserveId = driverId;
@@ -2480,8 +2498,8 @@ const App: React.FC = () => {
   };
   
   const handleRuleChangeNumeric = (field: keyof ScoringRules, value: string) => {
-      const num = parseFloat(value);
-      if (isNaN(num)) return;
+      const num = parseNumberInput(value);
+      if (num === null) return;
       setData(prev => prev ? { ...prev, rules: { ...prev.rules, [field]: num } } : null);
   };
 

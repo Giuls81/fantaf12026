@@ -28,7 +28,11 @@ workflows:
         script: |
           cd web
           npm ci
-          VITE_API_URL=$VITE_API_URL npm run build
+          VITE_API_URL=$VITE_API_URL \
+          VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
+          VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
+          VITE_ADS_DEBUG_LOGS=$VITE_ADS_DEBUG_LOGS \
+          npm run build
       - name: Sync Capacitor iOS
         script: npx cap sync ios
       - name: Install iOS pods (if Podfile exists)
@@ -140,7 +144,11 @@ workflows:
         script: |
           cd web
           npm ci
-          VITE_API_URL=$VITE_API_URL npm run build
+          VITE_API_URL=$VITE_API_URL \
+          VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
+          VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
+          VITE_ADS_DEBUG_LOGS=$VITE_ADS_DEBUG_LOGS \
+          npm run build
       - name: Add/Sync Android
         script: |
           npx cap add android || true
