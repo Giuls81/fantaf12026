@@ -122,6 +122,11 @@ const getDefaultResultSession = (race?: Race | null): 'quali' | 'race' | 'sprint
 };
 
 type LangCode = 'en' | 'it' | 'fr' | 'de' | 'es' | 'ru' | 'zh' | 'ar' | 'ja';
+type DecimalRuleField =
+  | 'positionGainedPos1_10'
+  | 'positionGainedPos11_Plus'
+  | 'positionLostPos1_10'
+  | 'positionLostPos11_Plus';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
@@ -134,6 +139,13 @@ const App: React.FC = () => {
   const [fetchedDrivers, setFetchedDrivers] = useState<Driver[]>([]);
   const [leagueMembers, setLeagueMembers] = useState<any[]>([]); // Added for Admin
   const [adminUpdates, setAdminUpdates] = useState<Record<string, { price: number; points: number }>>({});
+  const [constructorMultiplierDrafts, setConstructorMultiplierDrafts] = useState<Record<string, string>>({});
+  const [decimalRuleDrafts, setDecimalRuleDrafts] = useState<Record<DecimalRuleField, string>>({
+    positionGainedPos1_10: '1',
+    positionGainedPos11_Plus: '0.5',
+    positionLostPos1_10: '-1',
+    positionLostPos11_Plus: '-0.5',
+  });
   
   const racesWithResults = useMemo(() => {
     return races
@@ -535,6 +547,30 @@ const App: React.FC = () => {
     }
   }, [data?.currentRaceIndex, races, activeTab]);
 
+  useEffect(() => {
+    if (!data?.rules) return;
+
+    setDecimalRuleDrafts({
+      positionGainedPos1_10: String(data.rules.positionGainedPos1_10 ?? 1),
+      positionGainedPos11_Plus: String(data.rules.positionGainedPos11_Plus ?? 0.5),
+      positionLostPos1_10: String(data.rules.positionLostPos1_10 ?? -1),
+      positionLostPos11_Plus: String(data.rules.positionLostPos11_Plus ?? -0.5),
+    });
+
+    const constructors = data.rules.constructors || CONSTRUCTORS;
+    const nextDrafts: Record<string, string> = {};
+    constructors.forEach((c) => {
+      nextDrafts[c.id] = String(c.multiplier);
+    });
+    setConstructorMultiplierDrafts(nextDrafts);
+  }, [
+    data?.rules?.constructors,
+    data?.rules?.positionGainedPos1_10,
+    data?.rules?.positionGainedPos11_Plus,
+    data?.rules?.positionLostPos1_10,
+    data?.rules?.positionLostPos11_Plus,
+  ]);
+
   // Save data to localStorage whenever it changes
   useEffect(() => {
     if (data && data.user) {
@@ -868,6 +904,45 @@ const App: React.FC = () => {
     return Number.isFinite(parsed) ? parsed : null;
   };
 
+  const sanitizeDecimalDraft = (raw: string) => raw.replace(/[^0-9,.\-]/g, '');
+
+  const getDecimalRuleFallback = (field: DecimalRuleField): number => {
+    switch (field) {
+      case 'positionGainedPos1_10':
+        return 1;
+      case 'positionGainedPos11_Plus':
+        return 0.5;
+      case 'positionLostPos1_10':
+        return -1;
+      case 'positionLostPos11_Plus':
+        return -0.5;
+      default:
+        return 0;
+    }
+  };
+
+  const handleDecimalRuleDraftChange = (field: DecimalRuleField, raw: string) => {
+    setDecimalRuleDrafts((prev) => ({ ...prev, [field]: sanitizeDecimalDraft(raw) }));
+  };
+
+  const commitDecimalRuleDraft = (field: DecimalRuleField) => {
+    if (!data) return;
+    const parsed = parseNumberInput(decimalRuleDrafts[field] || '');
+    const currentValue = data.rules[field] ?? getDecimalRuleFallback(field);
+
+    if (parsed === null) {
+      setDecimalRuleDrafts((prev) => ({ ...prev, [field]: String(currentValue) }));
+      return;
+    }
+
+    handleRuleChange(field, parsed);
+    setDecimalRuleDrafts((prev) => ({ ...prev, [field]: String(parsed) }));
+  };
+
+  const handleConstructorDraftChange = (id: string, raw: string) => {
+    setConstructorMultiplierDrafts((prev) => ({ ...prev, [id]: sanitizeDecimalDraft(raw) }));
+  };
+
   const handleConstructorMultiplierChange = (id: string, multiplier: number) => {
     if (!data) return;
     if (!Number.isFinite(multiplier)) return;
@@ -876,6 +951,22 @@ const App: React.FC = () => {
       c.id === id ? { ...c, multiplier } : c
     );
     handleRuleChange('constructors', newConstructors);
+  };
+
+  const commitConstructorDraft = (id: string) => {
+    if (!data) return;
+    const constructors = data.rules.constructors || CONSTRUCTORS;
+    const current = constructors.find((c) => c.id === id);
+    if (!current) return;
+
+    const parsed = parseNumberInput(constructorMultiplierDrafts[id] || '');
+    if (parsed === null) {
+      setConstructorMultiplierDrafts((prev) => ({ ...prev, [id]: String(current.multiplier) }));
+      return;
+    }
+
+    handleConstructorMultiplierChange(id, parsed);
+    setConstructorMultiplierDrafts((prev) => ({ ...prev, [id]: String(parsed) }));
   };
 
   const getLockStatus = (race: Race, currentTime: number): LockState => {
@@ -2238,12 +2329,13 @@ const App: React.FC = () => {
                     <div className="flex-1">
                       <div className="text-xs text-slate-400">{c.name}</div>
                       <input
-                        type="number"
-                        step="0.1"
-                        value={c.multiplier}
-                        onChange={(e) => {
-                          const parsed = parseNumberInput(e.target.value);
-                          if (parsed !== null) handleConstructorMultiplierChange(c.id, parsed);
+                        type="text"
+                        inputMode="decimal"
+                        value={constructorMultiplierDrafts[c.id] ?? String(c.multiplier)}
+                        onChange={(e) => handleConstructorDraftChange(c.id, e.target.value)}
+                        onBlur={() => commitConstructorDraft(c.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                         }}
                         title={`${c.name} Multiplier`}
                         className="w-full bg-transparent text-white font-mono text-sm focus:outline-none border-b border-slate-600 focus:border-blue-500"
@@ -2497,13 +2589,6 @@ const App: React.FC = () => {
     }
   };
   
-  const handleRuleChangeNumeric = (field: keyof ScoringRules, value: string) => {
-      const num = parseNumberInput(value);
-      if (num === null) return;
-      setData(prev => prev ? { ...prev, rules: { ...prev.rules, [field]: num } } : null);
-  };
-
-
   const handleWatchAdForPremium = async () => {
     const reward = await showRewardVideo();
     if (reward) {
@@ -2541,9 +2626,14 @@ const App: React.FC = () => {
                         {t({ en: 'Overtake (P1-10)', it: 'Sorpasso (P1-10)' })}
                     </label>
                     <input 
-                        type="number" step="0.1"
-                        value={data?.rules.positionGainedPos1_10 ?? 1}
-                        onChange={(e) => handleRuleChangeNumeric('positionGainedPos1_10', e.target.value)}
+                        type="text"
+                        inputMode="decimal"
+                        value={decimalRuleDrafts.positionGainedPos1_10}
+                        onChange={(e) => handleDecimalRuleDraftChange('positionGainedPos1_10', e.target.value)}
+                        onBlur={() => commitDecimalRuleDraft('positionGainedPos1_10')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
                         title="Overtake (P1-10)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
@@ -2553,9 +2643,14 @@ const App: React.FC = () => {
                         {t({ en: 'Overtake (P11+)', it: 'Sorpasso (P11+)' })}
                     </label>
                     <input 
-                        type="number" step="0.1"
-                        value={data?.rules.positionGainedPos11_Plus ?? 0.5}
-                        onChange={(e) => handleRuleChangeNumeric('positionGainedPos11_Plus', e.target.value)}
+                        type="text"
+                        inputMode="decimal"
+                        value={decimalRuleDrafts.positionGainedPos11_Plus}
+                        onChange={(e) => handleDecimalRuleDraftChange('positionGainedPos11_Plus', e.target.value)}
+                        onBlur={() => commitDecimalRuleDraft('positionGainedPos11_Plus')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
                         title="Overtake (P11+)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
@@ -2565,9 +2660,14 @@ const App: React.FC = () => {
                         {t({ en: 'Lost Pos (P1-10)', it: 'Pos Persa (P1-10)' })}
                     </label>
                     <input 
-                        type="number" step="0.1"
-                        value={data?.rules.positionLostPos1_10 ?? -1}
-                        onChange={(e) => handleRuleChangeNumeric('positionLostPos1_10', e.target.value)}
+                        type="text"
+                        inputMode="decimal"
+                        value={decimalRuleDrafts.positionLostPos1_10}
+                        onChange={(e) => handleDecimalRuleDraftChange('positionLostPos1_10', e.target.value)}
+                        onBlur={() => commitDecimalRuleDraft('positionLostPos1_10')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
                         title="Lost Position (P1-10)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
@@ -2577,9 +2677,14 @@ const App: React.FC = () => {
                         {t({ en: 'Lost Pos (P11+)', it: 'Pos Persa (P11+)' })}
                     </label>
                     <input 
-                        type="number" step="0.1"
-                        value={data?.rules.positionLostPos11_Plus ?? -0.5}
-                        onChange={(e) => handleRuleChangeNumeric('positionLostPos11_Plus', e.target.value)}
+                        type="text"
+                        inputMode="decimal"
+                        value={decimalRuleDrafts.positionLostPos11_Plus}
+                        onChange={(e) => handleDecimalRuleDraftChange('positionLostPos11_Plus', e.target.value)}
+                        onBlur={() => commitDecimalRuleDraft('positionLostPos11_Plus')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
                         title="Lost Position (P11+)"
                         className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
                     />
