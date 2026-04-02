@@ -117,8 +117,9 @@ export const initializeAdMob = async () => {
   const ready = await ensureAdMobInitialized();
   if (!ready) return;
 
-  // Keep startup inventory warm.
+  // Keep startup inventory warm for all active formats.
   await prepareAppOpen();
+  await prepareInterstitial();
   await prepareRewardVideo();
 };
 

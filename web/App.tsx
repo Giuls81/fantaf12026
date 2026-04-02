@@ -279,6 +279,7 @@ const App: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
 
   const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
+  const [isPurchasingPremium, setIsPurchasingPremium] = useState(false);
   
   // Standings & History States
   const [standings, setStandings] = useState<any[]>([]);
@@ -1683,6 +1684,7 @@ const App: React.FC = () => {
   
   const lockRace = getActiveLockRace(races) || currentRace;
   const lockState = getLockStatus(lockRace, now);
+  const annualPriceLabel = annualPackage?.product.priceString || '5.99 EUR';
 
   const getStatusColor = (s: LockStatus) => {
     switch (s) {
@@ -1762,6 +1764,50 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {!isPremium && (
+              <div className="bg-gradient-to-r from-yellow-900/40 to-amber-900/40 p-4 rounded-xl border border-yellow-700/50">
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-yellow-300">{t({ en: 'Premium Annual', it: 'Premium Annuale' })}</h2>
+                    <p className="text-sm text-yellow-100/80 mt-1">
+                      {t({
+                        en: 'The app stays free with ads. Upgrade to remove ads for one year.',
+                        it: "L'app resta gratuita con pubblicita. Passa a Premium per rimuovere gli annunci per un anno."
+                      })}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleBuyPremiumAnnual}
+                    disabled={!annualPackage || isPurchasingPremium}
+                    className={`w-full font-bold py-3 px-3 rounded-lg shadow-lg border transition-all text-sm ${
+                      annualPackage && !isPurchasingPremium
+                        ? 'bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white border-yellow-500/50'
+                        : 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed'
+                    }`}
+                  >
+                    {isPurchasingPremium
+                      ? t({ en: 'Processing purchase...', it: 'Acquisto in corso...' })
+                      : t({ en: `Buy Premium ${annualPriceLabel}/year`, it: `Acquista Premium ${annualPriceLabel}/anno` })}
+                  </button>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={handleRestorePremiumPurchases}
+                      className="bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 py-2 px-3 rounded border border-slate-600"
+                    >
+                      {t({ en: "Restore Purchases", it: "Ripristina Acquisti" })}
+                    </button>
+                    {!annualPackage && (
+                      <span className="text-[11px] text-amber-200/80">
+                        {t({ en: 'Annual offer not loaded', it: 'Offerta annuale non caricata' })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Profile & Logout Card (Added to Home) */}
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
               <h3 className="font-semibold text-white mb-2">{t({ en: 'User Profile', it: 'Profilo Utente', fr: 'Profil utilisateur', de: 'Benutzerprofil', es: 'Perfil usuario', ru: 'Профиль', zh: '用户资料', ar: 'ملف المستخدم', ja: 'プロフィール' })}</h3>
@@ -1785,33 +1831,24 @@ const App: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                        {annualPackage && (
                           <button
-                            onClick={async () => {
-                               const success = await purchasePackage(annualPackage);
-                               if (success) {
-                                  setIsPremium(true);
-                                  alert(t({ en: "Premium Activated!", it: "Premium Attivato!" }));
-                               }
-                            }}
-                            className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold py-3 px-3 rounded-lg shadow-lg border border-yellow-500/50 transition-all flex items-center justify-center gap-2 text-sm mb-2"
+                            onClick={handleBuyPremiumAnnual}
+                            disabled={!annualPackage || isPurchasingPremium}
+                            className={`w-full font-bold py-3 px-3 rounded-lg shadow-lg border transition-all flex items-center justify-center gap-2 text-sm mb-2 ${
+                              annualPackage && !isPurchasingPremium
+                                ? 'bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white border-yellow-500/50'
+                                : 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed'
+                            }`}
                           >
                             <span>💎</span>
-                            {t({ en: `Buy Premium ${annualPackage.product.priceString}/yr`, it: `Acquista Premium ${annualPackage.product.priceString}/anno` })}
+                            {isPurchasingPremium
+                              ? t({ en: 'Processing purchase...', it: 'Acquisto in corso...' })
+                              : t({ en: `Buy Premium ${annualPriceLabel}/yr`, it: `Acquista Premium ${annualPriceLabel}/anno` })}
                           </button>
-                        )}
                         
                         <div className="grid grid-cols-2 gap-2">
                            <button
-                             onClick={async () => {
-                                const success = await restorePurchases();
-                                if (success) {
-                                   setIsPremium(true);
-                                   alert(t({ en: "Purchases Restored", it: "Acquisti Ripristinati" }));
-                                } else {
-                                   alert(t({ en: "No active subscription found", it: "Nessun abbonamento attivo trovato" }));
-                                }
-                             }}
+                             onClick={handleRestorePremiumPurchases}
                              className="bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 py-2 rounded border border-slate-600"
                            >
                              {t({ en: "Restore Purchases", it: "Ripristina Acquisti" })}
@@ -2587,6 +2624,41 @@ const App: React.FC = () => {
     } catch (e) {
         console.error(e);
         alert(t({ en: "Error saving rules.", it: "Errore salvataggio regole." }));
+    }
+  };
+
+  const handleBuyPremiumAnnual = async () => {
+    if (!annualPackage) {
+      alert(t({
+        en: "Annual Premium plan not available right now. Check RevenueCat offering.",
+        it: "Piano Premium annuale non disponibile al momento. Verifica l'offering RevenueCat."
+      }));
+      return;
+    }
+
+    try {
+      setIsPurchasingPremium(true);
+      const success = await purchasePackage(annualPackage);
+      if (success) {
+        setIsPremium(true);
+        localStorage.setItem('fantaF1Premium', 'true');
+        localStorage.removeItem('fantaF1PremiumExpiry');
+        alert(t({ en: "Premium Activated!", it: "Premium Attivato!" }));
+      }
+    } finally {
+      setIsPurchasingPremium(false);
+    }
+  };
+
+  const handleRestorePremiumPurchases = async () => {
+    const success = await restorePurchases();
+    if (success) {
+      setIsPremium(true);
+      localStorage.setItem('fantaF1Premium', 'true');
+      localStorage.removeItem('fantaF1PremiumExpiry');
+      alert(t({ en: "Purchases Restored", it: "Acquisti Ripristinati" }));
+    } else {
+      alert(t({ en: "No active subscription found", it: "Nessun abbonamento attivo trovato" }));
     }
   };
   

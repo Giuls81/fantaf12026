@@ -1,6 +1,6 @@
 
-// AdMob Unit IDs provided by user
-// Replaced App IDs with placeholders as requested in plan
+// AdMob production IDs provided by user.
+// Test IDs are used only when VITE_ADS_TEST_MODE=true.
 
 export const ADMOB_IDS = {
   ANDROID: {
@@ -12,7 +12,7 @@ export const ADMOB_IDS = {
   },
   IOS: {
     APP_ID: 'ca-app-pub-6238898129897806~1618757166',
-    APP_OPEN: 'ca-app-pub-6238898129897806/9071540071', // Typically different for iOS, using same for now per user
+    APP_OPEN: 'ca-app-pub-6238898129897806/9071540071',
     BANNER: 'ca-app-pub-6238898129897806/2450291400',
     INTERSTITIAL: 'ca-app-pub-6238898129897806/9277815405',
     REWARDED: 'ca-app-pub-6238898129897806/4066625400',
