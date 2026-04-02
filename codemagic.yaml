@@ -13,8 +13,8 @@ workflows:
         BUNDLE_ID: "com.fantaf1.app"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
         VITE_ADS_ENABLED: "true"
-        VITE_ADS_TEST_MODE: "false"
-        VITE_ADS_DEBUG_LOGS: "false"
+        VITE_ADS_TEST_MODE: "true"
+        VITE_ADS_DEBUG_LOGS: "true"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.fantaf1.app

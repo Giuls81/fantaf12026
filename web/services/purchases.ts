@@ -18,17 +18,18 @@ export const initializePurchases = async () => {
   }
 };
 
-export const checkPremiumStatus = async (): Promise<boolean> => {
+export const checkPremiumStatus = async (): Promise<boolean | null> => {
    if (Capacitor.getPlatform() === 'web') return false;
    try {
      const customerInfo = await Purchases.getCustomerInfo();
      if (typeof customerInfo.customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined") {
        return true;
      }
+     return false;
    } catch (e) {
      console.warn("Check premium failed", e);
+     return null;
    }
-   return false;
 };
 
 export const getOfferings = async (): Promise<PurchasesPackage | null> => {

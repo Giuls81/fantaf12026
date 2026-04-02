@@ -214,10 +214,25 @@ const App: React.FC = () => {
         if (pkg) {
            setAnnualPackage(pkg);
         }
-        const isPrem = await checkPremiumStatus();
-        if (isPrem) {
-           setIsPremium(true);
-           localStorage.setItem('fantaF1Premium', 'true');
+        const premiumStatus = await checkPremiumStatus();
+        const expiry = localStorage.getItem('fantaF1PremiumExpiry');
+        const hasTemporaryPremium = !!expiry && Date.now() <= Number(expiry);
+
+        if (premiumStatus === true) {
+          setIsPremium(true);
+          localStorage.setItem('fantaF1Premium', 'true');
+          return;
+        }
+
+        if (premiumStatus === false) {
+          if (hasTemporaryPremium) {
+            setIsPremium(true);
+            localStorage.setItem('fantaF1Premium', 'true');
+          } else {
+            setIsPremium(false);
+            localStorage.removeItem('fantaF1Premium');
+            localStorage.removeItem('fantaF1PremiumExpiry');
+          }
         }
     })();
 
@@ -1682,6 +1697,7 @@ const App: React.FC = () => {
   if (!currentRace) return <div>Error: No Race Data</div>; // Should never happen due to check above
   
   const lockRace = getActiveLockRace(races) || currentRace;
+  const homeRace = lockRace || currentRace;
   const lockState = getLockStatus(lockRace, now);
   const annualPriceLabel = annualPackage?.product.priceString || '5.99 EUR';
 
@@ -1738,9 +1754,9 @@ const App: React.FC = () => {
             </header>
 
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-              <h2 className="text-lg font-semibold text-blue-400 mb-2">{t({ en: 'Selected Race', it: 'Gara Selezionata', fr: 'Course sélectionnée', de: 'Ausgewähltes Rennen', es: 'Carrera seleccionada', ru: 'Выбранная гонка', zh: '已选赛事', ar: 'السباق المحدد', ja: '選択されたレース' })}</h2>
-              <div className="text-3xl font-bold text-white">{currentRace.name}</div>
-              <div className="text-slate-400 mt-1">{currentRace.date}</div>
+              <h2 className="text-lg font-semibold text-blue-400 mb-2">{t({ en: 'Next Race', it: 'Prossima Gara', fr: 'Prochaine course', de: 'Nächstes Rennen', es: 'Próxima carrera', ru: 'Следующая гонка', zh: '下一场比赛', ar: 'السباق القادم', ja: '次のレース' })}</h2>
+              <div className="text-3xl font-bold text-white">{homeRace.name}</div>
+              <div className="text-slate-400 mt-1">{homeRace.date}</div>
               {lockState.status !== 'unconfigured' && (
                 <div className="mt-3 bg-slate-900/50 p-2 rounded text-center border border-slate-600">
                   <span className="text-xs text-slate-400 uppercase mr-2">{t({ en: 'Lineup Locks In', it: 'Chiude tra', fr: 'Verrouillage dans', de: 'Sperrt in', es: 'Cierra en', ru: 'Закрытие через', zh: '阵容锁定于', ar: 'يغلق التشكيل في', ja: 'ラインナップ固定まで' })}</span>
