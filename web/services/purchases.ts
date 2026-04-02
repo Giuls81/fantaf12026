@@ -1,4 +1,4 @@
-import { Purchases, LOG_LEVEL, PurchasesPackage } from '@revenuecat/purchases-capacitor';
+import { Purchases, LOG_LEVEL, PurchasesPackage, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { REVENUECAT_API_KEYS, ENTITLEMENT_ID } from '../constants_iap';
 
@@ -35,9 +35,29 @@ export const getOfferings = async (): Promise<PurchasesPackage | null> => {
   if (Capacitor.getPlatform() === 'web') return null;
   try {
     const offerings = await Purchases.getOfferings();
-    if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-      return offerings.current.availablePackages[0]; // Assuming only one annual package
+    if (offerings.current === null) return null;
+
+    // Prefer explicit annual package from RevenueCat offering.
+    if (offerings.current.annual) {
+      return offerings.current.annual;
     }
+
+    // Fallbacks for custom package setups that still map to a yearly subscription.
+    const annualByType = offerings.current.availablePackages.find(
+      (pkg) => pkg.packageType === PACKAGE_TYPE.ANNUAL,
+    );
+    if (annualByType) {
+      return annualByType;
+    }
+
+    const annualByPeriod = offerings.current.availablePackages.find(
+      (pkg) => pkg.product.subscriptionPeriod === 'P1Y',
+    );
+    if (annualByPeriod) {
+      return annualByPeriod;
+    }
+
+    console.warn("No annual package found in current offering", offerings.current.identifier);
   } catch (e) {
     console.error("Get offerings failed", e);
   }
