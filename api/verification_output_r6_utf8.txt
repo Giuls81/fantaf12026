@@ -1,0 +1,361 @@
+﻿[dotenv@17.3.1] injecting env (1) from .env -- tip: ≡ƒ¢í∩╕Å auth for agents: https://vestauth.com
+
+
+=== VERIFYING RACE r1 ===
+[MISMATCH r1] ant: DB=-4 vs RECALC=-4.3. DB Breakdown: {
+  dnf: 0,
+  race: -1,
+  quali: -3,
+  total: -4,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: 1,
+  qualiPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.1
+} Recalc: {
+  total: -4.3,
+  fRace: -1,
+  fQuali: -3.3000000000000003,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 1,
+  teammatePts: -2,
+  constructorMult: 1.1
+}
+[MISMATCH r1] lec: DB=34.1 vs RECALC=33.8. DB Breakdown: {
+  dnf: 0,
+  race: 30.8,
+  quali: 3.3,
+  total: 34.1,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: 1,
+  qualiPole: 0,
+  qualiSession: 3,
+  racePosition: 25,
+  constructorMult: 1.1
+} Recalc: {
+  total: 33.8,
+  fRace: 30.500000000000004,
+  fQuali: 3.3000000000000003,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 1,
+  teammatePts: 2,
+  constructorMult: 1.1
+}
+[MISMATCH r1] ham: DB=11 vs RECALC=11.3. DB Breakdown: {
+  dnf: 0,
+  race: 7.7,
+  quali: 3.3,
+  total: 11,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: -1,
+  qualiPole: 0,
+  qualiSession: 3,
+  racePosition: 10,
+  constructorMult: 1.1
+} Recalc: {
+  total: 11.3,
+  fRace: 8,
+  fQuali: 3.3000000000000003,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: -1,
+  teammatePts: -2,
+  constructorMult: 1.1
+}
+[MISMATCH r1] alo: DB=13 vs RECALC=12.1. DB Breakdown: {
+  dnf: 0,
+  race: 9.1,
+  quali: 3.9,
+  total: 13,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: 1,
+  qualiPole: 0,
+  qualiSession: 3,
+  racePosition: 4,
+  constructorMult: 1.3
+} Recalc: {
+  total: 12.1,
+  fRace: 8.2,
+  fQuali: 3.9000000000000004,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 1,
+  teammatePts: 2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] str: DB=-4 vs RECALC=-4.9. DB Breakdown: {
+  dnf: 0,
+  race: -1,
+  quali: -3,
+  total: -4,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: 1,
+  qualiPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: -4.9,
+  fRace: -1,
+  fQuali: -3.9000000000000004,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 1,
+  teammatePts: -2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] col: DB=-4.5 vs RECALC=-5.4. DB Breakdown: {
+  dnf: 0,
+  race: -1.5,
+  quali: -3,
+  total: -4.5,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: 0.5,
+  qualiPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: -5.4,
+  fRace: -1.5,
+  fQuali: -3.9000000000000004,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 0.5,
+  teammatePts: -2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] gas: DB=4.6 vs RECALC=4.4. DB Breakdown: {
+  dnf: 0,
+  race: 0.7,
+  quali: 3.9,
+  total: 4.6,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: -1.5,
+  qualiPole: 0,
+  qualiSession: 3,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: 4.4,
+  fRace: 0.5,
+  fQuali: 3.9000000000000004,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: -1.5,
+  teammatePts: 2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] sai: DB=14.3 vs RECALC=13.7. DB Breakdown: {
+  dnf: 0,
+  race: 10.4,
+  quali: 3.9,
+  total: 14.3,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: 0,
+  qualiPole: 0,
+  qualiSession: 3,
+  racePosition: 6,
+  constructorMult: 1.3
+} Recalc: {
+  total: 13.7,
+  fRace: 9.8,
+  fQuali: 3.9000000000000004,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 0,
+  teammatePts: 2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] lin: DB=-16 vs RECALC=-11.7. DB Breakdown: {
+  dnf: -5,
+  race: -13,
+  quali: -3,
+  total: -16,
+  teammate: -2,
+  lastPlace: -3,
+  overtakes: -3,
+  qualiPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: -11.7,
+  fRace: -13,
+  fQuali: 1.3,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: -3,
+  teammatePts: -2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] law: DB=3.3 vs RECALC=2.8. DB Breakdown: {
+  dnf: 0,
+  race: 2,
+  quali: 1.3,
+  total: 3.3,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: -0.5,
+  qualiPole: 0,
+  qualiSession: 1,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: 2.8,
+  fRace: 1.5,
+  fQuali: 1.3,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: -0.5,
+  teammatePts: 2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] oco: DB=4.6 vs RECALC=3.8. DB Breakdown: {
+  dnf: 0,
+  race: 3.3,
+  quali: 1.3,
+  total: 4.6,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: 0.5,
+  qualiPole: 0,
+  qualiSession: 1,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: 3.8,
+  fRace: 2.5,
+  fQuali: 1.3,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 0.5,
+  teammatePts: 2,
+  constructorMult: 1.3
+}
+[MISMATCH r1] bor: DB=-5 vs RECALC=-6.5. DB Breakdown: {
+  dnf: 0,
+  race: -2,
+  quali: -3,
+  total: -5,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: 0,
+  qualiPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.5
+} Recalc: {
+  total: -6.5,
+  fRace: -2,
+  fQuali: -4.5,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 0,
+  teammatePts: -2,
+  constructorMult: 1.5
+}
+[MISMATCH r1] hul: DB=8.3 vs RECALC=6.5. DB Breakdown: {
+  dnf: 0,
+  race: 6.8,
+  quali: 1.5,
+  total: 8.3,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: 1.5,
+  qualiPole: 0,
+  qualiSession: 1,
+  racePosition: 1,
+  constructorMult: 1.5
+} Recalc: {
+  total: 6.5,
+  fRace: 5,
+  fQuali: 1.5,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 1.5,
+  teammatePts: 2,
+  constructorMult: 1.5
+}
+[MISMATCH r1] per: DB=9.6 vs RECALC=9. DB Breakdown: {
+  dnf: 0,
+  race: 4.8,
+  quali: 4.8,
+  total: 9.6,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: -1,
+  qualiPole: 0,
+  qualiSession: 3,
+  racePosition: 2,
+  constructorMult: 1.6
+} Recalc: {
+  total: 9,
+  fRace: 4.2,
+  fQuali: 4.800000000000001,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: -1,
+  teammatePts: 2,
+  constructorMult: 1.6
+}
+[MISMATCH r1] bot: DB=-4.5 vs RECALC=-6.3. DB Breakdown: {
+  dnf: 0,
+  race: -1.5,
+  quali: -3,
+  total: -4.5,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: 0.5,
+  qualiPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.6
+} Recalc: {
+  total: -6.3,
+  fRace: -1.5,
+  fQuali: -4.800000000000001,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 0.5,
+  teammatePts: -2,
+  constructorMult: 1.6
+}
+Γ£ô Driver math checked for r1.
+
+
+=== VERIFYING RACE r2 ===
+[MISMATCH r2] ant: DB=1.4 vs RECALC=5.8. DB Breakdown: {
+  dnf: 0,
+  total: 1.4,
+  sprint: 2,
+  teammate: 2,
+  lastPlace: 0,
+  overtakes: 0.5,
+  qualiPole: 0,
+  sprintPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.1
+} Recalc: {
+  total: 5.8,
+  fRace: 2.5,
+  fQuali: 1.1,
+  fSprint: 2.2,
+  fSprintQuali: 0,
+  overtakes: 0.5,
+  teammatePts: 2,
+  constructorMult: 1.1
+}
+Γ£ô Driver math checked for r2.

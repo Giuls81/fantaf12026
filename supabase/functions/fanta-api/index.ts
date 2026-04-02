@@ -606,6 +606,7 @@ app.post("/league/delete", requireUser, async (c) => {
 // Helper constants for Sync
 const OPENF1_BASE = "https://api.openf1.org/v1";
 const OPENF1_MAX_RETRIES = 3;
+const OPENF1_SESSION_END_GRACE_MS = 2 * 60 * 1000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -864,6 +865,59 @@ async function getOpenF1Classification(sessionKey: number, sessionDriverMap: Rec
   return results;
 }
 
+async function getOpenF1SessionResultClassification(sessionKey: number, sessionDriverMap: Record<number, string>, knownDriverIds: Set<string>): Promise<Record<string, number>> {
+  const results: Record<string, number> = {};
+  let hasActualClassification = false;
+  try {
+    const data = await fetchOpenF1Json(`${OPENF1_BASE}/session_result?session_key=${sessionKey}`);
+    if (Array.isArray(data)) {
+      for (const r of data) {
+        const n = Number(r.driver_number);
+        const p = Number(r.position);
+        if (Number.isFinite(n) && Number.isFinite(p) && p > 0) {
+          const id = resolveDriverIdByNumber(n, sessionDriverMap, knownDriverIds);
+          if (id) {
+            results[id] = p;
+            hasActualClassification = true;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("session_result_classification_err", e);
+  }
+
+  if (!hasActualClassification) {
+    return {};
+  }
+
+  for (const driverId of new Set(Object.values(sessionDriverMap))) {
+    if (!results[driverId]) {
+      results[driverId] = 999;
+    }
+  }
+
+  return results;
+}
+
+async function getOpenF1SessionEndTimestamp(sessionKey: number): Promise<number | null> {
+  try {
+    const data = await fetchOpenF1Json(`${OPENF1_BASE}/sessions?session_key=${sessionKey}`);
+    if (Array.isArray(data) && data.length > 0) {
+      const first = data[0] as Record<string, unknown>;
+      const endTs = Date.parse(String(first.date_end || ""));
+      if (Number.isFinite(endTs)) return endTs;
+    }
+  } catch (e) {
+    console.error("session_end_err", e);
+  }
+  return null;
+}
+
+function isOpenF1SessionEnded(sessionEndTs: number | null, nowTs = Date.now()): boolean {
+  return Number.isFinite(sessionEndTs) && nowTs >= Number(sessionEndTs) + OPENF1_SESSION_END_GRACE_MS;
+}
+
 async function getOpenF1SessionFlags(sessionKey: number, sessionDriverMap: Record<number, string>, knownDriverIds: Set<string>) {
   const dns = new Set<string>(); const dnf = new Set<string>();
   try {
@@ -1075,10 +1129,21 @@ app.post("/admin/sync-race", requireUser, async (c) => {
   const rK = await getOpenF1SessionKey(season, loc, "Race", race.country, race.date);
   if (rK) {
     const map = await getOpenF1DriverNumberMap(rK, allDrivers);
-    const pos = await getOpenF1Classification(rK, map, known);
-    if (Object.keys(pos).length > 0) { res.race = pos; pub = true; }
+    const livePos = await getOpenF1Classification(rK, map, known);
+    const finalPos = await getOpenF1SessionResultClassification(rK, map, known);
     const flg = await getOpenF1SessionFlags(rK, map, known);
     dnsD = flg.dnsDrivers; dnfD = flg.dnfDrivers;
+    const endTs = await getOpenF1SessionEndTimestamp(rK);
+    const raceEnded = isOpenF1SessionEnded(endTs);
+    if (raceEnded && Object.keys(finalPos).length > 0) {
+      res.race = finalPos;
+      pub = true;
+    } else if (Object.keys(livePos).length > 0) {
+      res.race = livePos;
+    } else if (Object.keys(finalPos).length > 0) {
+      res.race = finalPos;
+      pub = raceEnded;
+    }
   }
   res.dnsDrivers = Array.from(dnsD); res.dnfDrivers = Array.from(dnfD);
   if (Object.keys(res).length === 0) return c.json({ error: "no_data", loc, season }, 404);
@@ -1247,9 +1312,23 @@ app.post("/cron/sync-all", async (c) => {
     }
     let pub = false; const rK = await getOpenF1SessionKey(season, loc, "Race", race.country, race.date);
     if (rK) {
-      const map = await getOpenF1DriverNumberMap(rK, allD); const pos = await getOpenF1Classification(rK, map, known);
-      if (Object.keys(pos).length > 0) { cRes.race = pos; pub = true; }
-      const flg = await getOpenF1SessionFlags(rK, map, known); cRes.dnsDrivers = Array.from(flg.dnsDrivers); cRes.dnfDrivers = Array.from(flg.dnfDrivers);
+      const map = await getOpenF1DriverNumberMap(rK, allD);
+      const livePos = await getOpenF1Classification(rK, map, known);
+      const finalPos = await getOpenF1SessionResultClassification(rK, map, known);
+      const flg = await getOpenF1SessionFlags(rK, map, known);
+      cRes.dnsDrivers = Array.from(flg.dnsDrivers);
+      cRes.dnfDrivers = Array.from(flg.dnfDrivers);
+      const endTs = await getOpenF1SessionEndTimestamp(rK);
+      const raceEnded = isOpenF1SessionEnded(endTs);
+      if (raceEnded && Object.keys(finalPos).length > 0) {
+        cRes.race = finalPos;
+        pub = true;
+      } else if (Object.keys(livePos).length > 0) {
+        cRes.race = livePos;
+      } else if (Object.keys(finalPos).length > 0) {
+        cRes.race = finalPos;
+        pub = raceEnded;
+      }
     }
     if (Object.keys(cRes).length === 0) return c.json({ message: "No data" }, 200);
     const allL = await sql`SELECT id, rules FROM "League"`;

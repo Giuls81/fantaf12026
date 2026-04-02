@@ -1,0 +1,53 @@
+﻿[dotenv@17.3.1] injecting env (1) from .env -- tip: ≡ƒñû agentic secret storage: https://dotenvx.com/as2
+
+
+=== VERIFYING RACE r1 ===
+[MISMATCH r1] hul: DB=-7 vs RECALC=-2.5. DB Breakdown: {
+  dnf: 0,
+  total: -7,
+  sprint: 0,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: -2,
+  qualiPole: 0,
+  sprintPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.5
+} Recalc: {
+  total: -2.5,
+  fRace: -4,
+  fQuali: 1.5,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: -2,
+  teammatePts: -2,
+  constructorMult: 1.5
+}
+Γ£ô Driver math checked for r1.
+
+
+=== VERIFYING RACE r2 ===
+[MISMATCH r2] law: DB=-5 vs RECALC=-0.7. DB Breakdown: {
+  dnf: 0,
+  total: -5,
+  sprint: 0,
+  teammate: -2,
+  lastPlace: 0,
+  overtakes: 0,
+  qualiPole: 0,
+  sprintPole: 0,
+  qualiSession: -3,
+  racePosition: 0,
+  constructorMult: 1.3
+} Recalc: {
+  total: -0.7,
+  fRace: -2,
+  fQuali: 1.3,
+  fSprint: 0,
+  fSprintQuali: 0,
+  overtakes: 0,
+  teammatePts: -2,
+  constructorMult: 1.3
+}
+Γ£ô Driver math checked for r2.

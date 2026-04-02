@@ -1039,6 +1039,7 @@ const App: React.FC = () => {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <div className="relative flex-1">
                   <select
+                    aria-label="Select race"
                     value={selectedRaceForResults?.id || ''}
                     onChange={(e) => setSelectedRaceId(e.target.value)}
                     className="w-full appearance-none rounded-xl border border-slate-600 bg-slate-900/90 px-4 py-3 pr-12 text-sm font-bold text-white outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"

@@ -1,0 +1,11 @@
+﻿[dotenv@17.3.1] injecting env (1) from .env -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+
+
+=== VERIFYING RACE r1 ===
+Γ£ô All driver points match DB logic perfectly for r1.
+Γ£ô Driver math checked for r1.
+
+
+=== VERIFYING RACE r2 ===
+Γ£ô All driver points match DB logic perfectly for r2.
+Γ£ô Driver math checked for r2.
