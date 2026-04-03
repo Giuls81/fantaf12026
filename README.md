@@ -55,3 +55,16 @@ npm run ota:upload
 
 Use workflow: `OTA Live Update (Capgo)` in `codemagic.yaml`.
 It builds `web/dist` and uploads the bundle with delta mode.
+
+## Release Build Number (iOS + Android)
+
+Before store upload, bump both platforms together:
+
+```bash
+npm run release:set-build -- 113 1.0.0
+```
+
+- First arg: build number (`versionCode` Android + `CFBundleVersion` iOS)
+- Second arg (optional): app version (`versionName` / `CFBundleShortVersionString`)
+
+iOS upload requires a strictly higher build number than the last uploaded build.

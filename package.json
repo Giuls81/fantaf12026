@@ -15,6 +15,7 @@
   "scripts": {
     "build": "cd web && npm install && npm run build",
     "sync": "npx cap sync",
+    "release:set-build": "node scripts/bump-build-number.mjs",
     "ota:build": "npm --prefix web run build",
     "ota:upload": "node scripts/capgo-upload.mjs"
   },
