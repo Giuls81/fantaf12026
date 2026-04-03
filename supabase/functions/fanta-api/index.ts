@@ -86,6 +86,78 @@ const app = new Hono<{ Variables: Variables }>().basePath("/fanta-api");
 // DB Connection
 const databaseUrl = Deno.env.get("DATABASE_URL")!;
 const sql = postgres(databaseUrl, { ssl: "require" });
+const LOCK_OFFSET_MS = 5 * 60 * 1000;
+const parsedAutoCloseHours = Number(Deno.env.get("RACE_AUTO_CLOSE_HOURS") || "72");
+const AUTO_CLOSE_HOURS = Number.isFinite(parsedAutoCloseHours) && parsedAutoCloseHours > 0 ? parsedAutoCloseHours : 72;
+const AUTO_CLOSE_MS = AUTO_CLOSE_HOURS * 60 * 60 * 1000;
+
+interface RaceRow {
+  id: string;
+  name: string;
+  country?: string | null;
+  city?: string | null;
+  season?: number | null;
+  round: number;
+  isSprint: boolean;
+  qualifyingUtc: string | Date | null;
+  sprintQualifyingUtc: string | Date | null;
+  date: string | Date | null;
+  isCompleted: boolean;
+  results?: CombinedResults | null;
+}
+
+const parseDateSafe = (value: string | Date | null | undefined): Date | null => {
+  if (!value) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getRaceSessionUtc = (race: RaceRow): Date | null => {
+  const primary = race.isSprint ? race.sprintQualifyingUtc : race.qualifyingUtc;
+  return parseDateSafe(primary) || parseDateSafe(race.qualifyingUtc) || parseDateSafe(race.date);
+};
+
+const getRaceLockDate = (race: RaceRow): Date | null => {
+  const session = getRaceSessionUtc(race);
+  if (!session) return null;
+  return new Date(session.getTime() - LOCK_OFFSET_MS);
+};
+
+const isRaceStale = (race: RaceRow, now = new Date()): boolean => {
+  if (race.isCompleted) return false;
+  const session = getRaceSessionUtc(race);
+  if (!session) return false;
+  const autoCloseAt = session.getTime() + AUTO_CLOSE_MS;
+  return now.getTime() > autoCloseAt;
+};
+
+const pickActiveRace = (races: RaceRow[], now = new Date()): RaceRow | null => {
+  if (races.length === 0) return null;
+  const nonCompleted = races.filter((race) => !race.isCompleted);
+  if (nonCompleted.length === 0) return races[races.length - 1];
+  return nonCompleted.find((race) => !isRaceStale(race, now)) || nonCompleted[nonCompleted.length - 1];
+};
+
+const loadRacesOrdered = async (): Promise<RaceRow[]> => {
+  return sql<RaceRow[]>`
+    SELECT id, name, country, city, season, round, "isSprint", "qualifyingUtc", "sprintQualifyingUtc", date, "isCompleted", results
+    FROM "Race"
+    ORDER BY round ASC
+  `;
+};
+
+const autocloseStaleRaces = async (): Promise<RaceRow[]> => {
+  const races = await loadRacesOrdered();
+  const staleIds = races.filter((race) => isRaceStale(race)).map((race) => race.id);
+  if (staleIds.length === 0) return races;
+
+  await sql`
+    UPDATE "Race"
+    SET "isCompleted" = true
+    WHERE id IN ${sql(staleIds)} AND "isCompleted" = false
+  `;
+  return loadRacesOrdered();
+};
 
 // Helper for tokens
 function makeToken() {
@@ -250,11 +322,7 @@ app.get("/me", requireUser, async (c) => {
 });
 
 app.get("/races", async (c) => {
-  const races = await sql`
-    SELECT id, name, country, city, season, round, "isSprint", "qualifyingUtc", "sprintQualifyingUtc", date, "isCompleted", results
-    FROM "Race"
-    ORDER BY round ASC
-  `;
+  const races = await autocloseStaleRaces();
   return c.json(races);
 });
 
@@ -344,16 +412,13 @@ app.post("/team/market", requireUser, async (c) => {
 
   if (!leagueId) return c.json({ error: "missing_leagueId" }, 400);
 
-  // Check Lock
-  const races = await sql`SELECT * FROM "Race" ORDER BY round ASC`;
-  const nextRace = races.find(r => !r.isCompleted) || races[races.length - 1];
-  
-  if (nextRace) {
-    const sessionStr = nextRace.isSprint ? nextRace.sprintQualifyingUtc : nextRace.qualifyingUtc;
-    if (sessionStr) {
-      const lockDate = new Date(new Date(sessionStr).getTime() - 5 * 60 * 1000); // Lock 5 minutes before session start
-      if (new Date() > lockDate) return c.json({ error: "market_locked" }, 403);
-    }
+  // Check lock against the active race. Old stale races auto-close.
+  const races = await autocloseStaleRaces();
+  const activeRace = pickActiveRace(races);
+
+  if (activeRace) {
+    const lockDate = getRaceLockDate(activeRace);
+    if (lockDate && new Date() > lockDate) return c.json({ error: "market_locked" }, 403);
   }
 
   const [team] = await sql`SELECT * FROM "Team" WHERE "leagueId" = ${leagueId} AND "userId" = ${user.id}`;
@@ -402,15 +467,12 @@ app.post("/team/lineup", requireUser, async (c) => {
   const user = c.get("user");
   const { leagueId, captainId, reserveId } = await c.req.json();
 
-  const races = await sql`SELECT * FROM "Race" ORDER BY round ASC`;
-  const nextRace = races.find(r => !r.isCompleted) || races[races.length - 1];
-  
-  if (nextRace) {
-    const sessionStr = nextRace.isSprint ? nextRace.sprintQualifyingUtc : nextRace.qualifyingUtc;
-    if (sessionStr) {
-      const lockDate = new Date(new Date(sessionStr).getTime() - 5 * 60 * 1000); // Lock 5 minutes before session start
-      if (new Date() > lockDate) return c.json({ error: "lineup_locked" }, 403);
-    }
+  const races = await autocloseStaleRaces();
+  const activeRace = pickActiveRace(races);
+
+  if (activeRace) {
+    const lockDate = getRaceLockDate(activeRace);
+    if (lockDate && new Date() > lockDate) return c.json({ error: "lineup_locked" }, 403);
   }
 
   const now = new Date().toISOString();
@@ -1228,9 +1290,11 @@ app.post("/cron/sync-all", async (c) => {
   const expectedSecret = Deno.env.get("CRON_SECRET") || "fanta-cron-2026";
   if (authHeader !== `Bearer ${expectedSecret}` && authHeader !== expectedSecret) return c.json({ error: "unauthorized" }, 401);
   try {
-    const activeRaces = await sql`SELECT * FROM "Race" WHERE "isCompleted" = false ORDER BY "date" ASC LIMIT 1`;
-    if (activeRaces.length === 0) return c.json({ message: "No active races" }, 200);
-    const race = activeRaces[0]; const allD = await sql<Driver[]>`SELECT id, name, "constructorId" FROM "Driver"`;
+    const races = await autocloseStaleRaces();
+    const race = pickActiveRace(races);
+    if (!race || race.isCompleted) return c.json({ message: "No active races" }, 200);
+
+    const allD = await sql<Driver[]>`SELECT id, name, "constructorId" FROM "Driver"`;
     if (allD.length === 0) return c.json({ error: "no_drivers" }, 400);
     const teammates: Record<string, string> = {}; const byC: Record<string, string[]> = {};
     for (const d of allD) { if (!byC[d.constructorId]) byC[d.constructorId] = []; byC[d.constructorId].push(d.id); }

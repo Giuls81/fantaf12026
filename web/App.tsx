@@ -95,10 +95,34 @@ const getNextRaceIndex = (races: Race[]) => {
   return idx === -1 ? races.length - 1 : idx;
 };
 
-// Keep lineup lock logic aligned with backend: first non-completed race.
-const getActiveLockRace = (races: Race[]): Race | null => {
+const RACE_AUTO_CLOSE_HOURS = 72;
+
+const parseRaceDateSafe = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getRaceSessionUtc = (race: Race): Date | null => {
+  const primary = race.isSprint ? race.sprintQualifyingUtc : race.qualifyingUtc;
+  return parseRaceDateSafe(primary) || parseRaceDateSafe(race.qualifyingUtc) || parseRaceDateSafe(race.date);
+};
+
+const isRaceStale = (race: Race, nowMs: number) => {
+  if (race.isCompleted) return false;
+  const session = getRaceSessionUtc(race);
+  if (!session) return false;
+  const autoCloseMs = session.getTime() + RACE_AUTO_CLOSE_HOURS * 60 * 60 * 1000;
+  return nowMs > autoCloseMs;
+};
+
+// Keep lineup lock logic aligned with backend:
+// first non-completed race that is not stale, otherwise fallback to latest open race.
+const getActiveLockRace = (races: Race[], nowMs = Date.now()): Race | null => {
   if (races.length === 0) return null;
-  return races.find(r => !r.isCompleted) || races[races.length - 1];
+  const nonCompleted = races.filter((race) => !race.isCompleted);
+  if (nonCompleted.length === 0) return races[races.length - 1];
+  return nonCompleted.find((race) => !isRaceStale(race, nowMs)) || nonCompleted[nonCompleted.length - 1];
 };
 
 const raceHasResults = (race?: Race | null): boolean => {
@@ -1696,7 +1720,7 @@ const App: React.FC = () => {
   const currentRace = races[data.currentRaceIndex] || races[0]; // Fallback to avoid crash
   if (!currentRace) return <div>Error: No Race Data</div>; // Should never happen due to check above
   
-  const lockRace = getActiveLockRace(races) || currentRace;
+  const lockRace = getActiveLockRace(races, now) || currentRace;
   const homeRace = lockRace || currentRace;
   const lockState = getLockStatus(lockRace, now);
   const annualPriceLabel = annualPackage?.product.priceString || '5.99 EUR';
@@ -2557,7 +2581,7 @@ const App: React.FC = () => {
   const handleSetCaptain = async (driverId: string) => {
     if (!data?.user) return;
     if (!data.team) return;
-    const lockRace = getActiveLockRace(races);
+    const lockRace = getActiveLockRace(races, now);
     if (!lockRace) return;
     const lockState = getLockStatus(lockRace, now);
     if (lockState.status === 'locked') return;
@@ -2593,7 +2617,7 @@ const App: React.FC = () => {
   const handleSetReserve = async (driverId: string) => {
     if (!data?.user) return;
     if (!data.team) return;
-    const lockRace = getActiveLockRace(races);
+    const lockRace = getActiveLockRace(races, now);
     if (!lockRace) return;
     const lockState = getLockStatus(lockRace, now);
     if (lockState.status === 'locked') return;
