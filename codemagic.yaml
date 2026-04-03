@@ -162,3 +162,44 @@ workflows:
       - android/app/build/outputs/apk/debug/*.apk
       - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
+
+  capgo_live_update:
+    name: OTA Live Update (Capgo)
+    max_build_duration: 30
+    environment:
+      node: 22
+      vars:
+        VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
+        VITE_ADS_ENABLED: "true"
+        VITE_ADS_TEST_MODE: "false"
+        VITE_ADS_DEBUG_LOGS: "false"
+        CAPGO_CHANNEL: "production"
+    scripts:
+      - name: Install deps
+        script: |
+          npm ci --omit=dev
+          cd web
+          npm ci
+      - name: Build web bundle
+        script: |
+          cd web
+          VITE_API_URL=$VITE_API_URL \
+          VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
+          VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
+          VITE_ADS_DEBUG_LOGS=$VITE_ADS_DEBUG_LOGS \
+          npm run build
+      - name: Upload bundle to Capgo
+        script: |
+          if [ -z "$CAPGO_API_KEY" ]; then
+            echo "Missing CAPGO_API_KEY"
+            exit 1
+          fi
+          if [ -z "$CAPGO_APP_ID" ]; then
+            echo "Missing CAPGO_APP_ID"
+            exit 1
+          fi
+          npx @capgo/cli@latest bundle upload "$CAPGO_APP_ID" \
+            -a "$CAPGO_API_KEY" \
+            -p web/dist \
+            -c "$CAPGO_CHANNEL" \
+            --delta
