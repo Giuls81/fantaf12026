@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import Layout from './components/Layout';
-import { initializeAdMob, showAppOpen, showRewardVideo, showInterstitialWithProbability } from './services/admob';
+import { initializeAdMob, showAppOpen, showInterstitialWithProbability } from './services/admob';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
@@ -1880,37 +1880,11 @@ const App: React.FC = () => {
                        </div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                          <button
-                            onClick={handleBuyPremiumAnnual}
-                            disabled={!annualPackage || isPurchasingPremium}
-                            className={`w-full font-bold py-3 px-3 rounded-lg shadow-lg border transition-all flex items-center justify-center gap-2 text-sm mb-2 ${
-                              annualPackage && !isPurchasingPremium
-                                ? 'bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white border-yellow-500/50'
-                                : 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed'
-                            }`}
-                          >
-                            <span>💎</span>
-                            {isPurchasingPremium
-                              ? t({ en: 'Processing purchase...', it: 'Acquisto in corso...' })
-                              : t({ en: `Buy Premium ${annualPriceLabel}/yr`, it: `Acquista Premium ${annualPriceLabel}/anno` })}
-                          </button>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                           <button
-                             onClick={handleRestorePremiumPurchases}
-                             className="bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 py-2 rounded border border-slate-600"
-                           >
-                             {t({ en: "Restore Purchases", it: "Ripristina Acquisti" })}
-                           </button>
-                           
-                           <button
-                             onClick={handleWatchAdForPremium}
-                             className="bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 py-2 rounded border border-slate-600 flex items-center justify-center gap-1"
-                           >
-                             <span>🎬</span> {t({ en: "Watch Ad (24h)", it: "Guarda Video (24h)" })}
-                           </button>
-                        </div>
+                    <div className="text-xs text-slate-300">
+                      {t({
+                        en: 'Premium purchase is available in the Premium Annual section above.',
+                        it: "L'acquisto Premium e disponibile nel riquadro Premium Annuale qui sopra."
+                      })}
                     </div>
                   )}
                 </div>
@@ -2712,18 +2686,6 @@ const App: React.FC = () => {
     }
   };
   
-  const handleWatchAdForPremium = async () => {
-    const reward = await showRewardVideo();
-    if (reward) {
-      const now = Date.now();
-      const expiry = now + 24 * 60 * 60 * 1000; // 24 hours
-      setIsPremium(true);
-      localStorage.setItem('fantaF1Premium', 'true');
-      localStorage.setItem('fantaF1PremiumExpiry', String(expiry));
-      alert(t({ en: "Premium activated for 24h!", it: "Premium attivato per 24h!" }));
-    }
-  };
-
   const renderAdmin = () => {
     return (
       <div className="space-y-6">
