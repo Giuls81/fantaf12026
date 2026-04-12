@@ -206,25 +206,36 @@ async function hashPassword(password: string) {
 
 type SqlExecutor = (template: TemplateStringsArray, ...params: unknown[]) => Promise<Array<Record<string, unknown>>>;
 
-const ensureTeamPenaltyTable = async (db: SqlExecutor) => {
-  await db`
-    CREATE TABLE IF NOT EXISTS "TeamPenalty" (
-      id UUID PRIMARY KEY,
-      "teamId" UUID NOT NULL REFERENCES "Team"(id),
-      "leagueId" UUID NOT NULL,
-      points NUMERIC NOT NULL,
-      comment TEXT,
-      "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    );
-  `;
+const ensureTeamPenaltyTable = async (db: SqlExecutor): Promise<boolean> => {
+  try {
+    await db`
+      CREATE TABLE IF NOT EXISTS "TeamPenalty" (
+        id UUID PRIMARY KEY,
+        "teamId" UUID NOT NULL REFERENCES "Team"(id),
+        "leagueId" UUID NOT NULL,
+        points NUMERIC NOT NULL,
+        comment TEXT,
+        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    return true;
+  } catch (e) {
+    console.error("TeamPenalty table unavailable:", e);
+    return false;
+  }
 };
 
-const syncTeamTotalPoints = async (db: SqlExecutor, teamId: string) => {
-  const rows = await db`
-    SELECT
-      COALESCE((SELECT SUM(points) FROM "TeamResult" WHERE "teamId" = ${teamId}), 0)
-      + COALESCE((SELECT SUM(points) FROM "TeamPenalty" WHERE "teamId" = ${teamId}), 0) AS total
-  `;
+const syncTeamTotalPoints = async (db: SqlExecutor, teamId: string, includePenalties = true) => {
+  const rows = includePenalties
+    ? await db`
+      SELECT
+        COALESCE((SELECT SUM(points) FROM "TeamResult" WHERE "teamId" = ${teamId}), 0)
+        + COALESCE((SELECT SUM(points) FROM "TeamPenalty" WHERE "teamId" = ${teamId}), 0) AS total
+    `
+    : await db`
+      SELECT
+        COALESCE((SELECT SUM(points) FROM "TeamResult" WHERE "teamId" = ${teamId}), 0) AS total
+    `;
   const total = Number((rows[0] as { total?: number | string | null } | undefined)?.total ?? 0);
   await db`UPDATE "Team" SET "totalPoints" = ${total} WHERE id = ${teamId}`;
 };
@@ -636,17 +647,27 @@ app.post("/league/penalty", requireUser, async (c) => {
   const penaltyId = crypto.randomUUID();
   const pts = Number(points);
 
-  await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
+  const hasPenaltyTable = await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
 
   await sql.begin(async (tx) => {
-      await tx`
-        INSERT INTO "TeamPenalty" (id, "teamId", "leagueId", points, comment)
-        VALUES (${penaltyId}, ${teamId}, ${leagueId}, ${pts}, ${comment})
-      `;
-
-      await syncTeamTotalPoints(tx as unknown as SqlExecutor, teamId);
+      if (hasPenaltyTable) {
+        await tx`
+          INSERT INTO "TeamPenalty" (id, "teamId", "leagueId", points, comment)
+          VALUES (${penaltyId}, ${teamId}, ${leagueId}, ${pts}, ${comment})
+        `;
+        await syncTeamTotalPoints(tx as unknown as SqlExecutor, teamId, true);
+      } else {
+        await tx`
+          UPDATE "Team"
+          SET "totalPoints" = "totalPoints" + ${pts}
+          WHERE id = ${teamId}
+        `;
+      }
   });
 
+  if (!hasPenaltyTable) {
+    return c.json({ ok: true, warning: "penalty_table_unavailable" });
+  }
   return c.json({ ok: true });
 });
 
@@ -1158,7 +1179,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
   const [lD] = await sql<{ rules: ScoringRules }[]>`SELECT rules FROM "League" WHERE id = ${lId}`;
   const rules = (lD?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
   const lPts = calculateWeekendPoints(res, rules, teammates, allDrivers);
-  await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
+  const hasPenaltyTable = await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
   await sql.begin(async (sql) => {
     const teams = await sql`SELECT id, "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${lId}`;
     const tIds = teams.map((t) => t.id);
@@ -1184,7 +1205,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
       const trId = crypto.randomUUID();
       await sql`INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt") VALUES (${trId}, ${race.id}, ${t.id}, ${tP}, ${t.captainId}, ${t.reserveId}, ${new Date().toISOString()})`;
       for (const d of rD) await sql`INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points) VALUES (${crypto.randomUUID()}, ${trId}, ${d.driverId}, ${d.points})`;
-      await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id);
+      await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id, hasPenaltyTable);
     }
     const offP = calculateWeekendPoints(res, DEFAULT_SCORING_RULES, teammates, allDrivers);
     const finalR = { ...res, driverPoints: offP.driverPoints, driverRacePoints: offP.driverRacePoints, driverQualiPoints: offP.driverQualiPoints, driverSprintPoints: offP.driverSprintPoints, driverSprintQualiPoints: offP.driverSprintQualiPoints, driverBreakdown: offP.driverBreakdown };
@@ -1217,7 +1238,7 @@ app.post("/admin/recalculate-race", requireUser, async (c) => {
     for (const drvs of Object.values(byC)) if (drvs.length === 2) { teammates[drvs[0]] = drvs[1]; teammates[drvs[1]] = drvs[0]; }
     const recalculated = calculateWeekendPoints(cRes, rules, teammates, allD);
     const points = recalculated.driverPoints;
-    await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
+    const hasPenaltyTable = await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
     await sql.begin(async (sql) => {
       const teams = await sql`SELECT id, "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${lId}`;
       const tIds = teams.map(t => t.id);
@@ -1241,7 +1262,7 @@ app.post("/admin/recalculate-race", requireUser, async (c) => {
         const trId = crypto.randomUUID();
         await sql`INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId") VALUES (${trId}, ${race.id}, ${t.id}, ${tP}, ${t.captainId}, ${t.reserveId})`;
         for (const rd of rD) await sql`INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points) VALUES (${crypto.randomUUID()}, ${trId}, ${rd.driverId}, ${rd.points})`;
-        await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id);
+        await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id, hasPenaltyTable);
       }
     });
     return c.json({ ok: true });
@@ -1268,7 +1289,7 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
     const rules = (lD?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
     const points = calculateWeekendPoints(cRes, rules, teammates, allD);
     const dnsSet = new Set(dnsIds);
-    await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
+    const hasPenaltyTable = await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
     await sql.begin(async (sql) => {
       const teams = await sql`SELECT id, "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${lId}`;
       for (const t of teams) {
@@ -1282,7 +1303,7 @@ app.post("/admin/simulate-race", requireUser, async (c) => {
         const trId = crypto.randomUUID();
         await sql`INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId") VALUES (${trId}, ${race.id}, ${t.id}, ${teamP}, ${t.captainId}, ${t.reserveId})`;
         for (const rd of rD) await sql`INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points) VALUES (${crypto.randomUUID()}, ${trId}, ${rd.driverId}, ${rd.points})`;
-        await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id);
+        await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id, hasPenaltyTable);
       }
       const finalR = { ...cRes, driverPoints: points.driverPoints, driverRacePoints: points.driverRacePoints, driverQualiPoints: points.driverQualiPoints, driverSprintPoints: points.driverSprintPoints, driverSprintQualiPoints: points.driverSprintQualiPoints, driverBreakdown: points.driverBreakdown };
       await sql`UPDATE "Race" SET "isCompleted" = true, "results" = ${sql.json(finalR as any)} WHERE id = ${race.id}`;
@@ -1327,7 +1348,7 @@ app.post("/cron/sync-all", async (c) => {
     }
     if (Object.keys(cRes).length === 0) return c.json({ message: "No data" }, 200);
     const allL = await sql`SELECT id, rules FROM "League"`;
-    await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
+    const hasPenaltyTable = await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
     await sql.begin(async (sql) => {
       for (const l of allL) {
         const rules = (l.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
@@ -1353,7 +1374,7 @@ app.post("/cron/sync-all", async (c) => {
           const trId = crypto.randomUUID();
           await sql`INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt") VALUES (${trId}, ${race.id}, ${t.id}, ${teamP}, ${t.captainId}, ${t.reserveId}, ${new Date().toISOString()})`;
           for (const rd of rD) await sql`INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points) VALUES (${crypto.randomUUID()}, ${trId}, ${rd.driverId}, ${rd.points})`;
-          await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id);
+          await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id, hasPenaltyTable);
         }
       }
       const defP = calculateWeekendPoints(cRes, DEFAULT_SCORING_RULES, teammates, allD);
