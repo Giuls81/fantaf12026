@@ -210,12 +210,12 @@ const ensureTeamPenaltyTable = async (db: SqlExecutor): Promise<boolean> => {
   try {
     await db`
       CREATE TABLE IF NOT EXISTS "TeamPenalty" (
-        id UUID PRIMARY KEY,
-        "teamId" UUID NOT NULL REFERENCES "Team"(id),
-        "leagueId" UUID NOT NULL,
+        id TEXT PRIMARY KEY,
+        "teamId" TEXT NOT NULL REFERENCES "Team"(id) ON DELETE CASCADE,
+        "leagueId" TEXT NOT NULL REFERENCES "League"(id) ON DELETE CASCADE,
         points NUMERIC NOT NULL,
         comment TEXT,
-        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
       );
     `;
     return true;
