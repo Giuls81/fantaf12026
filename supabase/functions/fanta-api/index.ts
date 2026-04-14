@@ -147,6 +147,7 @@ const loadRacesOrdered = async (): Promise<RaceRow[]> => {
 };
 
 const autocloseStaleRaces = async (): Promise<RaceRow[]> => {
+  await maybeSyncRaceCalendarFromOpenF1();
   const races = await loadRacesOrdered();
   const staleIds = races.filter((race) => isRaceStale(race)).map((race) => race.id);
   if (staleIds.length === 0) return races;
@@ -774,6 +775,246 @@ async function fetchOpenF1Json(url: string): Promise<unknown | null> {
   return null;
 }
 
+interface OpenF1SessionRow {
+  meeting_key?: number | string | null;
+  meeting_name?: string | null;
+  country_name?: string | null;
+  location?: string | null;
+  date_start?: string | null;
+  session_name?: string | null;
+  session_type?: string | null;
+}
+
+interface OpenF1MeetingCalendar {
+  meetingName: string;
+  country: string | null;
+  city: string | null;
+  raceUtc: string;
+  qualifyingUtc: string | null;
+  sprintQualifyingUtc: string | null;
+  isSprint: boolean;
+}
+
+const RACE_CALENDAR_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
+let lastRaceCalendarSyncAt = 0;
+let raceCalendarSyncInFlight: Promise<void> | null = null;
+
+function hasStoredResults(race: RaceRow): boolean {
+  if (!race.results || typeof race.results !== "object") return false;
+  const results = race.results as Record<string, unknown>;
+  const classificationKeys = ["race", "quali", "sprint", "sprintQuali"];
+  for (const key of classificationKeys) {
+    const value = results[key];
+    if (value && typeof value === "object" && Object.keys(value as Record<string, unknown>).length > 0) {
+      return true;
+    }
+  }
+  const driverPoints = results.driverPoints;
+  if (driverPoints && typeof driverPoints === "object") {
+    for (const value of Object.values(driverPoints as Record<string, unknown>)) {
+      const n = Number(value);
+      if (Number.isFinite(n) && Math.abs(n) > 0) return true;
+    }
+  }
+  return false;
+}
+
+function getSessionNameLower(session: OpenF1SessionRow): string {
+  return String(session.session_name || session.session_type || "").trim().toLowerCase();
+}
+
+function parseCsvSet(value: string | undefined): Set<string> {
+  if (!value) return new Set<string>();
+  return new Set(
+    value
+      .split(",")
+      .map((s) => normalizeText(s))
+      .filter((s) => s.length > 0),
+  );
+}
+
+function isMeetingCancelledByRule(season: number, meeting: OpenF1MeetingCalendar): boolean {
+  const forcedCancelled = parseCsvSet(Deno.env.get("CANCELLED_RACE_MEETINGS"));
+  const candidates = [
+    meeting.meetingName,
+    meeting.country || "",
+    meeting.city || "",
+  ].map((x) => normalizeText(x));
+  for (const c of candidates) {
+    if (c && forcedCancelled.has(c)) return true;
+  }
+
+  // 2026 emergency cancellation fallback:
+  // Bahrain and Saudi Arabia races do not take place in April.
+  if (season === 2026) {
+    const raceTs = Date.parse(meeting.raceUtc);
+    const isApril = Number.isFinite(raceTs) && (new Date(raceTs).getUTCMonth() === 3);
+    if (!isApril) return false;
+    const fingerprint = normalizeText(`${meeting.meetingName} ${meeting.country || ""} ${meeting.city || ""}`);
+    if (
+      fingerprint.includes("bahrain")
+      || fingerprint.includes("sakhir")
+      || fingerprint.includes("saudi arabia")
+      || fingerprint.includes("jeddah")
+    ) return true;
+  }
+
+  return false;
+}
+
+function pickEarliestSessionByName(sessions: OpenF1SessionRow[], targetName: string): OpenF1SessionRow | null {
+  const target = targetName.toLowerCase();
+  const matches = sessions
+    .filter((s) => getSessionNameLower(s) === target && s.date_start)
+    .sort((a, b) => Date.parse(String(a.date_start || 0)) - Date.parse(String(b.date_start || 0)));
+  return matches[0] || null;
+}
+
+async function fetchOpenF1CalendarMeetings(season: number): Promise<OpenF1MeetingCalendar[]> {
+  const data = await fetchOpenF1Json(`${OPENF1_BASE}/sessions?year=${season}`);
+  if (!Array.isArray(data)) return [];
+
+  const byMeeting = new Map<string, OpenF1SessionRow[]>();
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") continue;
+    const session = raw as OpenF1SessionRow;
+    const meetingKey = Number.isFinite(Number(session.meeting_key))
+      ? String(Number(session.meeting_key))
+      : normalizeText(String(session.meeting_name || ""));
+    if (!meetingKey) continue;
+    const arr = byMeeting.get(meetingKey) || [];
+    arr.push(session);
+    byMeeting.set(meetingKey, arr);
+  }
+
+  const meetings: OpenF1MeetingCalendar[] = [];
+  for (const sessions of byMeeting.values()) {
+    const raceSession = pickEarliestSessionByName(sessions, "Race");
+    if (!raceSession?.date_start) continue;
+    const qualifyingSession = pickEarliestSessionByName(sessions, "Qualifying");
+    const sprintQualifyingSession = pickEarliestSessionByName(sessions, "Sprint Qualifying");
+    const hasSprint = sessions.some((s) => getSessionNameLower(s) === "sprint");
+
+    const country = raceSession.country_name ? String(raceSession.country_name).trim() : null;
+    const city = raceSession.location ? String(raceSession.location).trim() : null;
+    const meetingNameRaw = raceSession.meeting_name ? String(raceSession.meeting_name).trim() : "";
+    const meetingName = meetingNameRaw
+      || (city ? `Grand Prix of ${city}` : null)
+      || (country ? `Grand Prix of ${country}` : "Grand Prix");
+
+    meetings.push({
+      meetingName,
+      country,
+      city,
+      raceUtc: String(raceSession.date_start),
+      qualifyingUtc: qualifyingSession?.date_start ? String(qualifyingSession.date_start) : null,
+      sprintQualifyingUtc: sprintQualifyingSession?.date_start ? String(sprintQualifyingSession.date_start) : null,
+      isSprint: Boolean(hasSprint || sprintQualifyingSession),
+    });
+  }
+
+  meetings.sort((a, b) => Date.parse(a.raceUtc) - Date.parse(b.raceUtc));
+  return meetings.filter((m) => !isMeetingCancelledByRule(season, m));
+}
+
+async function syncRaceCalendarFromOpenF1(): Promise<void> {
+  const [seasonRow] = await sql<{ season?: number }[]>`
+    SELECT season
+    FROM "Race"
+    WHERE season IS NOT NULL
+    ORDER BY season DESC, round DESC
+    LIMIT 1
+  `;
+  const season = Number(seasonRow?.season) || new Date().getUTCFullYear();
+  const meetings = await fetchOpenF1CalendarMeetings(season);
+  if (meetings.length === 0) return;
+
+  const dbRaces = await sql<RaceRow[]>`
+    SELECT id, name, country, city, season, round, "isSprint", "qualifyingUtc", "sprintQualifyingUtc", date, "isCompleted", results
+    FROM "Race"
+    WHERE season = ${season}
+    ORDER BY round ASC
+  `;
+  if (dbRaces.length === 0) return;
+
+  const nowTs = Date.now();
+  const lockedHistoricalRaceIds = new Set(
+    dbRaces
+      .filter((r) => {
+        if (hasStoredResults(r)) return true;
+        const ts = Date.parse(String(r.date || 0));
+        return Boolean(r.isCompleted) && Number.isFinite(ts) && ts < (nowTs - 12 * 60 * 60 * 1000);
+      })
+      .map((r) => r.id),
+  );
+
+  const lockedHistoricalRaces = dbRaces.filter((r) => lockedHistoricalRaceIds.has(r.id));
+  const pivotTs = lockedHistoricalRaces.length > 0
+    ? Math.max(...lockedHistoricalRaces.map((r) => Date.parse(String(r.date || 0))).filter(Number.isFinite))
+    : NaN;
+  const upcomingMeetings = Number.isFinite(pivotTs)
+    ? meetings.filter((m) => Date.parse(m.raceUtc) > pivotTs)
+    : meetings;
+
+  const mutableRaces = dbRaces.filter((r) => !lockedHistoricalRaceIds.has(r.id));
+
+  await sql.begin(async (tx) => {
+    for (let index = 0; index < mutableRaces.length; index++) {
+      const race = mutableRaces[index];
+      const meeting = upcomingMeetings[index];
+      if (!meeting) {
+        // Hide local placeholder races that are no longer present in OpenF1.
+        if (!hasStoredResults(race) && !race.isCompleted) {
+          await tx`UPDATE "Race" SET "isCompleted" = true WHERE id = ${race.id}`;
+        }
+        continue;
+      }
+
+      const raceTs = Date.parse(meeting.raceUtc);
+      const isPastAndStale = Number.isFinite(raceTs) && (raceTs + AUTO_CLOSE_MS) < nowTs;
+      const newIsCompleted = Boolean(isPastAndStale);
+
+      await tx`
+        UPDATE "Race"
+        SET
+          name = ${meeting.meetingName || race.name},
+          country = ${meeting.country},
+          city = ${meeting.city},
+          season = ${season},
+          round = ${race.round},
+          "isSprint" = ${meeting.isSprint},
+          "qualifyingUtc" = ${meeting.qualifyingUtc},
+          "sprintQualifyingUtc" = ${meeting.sprintQualifyingUtc},
+          date = ${meeting.raceUtc},
+          "isCompleted" = ${newIsCompleted}
+        WHERE id = ${race.id}
+      `;
+    }
+  });
+}
+
+async function maybeSyncRaceCalendarFromOpenF1(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastRaceCalendarSyncAt < RACE_CALENDAR_SYNC_COOLDOWN_MS) return;
+  if (raceCalendarSyncInFlight) {
+    await raceCalendarSyncInFlight;
+    return;
+  }
+
+  raceCalendarSyncInFlight = (async () => {
+    try {
+      await syncRaceCalendarFromOpenF1();
+    } catch (e) {
+      console.error("openf1_calendar_sync_error", e);
+    } finally {
+      lastRaceCalendarSyncAt = Date.now();
+      raceCalendarSyncInFlight = null;
+    }
+  })();
+
+  await raceCalendarSyncInFlight;
+}
+
 const DRIVER_NUMBER_FALLBACK: Record<number, string> = {
   1: "nor", 3: "ver", 5: "bor", 6: "had", 10: "gas", 11: "per", 12: "ant", 14: "alo", 16: "lec", 18: "str",
   22: "tsu", 23: "alb", 27: "hul", 30: "law", 31: "oco", 41: "lin", 43: "col", 44: "ham", 55: "sai",
@@ -904,6 +1145,15 @@ app.post("/admin/migrate-rules", requireUser, async (c) => {
     }
     return c.json({ ok: true, migrated: leagues.length });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/admin/sync-calendar", requireUser, async (c) => {
+  const user = c.get("user");
+  const membership = await sql`SELECT role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+  await maybeSyncRaceCalendarFromOpenF1(true);
+  const races = await loadRacesOrdered();
+  return c.json({ ok: true, races });
 });
 
 app.post("/league/rules", requireUser, async (c) => {

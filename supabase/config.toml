@@ -1,0 +1,2 @@
+[functions.fanta-api]
+verify_jwt = false
