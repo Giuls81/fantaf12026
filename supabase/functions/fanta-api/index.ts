@@ -523,19 +523,58 @@ app.post("/team/lineup", requireUser, async (c) => {
 
 app.get("/leagues/:id/standings", requireUser, async (c) => {
   const leagueId = c.req.param("id");
-  const standings = await sql`
-    SELECT t."userId", u."displayName" as "userName", t."totalPoints"
-    FROM "Team" t
-    JOIN "User" u ON t."userId" = u.id
-    WHERE t."leagueId" = ${leagueId}
-    ORDER BY t."totalPoints" DESC
-  `;
+  let standings: Array<Record<string, unknown>> = [];
+  try {
+    standings = await sql`
+      SELECT
+        t."userId",
+        u."displayName" AS "userName",
+        (COALESCE(tr."basePoints", 0) + COALESCE(tp."penaltyPoints", 0))::double precision AS "totalPoints",
+        COALESCE(tp."penaltyPoints", 0)::double precision AS "penaltyPoints"
+      FROM "Team" t
+      JOIN "User" u ON t."userId" = u.id
+      LEFT JOIN (
+        SELECT "teamId", SUM(points)::double precision AS "basePoints"
+        FROM "TeamResult"
+        GROUP BY "teamId"
+      ) tr ON tr."teamId" = t.id
+      LEFT JOIN (
+        SELECT "teamId", SUM(points)::double precision AS "penaltyPoints"
+        FROM "TeamPenalty"
+        GROUP BY "teamId"
+      ) tp ON tp."teamId" = t.id
+      WHERE t."leagueId" = ${leagueId}
+      ORDER BY 3 DESC
+    `;
+  } catch (_e) {
+    standings = await sql`
+      SELECT
+        t."userId",
+        u."displayName" as "userName",
+        t."totalPoints",
+        0::double precision AS "penaltyPoints"
+      FROM "Team" t
+      JOIN "User" u ON t."userId" = u.id
+      WHERE t."leagueId" = ${leagueId}
+      ORDER BY t."totalPoints" DESC
+    `;
+  }
   
-  return c.json(standings.map((s, idx) => ({
-    ...s,
-    rank: idx + 1,
-    userName: s.userName || "User " + s.userId.slice(0, 4)
-  })));
+  return c.json(standings.map((s, idx) => {
+    const row = s as {
+      userId?: string;
+      userName?: string | null;
+      totalPoints?: number | string | null;
+      penaltyPoints?: number | string | null;
+    };
+    return {
+      ...row,
+      totalPoints: Number(row.totalPoints ?? 0),
+      penaltyPoints: Number(row.penaltyPoints ?? 0),
+      rank: idx + 1,
+      userName: row.userName || "User " + String(row.userId || "").slice(0, 4),
+    };
+  }));
 });
 
 app.get("/leagues/:leagueId/results/:raceId", requireUser, async (c) => {

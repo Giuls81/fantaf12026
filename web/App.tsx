@@ -247,7 +247,7 @@ const App: React.FC = () => {
         await initializePurchases();
         const pkg = await getOfferings();
         if (pkg) {
-           setAnnualPackage(pkg);
+           setSeasonPackage(pkg);
         }
         const premiumStatus = await checkPremiumStatus();
         const expiry = localStorage.getItem('fantaF1PremiumExpiry');
@@ -328,7 +328,7 @@ const App: React.FC = () => {
   // Admin Points Anti-NaN States
   const [syncing, setSyncing] = useState(false);
 
-  const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
+  const [seasonPackage, setSeasonPackage] = useState<PurchasesPackage | null>(null);
   const [isPurchasingPremium, setIsPurchasingPremium] = useState(false);
   
   // Standings & History States
@@ -1175,6 +1175,9 @@ const App: React.FC = () => {
                        </div>
                        <div className="text-right">
                           <div className="text-xl font-mono font-bold text-blue-400">{Number(s.totalPoints || 0).toFixed(1)}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {t({ en: 'Penalty', it: 'Penalità' })}: {Number(s.penaltyPoints || 0).toFixed(1)}
+                          </div>
                           {userResult && <div className="text-[10px] text-slate-500 font-mono">{t({ en: 'Race', it: 'Gara' })}: {userResult.points?.toFixed(1)}</div>}
                        </div>
                     </div>
@@ -1734,7 +1737,8 @@ const App: React.FC = () => {
   const lockRace = getActiveLockRace(races, now) || currentRace;
   const homeRace = lockRace || currentRace;
   const lockState = getLockStatus(lockRace, now);
-  const annualPriceLabel = annualPackage?.product.priceString || '5.99 EUR';
+  const seasonPriceLabel = seasonPackage?.product.priceString || '5.99 EUR';
+  const seasonLabel = String(homeRace.season || new Date().getUTCFullYear());
 
   const getStatusColor = (s: LockStatus) => {
     switch (s) {
@@ -1818,27 +1822,28 @@ const App: React.FC = () => {
               <div className="bg-gradient-to-r from-yellow-900/40 to-amber-900/40 p-4 rounded-xl border border-yellow-700/50">
                 <div className="flex flex-col gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-yellow-300">{t({ en: 'Premium Annual', it: 'Premium Annuale' })}</h2>
+                    <h2 className="text-lg font-semibold text-yellow-300">{t({ en: 'Premium Season Pass', it: 'Premium Pass Stagione' })}</h2>
                     <p className="text-sm text-yellow-100/80 mt-1">
                       {t({
-                        en: 'The app stays free with ads. Upgrade to remove ads for one year.',
-                        it: "L'app resta gratuita con pubblicita. Passa a Premium per rimuovere gli annunci per un anno."
+                        en: 'The app stays free with ads. Upgrade to remove ads for the current season.',
+                        it: "L'app resta gratuita con pubblicita. Passa a Premium per rimuovere gli annunci per la stagione in corso."
                       })}
                     </p>
+                    <p className="text-xs text-yellow-200/80 mt-2">{t({ en: `Season ${seasonLabel}`, it: `Stagione ${seasonLabel}` })}</p>
                   </div>
 
                   <button
-                    onClick={handleBuyPremiumAnnual}
-                    disabled={!annualPackage || isPurchasingPremium}
+                    onClick={handleBuyPremiumSeason}
+                    disabled={!seasonPackage || isPurchasingPremium}
                     className={`w-full font-bold py-3 px-3 rounded-lg shadow-lg border transition-all text-sm ${
-                      annualPackage && !isPurchasingPremium
+                      seasonPackage && !isPurchasingPremium
                         ? 'bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white border-yellow-500/50'
                         : 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed'
                     }`}
                   >
                     {isPurchasingPremium
                       ? t({ en: 'Processing purchase...', it: 'Acquisto in corso...' })
-                      : t({ en: `Buy Premium ${annualPriceLabel}/year`, it: `Acquista Premium ${annualPriceLabel}/anno` })}
+                      : t({ en: `Buy Premium ${seasonPriceLabel} (season)`, it: `Acquista Premium ${seasonPriceLabel} (stagione)` })}
                   </button>
 
                   <div className="flex items-center justify-between gap-2">
@@ -1848,9 +1853,9 @@ const App: React.FC = () => {
                     >
                       {t({ en: "Restore Purchases", it: "Ripristina Acquisti" })}
                     </button>
-                    {!annualPackage && (
+                    {!seasonPackage && (
                       <span className="text-[11px] text-amber-200/80">
-                        {t({ en: 'Annual offer not loaded', it: 'Offerta annuale non caricata' })}
+                        {t({ en: 'Season pass offer not loaded', it: 'Offerta pass stagione non caricata' })}
                       </span>
                     )}
                   </div>
@@ -1869,25 +1874,17 @@ const App: React.FC = () => {
 
               <div className="flex flex-col gap-3 mt-4">
                 {/* Premium / Remove Ads */}
-                <div className="border border-slate-700/50 bg-slate-900/50 rounded-lg p-3 mb-2">
-                  <h4 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">{t({ en: 'Premium', it: 'Premium' })}</h4>
-                  {isPremium ? (
+                {isPremium && (
+                  <div className="border border-slate-700/50 bg-slate-900/50 rounded-lg p-3 mb-2">
+                    <h4 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">{t({ en: 'Premium', it: 'Premium' })}</h4>
                     <div className="flex items-center gap-3 text-yellow-400">
-                       <span className="text-xl">👑</span>
                        <div>
                          <div className="font-bold text-sm">{t({ en: 'Premium Active', it: 'Premium Attivo' })}</div>
                          <div className="text-[10px] opacity-80">{t({ en: 'No Ads enabled', it: 'Pubblicità rimosse' })}</div>
                        </div>
                     </div>
-                  ) : (
-                    <div className="text-xs text-slate-300">
-                      {t({
-                        en: 'Premium purchase is available in the Premium Annual section above.',
-                        it: "L'acquisto Premium e disponibile nel riquadro Premium Annuale qui sopra."
-                      })}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded transition-colors"
@@ -2548,6 +2545,8 @@ const App: React.FC = () => {
         // Refresh
         const { leagues } = await getMe();
         if (leagues[0]?.members) setLeagueMembers(leagues[0].members);
+        const updatedStandings = await getLeagueStandings(data.user.leagueId);
+        setStandings(updatedStandings);
      } catch (e) {
         console.error(e);
         alert(t({ en: "Failed to apply penalty.", it: "Errore durante l'applicazione." }));
@@ -2651,18 +2650,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleBuyPremiumAnnual = async () => {
-    if (!annualPackage) {
+  const handleBuyPremiumSeason = async () => {
+    if (!seasonPackage) {
       alert(t({
-        en: "Annual Premium plan not available right now. Check RevenueCat offering.",
-        it: "Piano Premium annuale non disponibile al momento. Verifica l'offering RevenueCat."
+        en: "Premium season pass not available right now. Check RevenueCat offering.",
+        it: "Pass Premium stagione non disponibile al momento. Verifica l'offering RevenueCat."
       }));
       return;
     }
 
     try {
       setIsPurchasingPremium(true);
-      const success = await purchasePackage(annualPackage);
+      const success = await purchasePackage(seasonPackage);
       if (success) {
         setIsPremium(true);
         localStorage.setItem('fantaF1Premium', 'true');
@@ -2788,24 +2787,24 @@ const App: React.FC = () => {
                     <span className="text-white font-medium">{m.userName}</span>
                     <span className="ml-2 text-xs text-slate-500">{m.role}</span>
                  </div>
-                 {m.userId !== data?.user?.id && (
-                    <div className="flex">
-                      <button 
-                        onClick={() => handleKickMember(m.userId, m.userName)}
-                        className="text-red-400 hover:text-red-300 px-2"
-                        title="Kick User"
-                      >
-                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                      <button 
-                        onClick={() => handleAddPenalty(m.userId, m.userName, m.teamId)}
-                        className="text-yellow-400 hover:text-yellow-300 px-2"
-                        title="Add Penalty/Bonus"
-                      >
-                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
-                      </button>
-                    </div>
-                 )}
+                 <div className="flex">
+                   {m.userId !== data?.user?.id && (
+                     <button 
+                       onClick={() => handleKickMember(m.userId, m.userName)}
+                       className="text-red-400 hover:text-red-300 px-2"
+                       title="Kick User"
+                     >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                     </button>
+                   )}
+                   <button 
+                     onClick={() => handleAddPenalty(m.userId, m.userName, m.teamId)}
+                     className="text-yellow-400 hover:text-yellow-300 px-2"
+                     title="Add Penalty/Bonus"
+                   >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+                   </button>
+                 </div>
               </div>
             ))}
           </div>

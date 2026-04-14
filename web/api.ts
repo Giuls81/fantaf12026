@@ -190,7 +190,7 @@ export async function addPenalty(leagueId: string, teamId: string, points: numbe
 }
 
 export async function getLeagueStandings(leagueId: string) {
-  return apiGet<{ userId: string; userName: string; totalPoints: number; rank: number }[]>(`/leagues/${leagueId}/standings`);
+  return apiGet<{ userId: string; userName: string; totalPoints: number; penaltyPoints: number; rank: number }[]>(`/leagues/${leagueId}/standings`);
 }
 
 export async function getRaceResults(leagueId: string, raceId: string) {
