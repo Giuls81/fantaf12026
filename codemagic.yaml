@@ -43,6 +43,19 @@ workflows:
           fi
       - name: Set up code signing
         script: xcode-project use-profiles
+      - name: Auto-increment build number (iOS + Android)
+        script: |
+          set -e
+          APP_BUILD_NUMBER="$(date +%s)"
+          echo "Using APP_BUILD_NUMBER=$APP_BUILD_NUMBER"
+
+          /usr/bin/sed -i '' -E "s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = ${APP_BUILD_NUMBER};/g" ios/App/App.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD_NUMBER" ios/App/App/Info.plist
+          /usr/bin/sed -i '' -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${APP_BUILD_NUMBER}/" android/app/build.gradle
+
+          echo "iOS CURRENT_PROJECT_VERSION -> $APP_BUILD_NUMBER"
+          echo "iOS CFBundleVersion -> $APP_BUILD_NUMBER"
+          echo "Android versionCode -> $APP_BUILD_NUMBER"
       - name: Build IPA (signed) + Upload to TestFlight
         script: |
           cd "$IOS_DIR"
@@ -153,6 +166,13 @@ workflows:
         script: |
           npx cap add android || true
           npx cap sync android
+      - name: Auto-increment build number (Android)
+        script: |
+          set -e
+          APP_BUILD_NUMBER="$(date +%s)"
+          echo "Using APP_BUILD_NUMBER=$APP_BUILD_NUMBER"
+          /usr/bin/sed -i '' -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${APP_BUILD_NUMBER}/" android/app/build.gradle
+          echo "Android versionCode -> $APP_BUILD_NUMBER"
       - name: Build Android APK (Debug & Release)
         script: |
           cd android
