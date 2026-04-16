@@ -1834,9 +1834,9 @@ const App: React.FC = () => {
 
                   <button
                     onClick={handleBuyPremiumSeason}
-                    disabled={!seasonPackage || isPurchasingPremium}
+                    disabled={isPurchasingPremium}
                     className={`w-full font-bold py-3 px-3 rounded-lg shadow-lg border transition-all text-sm ${
-                      seasonPackage && !isPurchasingPremium
+                      !isPurchasingPremium
                         ? 'bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white border-yellow-500/50'
                         : 'bg-slate-700 text-slate-300 border-slate-600 cursor-not-allowed'
                     }`}
@@ -2651,17 +2651,26 @@ const App: React.FC = () => {
   };
 
   const handleBuyPremiumSeason = async () => {
-    if (!seasonPackage) {
+    let pkg = seasonPackage;
+
+    if (!pkg) {
+      pkg = await getOfferings();
+      if (pkg) {
+        setSeasonPackage(pkg);
+      }
+    }
+
+    if (!pkg) {
       alert(t({
-        en: "Premium season pass not available right now. Check RevenueCat offering.",
-        it: "Pass Premium stagione non disponibile al momento. Verifica l'offering RevenueCat."
+        en: "Premium season pass not available right now. Check RevenueCat products/offering and SDK key.",
+        it: "Pass Premium stagione non disponibile al momento. Verifica prodotti/offering RevenueCat e chiave SDK."
       }));
       return;
     }
 
     try {
       setIsPurchasingPremium(true);
-      const success = await purchasePackage(seasonPackage);
+      const success = await purchasePackage(pkg);
       if (success) {
         setIsPremium(true);
         localStorage.setItem('fantaF1Premium', 'true');

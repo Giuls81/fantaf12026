@@ -13,8 +13,8 @@ workflows:
         BUNDLE_ID: "com.fantaf1.app"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
         VITE_ADS_ENABLED: "true"
-        VITE_ADS_TEST_MODE: "true"
-        VITE_ADS_DEBUG_LOGS: "true"
+        VITE_ADS_TEST_MODE: "false"
+        VITE_ADS_DEBUG_LOGS: "false"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.fantaf1.app
@@ -32,6 +32,8 @@ workflows:
           VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
           VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
           VITE_ADS_DEBUG_LOGS=$VITE_ADS_DEBUG_LOGS \
+          VITE_REVENUECAT_IOS_API_KEY=$VITE_REVENUECAT_IOS_API_KEY \
+          VITE_REVENUECAT_ANDROID_API_KEY=$VITE_REVENUECAT_ANDROID_API_KEY \
           npm run build
       - name: Sync Capacitor iOS
         script: npx cap sync ios
@@ -140,6 +142,8 @@ workflows:
     name: Android Release (APK/AAB)
     max_build_duration: 60
     environment:
+      groups:
+        - ios
       node: 22
       vars:
         ANDROID_DIR: "android"
@@ -161,6 +165,8 @@ workflows:
           VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
           VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
           VITE_ADS_DEBUG_LOGS=$VITE_ADS_DEBUG_LOGS \
+          VITE_REVENUECAT_IOS_API_KEY=$VITE_REVENUECAT_IOS_API_KEY \
+          VITE_REVENUECAT_ANDROID_API_KEY=$VITE_REVENUECAT_ANDROID_API_KEY \
           npm run build
       - name: Add/Sync Android
         script: |
@@ -187,6 +193,8 @@ workflows:
     name: OTA Live Update (Capgo)
     max_build_duration: 30
     environment:
+      groups:
+        - ios
       node: 22
       vars:
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
@@ -207,6 +215,8 @@ workflows:
           VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
           VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
           VITE_ADS_DEBUG_LOGS=$VITE_ADS_DEBUG_LOGS \
+          VITE_REVENUECAT_IOS_API_KEY=$VITE_REVENUECAT_IOS_API_KEY \
+          VITE_REVENUECAT_ANDROID_API_KEY=$VITE_REVENUECAT_ANDROID_API_KEY \
           npm run build
       - name: Upload bundle to Capgo
         script: |

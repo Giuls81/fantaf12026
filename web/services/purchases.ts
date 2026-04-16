@@ -1,18 +1,28 @@
-import { Purchases, LOG_LEVEL, PurchasesPackage, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
+import { Purchases, LOG_LEVEL, PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
-import { REVENUECAT_API_KEYS, ENTITLEMENT_ID } from '../constants_iap';
+import { REVENUECAT_API_KEYS, ENTITLEMENT_ID, isLikelyRevenueCatPublicKey } from '../constants_iap';
 
 export const initializePurchases = async () => {
-  if (Capacitor.getPlatform() === 'web') return;
+  const platform = Capacitor.getPlatform();
+  if (platform === 'web') return;
 
   try {
     await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
 
-    if (Capacitor.getPlatform() === 'ios') {
-      await Purchases.configure({ apiKey: REVENUECAT_API_KEYS.ios });
-    } else if (Capacitor.getPlatform() === 'android') {
-      await Purchases.configure({ apiKey: REVENUECAT_API_KEYS.android });
+    const apiKey = platform === 'ios' ? REVENUECAT_API_KEYS.ios : REVENUECAT_API_KEYS.android;
+    if (!apiKey) {
+      console.warn("Purchases init skipped: missing RevenueCat API key", platform);
+      return;
     }
+
+    if (!isLikelyRevenueCatPublicKey(apiKey)) {
+      console.warn(
+        "RevenueCat key format looks invalid (expected appl_/goog_). Check VITE_REVENUECAT_* env vars.",
+        { platform }
+      );
+    }
+
+    await Purchases.configure({ apiKey });
   } catch (e) {
     console.warn("Purchases init failed", e);
   }
@@ -38,27 +48,56 @@ export const getOfferings = async (): Promise<PurchasesPackage | null> => {
     const offerings = await Purchases.getOfferings();
     if (offerings.current === null) return null;
 
-    // Prefer explicit annual package from RevenueCat offering.
-    if (offerings.current.annual) {
-      return offerings.current.annual;
+    const getIdentifier = (pkg: PurchasesPackage) =>
+      String((pkg as PurchasesPackage & { identifier?: string }).identifier ?? '').toLowerCase();
+
+    const getPackageType = (pkg: PurchasesPackage) =>
+      String((pkg as PurchasesPackage & { packageType?: string }).packageType ?? '').toLowerCase();
+
+    const seasonHint = (pkg: PurchasesPackage) => {
+      const packageIdentifier = String((pkg as unknown as { identifier?: string }).identifier ?? '').toLowerCase();
+      const productIdentifier = String(pkg.product?.identifier ?? '').toLowerCase();
+      const productTitle = String(pkg.product?.title ?? '').toLowerCase();
+      const haystack = `${packageIdentifier} ${productIdentifier} ${productTitle}`;
+      return (
+        haystack.includes('season') ||
+        haystack.includes('stagion') ||
+        haystack.includes('pass') ||
+        haystack.includes('annual') ||
+        haystack.includes('annuale')
+      );
+    };
+
+    const availablePackages = offerings.current.availablePackages || [];
+    if (availablePackages.length === 0) return null;
+
+    // Prefer an explicitly named season/annual pass package from RevenueCat offering.
+    const seasonPackage = availablePackages.find(seasonHint);
+    if (seasonPackage) {
+      return seasonPackage;
     }
 
-    // Fallbacks for custom package setups that still map to a yearly subscription.
-    const annualByType = offerings.current.availablePackages.find(
-      (pkg) => pkg.packageType === PACKAGE_TYPE.ANNUAL,
+    // Fallback to the ANNUAL package type if defined.
+    const annualPackage = availablePackages.find((pkg) => getPackageType(pkg) === 'annual');
+    if (annualPackage) {
+      return annualPackage;
+    }
+
+    // Last-resort fallback: if there is a single package, use it.
+    if (availablePackages.length === 1) {
+      return availablePackages[0];
+    }
+
+    console.warn(
+      "No season pass package matched in current offering",
+      offerings.current.identifier,
+      availablePackages.map((pkg) => ({
+        identifier: getIdentifier(pkg),
+        productIdentifier: pkg.product?.identifier,
+        productTitle: pkg.product?.title,
+        packageType: getPackageType(pkg),
+      }))
     );
-    if (annualByType) {
-      return annualByType;
-    }
-
-    const annualByPeriod = offerings.current.availablePackages.find(
-      (pkg) => pkg.product.subscriptionPeriod === 'P1Y',
-    );
-    if (annualByPeriod) {
-      return annualByPeriod;
-    }
-
-    console.warn("No annual package found in current offering", offerings.current.identifier);
   } catch (e) {
     console.error("Get offerings failed", e);
   }
