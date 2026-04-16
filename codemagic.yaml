@@ -28,6 +28,14 @@ workflows:
         script: |
           cd web
           npm ci
+          if [[ -z "$VITE_REVENUECAT_IOS_API_KEY" || "$VITE_REVENUECAT_IOS_API_KEY" != appl_* ]]; then
+            echo "Invalid or missing VITE_REVENUECAT_IOS_API_KEY (expected appl_*)"
+            exit 1
+          fi
+          if [[ -z "$VITE_REVENUECAT_ANDROID_API_KEY" || "$VITE_REVENUECAT_ANDROID_API_KEY" != goog_* ]]; then
+            echo "Invalid or missing VITE_REVENUECAT_ANDROID_API_KEY (expected goog_*)"
+            exit 1
+          fi
           VITE_API_URL=$VITE_API_URL \
           VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
           VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
@@ -161,6 +169,14 @@ workflows:
         script: |
           cd web
           npm ci
+          if [[ -z "$VITE_REVENUECAT_IOS_API_KEY" || "$VITE_REVENUECAT_IOS_API_KEY" != appl_* ]]; then
+            echo "Invalid or missing VITE_REVENUECAT_IOS_API_KEY (expected appl_*)"
+            exit 1
+          fi
+          if [[ -z "$VITE_REVENUECAT_ANDROID_API_KEY" || "$VITE_REVENUECAT_ANDROID_API_KEY" != goog_* ]]; then
+            echo "Invalid or missing VITE_REVENUECAT_ANDROID_API_KEY (expected goog_*)"
+            exit 1
+          fi
           VITE_API_URL=$VITE_API_URL \
           VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
           VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \
@@ -211,6 +227,14 @@ workflows:
       - name: Build web bundle
         script: |
           cd web
+          if [[ -z "$VITE_REVENUECAT_IOS_API_KEY" || "$VITE_REVENUECAT_IOS_API_KEY" != appl_* ]]; then
+            echo "Invalid or missing VITE_REVENUECAT_IOS_API_KEY (expected appl_*)"
+            exit 1
+          fi
+          if [[ -z "$VITE_REVENUECAT_ANDROID_API_KEY" || "$VITE_REVENUECAT_ANDROID_API_KEY" != goog_* ]]; then
+            echo "Invalid or missing VITE_REVENUECAT_ANDROID_API_KEY (expected goog_*)"
+            exit 1
+          fi
           VITE_API_URL=$VITE_API_URL \
           VITE_ADS_ENABLED=$VITE_ADS_ENABLED \
           VITE_ADS_TEST_MODE=$VITE_ADS_TEST_MODE \

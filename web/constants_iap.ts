@@ -3,11 +3,12 @@ const getEnvValue = (key: 'VITE_REVENUECAT_IOS_API_KEY' | 'VITE_REVENUECAT_ANDRO
   return typeof value === 'string' ? value.trim() : '';
 };
 
-// Prefer environment variables for official release builds.
-// Legacy fallback values are kept to avoid breaking existing local setups.
+// RevenueCat must use SDK public keys from environment variables:
+// - iOS: appl_*
+// - Android: goog_*
 export const REVENUECAT_API_KEYS = {
-  ios: getEnvValue('VITE_REVENUECAT_IOS_API_KEY') || 'appae424649ff',
-  android: getEnvValue('VITE_REVENUECAT_ANDROID_API_KEY') || 'app5d6f594588',
+  ios: getEnvValue('VITE_REVENUECAT_IOS_API_KEY'),
+  android: getEnvValue('VITE_REVENUECAT_ANDROID_API_KEY'),
 };
 
 export const isLikelyRevenueCatPublicKey = (value: string): boolean => {

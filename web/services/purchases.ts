@@ -2,28 +2,38 @@ import { Purchases, LOG_LEVEL, PurchasesPackage } from '@revenuecat/purchases-ca
 import { Capacitor } from '@capacitor/core';
 import { REVENUECAT_API_KEYS, ENTITLEMENT_ID, isLikelyRevenueCatPublicKey } from '../constants_iap';
 
+let purchasesInitIssue: string | null = null;
+
+export const getPurchasesInitIssue = () => purchasesInitIssue;
+
 export const initializePurchases = async () => {
   const platform = Capacitor.getPlatform();
   if (platform === 'web') return;
+
+  purchasesInitIssue = null;
 
   try {
     await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
 
     const apiKey = platform === 'ios' ? REVENUECAT_API_KEYS.ios : REVENUECAT_API_KEYS.android;
     if (!apiKey) {
+      purchasesInitIssue = `missing_${platform}_sdk_key`;
       console.warn("Purchases init skipped: missing RevenueCat API key", platform);
       return;
     }
 
     if (!isLikelyRevenueCatPublicKey(apiKey)) {
+      purchasesInitIssue = `invalid_${platform}_sdk_key_format`;
       console.warn(
         "RevenueCat key format looks invalid (expected appl_/goog_). Check VITE_REVENUECAT_* env vars.",
         { platform }
       );
+      return;
     }
 
     await Purchases.configure({ apiKey });
   } catch (e) {
+    purchasesInitIssue = `purchases_configure_failed:${(e as Error)?.message || 'unknown_error'}`;
     console.warn("Purchases init failed", e);
   }
 };
@@ -46,7 +56,10 @@ export const getOfferings = async (): Promise<PurchasesPackage | null> => {
   if (Capacitor.getPlatform() === 'web') return null;
   try {
     const offerings = await Purchases.getOfferings();
-    if (offerings.current === null) return null;
+    if (offerings.current === null) {
+      purchasesInitIssue = purchasesInitIssue || 'no_current_offering';
+      return null;
+    }
 
     const getIdentifier = (pkg: PurchasesPackage) =>
       String((pkg as PurchasesPackage & { identifier?: string }).identifier ?? '').toLowerCase();
@@ -99,6 +112,7 @@ export const getOfferings = async (): Promise<PurchasesPackage | null> => {
       }))
     );
   } catch (e) {
+    purchasesInitIssue = `get_offerings_failed:${(e as Error)?.message || 'unknown_error'}`;
     console.error("Get offerings failed", e);
   }
   return null;

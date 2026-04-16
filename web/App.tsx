@@ -9,7 +9,7 @@ import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
 import { getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
-import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings } from './services/purchases';
+import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings, getPurchasesInitIssue } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 // RACES_2026 removed
 
@@ -2661,10 +2661,12 @@ const App: React.FC = () => {
     }
 
     if (!pkg) {
-      alert(t({
+      const baseMessage = t({
         en: "Premium season pass not available right now. Check RevenueCat products/offering and SDK key.",
         it: "Pass Premium stagione non disponibile al momento. Verifica prodotti/offering RevenueCat e chiave SDK."
-      }));
+      });
+      const diagnostic = getPurchasesInitIssue();
+      alert(diagnostic ? `${baseMessage}\n\nDebug: ${diagnostic}` : baseMessage);
       return;
     }
 
