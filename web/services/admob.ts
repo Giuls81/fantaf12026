@@ -32,6 +32,9 @@ let currentInterstitialSlot: InterstitialSlot = null;
 let isAdMobInitialized = false;
 let initializePromise: Promise<boolean> | null = null;
 let canRequestAds = true;
+let lastConsentCheckAt = 0;
+
+const CONSENT_RECHECK_INTERVAL_MS = 30_000;
 
 const isNativeAdsEnabled = () => ADS_ENABLED && Capacitor.getPlatform() !== 'web';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,6 +43,36 @@ const adLog = (...args: unknown[]) => {
   if (ADS_DEBUG_LOGS) {
     console.log(...args);
   }
+};
+
+const refreshConsentState = async (force = false): Promise<boolean> => {
+  if (!force && Date.now() - lastConsentCheckAt < CONSENT_RECHECK_INTERVAL_MS) {
+    return canRequestAds;
+  }
+
+  lastConsentCheckAt = Date.now();
+
+  try {
+    let consentInfo = await AdMob.requestConsentInfo();
+    canRequestAds = consentInfo.canRequestAds;
+
+    if (
+      consentInfo.status === AdmobConsentStatus.REQUIRED &&
+      consentInfo.isConsentFormAvailable &&
+      !consentInfo.canRequestAds
+    ) {
+      consentInfo = await AdMob.showConsentForm();
+      canRequestAds = consentInfo.canRequestAds;
+    }
+
+    adLog('AdMob: consent status', consentInfo.status, 'canRequestAds:', consentInfo.canRequestAds);
+  } catch (e) {
+    // Fail-open to avoid permanently blocking ads due transient consent API errors.
+    console.warn('AdMob: consent flow failed, continuing', e);
+    canRequestAds = true;
+  }
+
+  return canRequestAds;
 };
 
 const getAdId = (type: AdType) => {
@@ -73,25 +106,7 @@ const ensureAdMobInitialized = async (): Promise<boolean> => {
     }
 
     // EEA/UK: request/update consent state before requesting ads.
-    try {
-      let consentInfo = await AdMob.requestConsentInfo();
-      canRequestAds = consentInfo.canRequestAds;
-
-      if (
-        consentInfo.status === AdmobConsentStatus.REQUIRED &&
-        consentInfo.isConsentFormAvailable &&
-        !consentInfo.canRequestAds
-      ) {
-        consentInfo = await AdMob.showConsentForm();
-        canRequestAds = consentInfo.canRequestAds;
-      }
-
-      adLog('AdMob: consent status', consentInfo.status, 'canRequestAds:', consentInfo.canRequestAds);
-    } catch (e) {
-      // Fail-open to avoid blocking ads if consent API transiently fails.
-      console.warn('AdMob: consent flow failed, continuing', e);
-      canRequestAds = true;
-    }
+    await refreshConsentState(true);
 
     return true;
   })().finally(() => {
@@ -104,6 +119,11 @@ const ensureAdMobInitialized = async (): Promise<boolean> => {
 const canUseAds = async (): Promise<boolean> => {
   const initialized = await ensureAdMobInitialized();
   if (!initialized) return false;
+
+  if (!IS_TEST_MODE && !canRequestAds) {
+    await refreshConsentState();
+  }
+
   if (!IS_TEST_MODE && !canRequestAds) {
     adLog('AdMob: consent not granted, skipping ad request');
     return false;
