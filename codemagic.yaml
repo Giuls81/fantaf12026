@@ -256,4 +256,6 @@ workflows:
             -a "$CAPGO_API_KEY" \
             -p web/dist \
             -c "$CAPGO_CHANNEL" \
+            --package-json web/package.json \
+            --node-modules web/node_modules \
             --delta
