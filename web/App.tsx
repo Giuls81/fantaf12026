@@ -9,8 +9,12 @@ import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
 import { getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
-import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings, getPurchasesInitIssue } from './services/purchases';
+import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings, getPurchasesInitIssue, logInUser } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
+import { fetchMyCosmetics } from './services/cosmetics';
+import Storefront from './components/Storefront';
+import CosmeticSlot from './components/CosmeticSlot';
+import type { CosmeticsState } from './types';
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -157,6 +161,9 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
   
   const [isPremium, setIsPremium] = useState(false); // Premium State
+  // Cosmetics (Phase 4b, 2026-04-17). Loaded after login; null = not fetched yet.
+  const [cosmeticsState, setCosmeticsState] = useState<CosmeticsState | null>(null);
+  const [showStorefront, setShowStorefront] = useState(false);
   const [data, setData] = useState<AppData | null>(null);
   const [swapCandidate, setSwapCandidate] = useState<Driver | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -587,6 +594,20 @@ const App: React.FC = () => {
     }
   }, [races]);
 
+  // Phase 4b: whenever we have a logged-in user, sync RevenueCat user id
+  // and pull cosmetic ownership. Runs on login, session restore, and user
+  // switch. Safe no-op if user is null.
+  useEffect(() => {
+    const userId = data?.user?.id;
+    if (!userId) return;
+    let cancelled = false;
+    logInUser(userId).catch((e) => console.warn('logInUser failed', e));
+    fetchMyCosmetics()
+      .then((s) => { if (!cancelled) setCosmeticsState(s); })
+      .catch((e) => console.warn('fetchMyCosmetics failed', e));
+    return () => { cancelled = true; };
+  }, [data?.user?.id]);
+
   // Sync Drafts... (omitted for brevity, assume unchanged logic here)
   useEffect(() => {
     if (data && races.length > 0) {
@@ -725,6 +746,12 @@ const App: React.FC = () => {
         currentRaceIndex: nextRaceIndex
       });
       setActiveTab(Tab.HOME);
+
+      // Phase 4b: tell RevenueCat our user id + pull cosmetics (fire-and-forget)
+      logInUser(user.id).catch((e) => console.warn('logInUser failed', e));
+      fetchMyCosmetics()
+        .then((s) => setCosmeticsState(s))
+        .catch((e) => console.warn('fetchMyCosmetics failed', e));
 
       // MONETIZATION: Show ad after successful login/registration
       if (!isPremium) {
@@ -1754,7 +1781,15 @@ const App: React.FC = () => {
         return (
           <div className="space-y-6">
             <header>
-              <h1 className="text-2xl font-bold text-white">{t({ en: 'Welcome', it: 'Benvenuto', fr: 'Bienvenue', de: 'Willkommen', es: 'Bienvenido', ru: 'Добро пожаловать', zh: '欢迎', ar: 'مرحباً', ja: 'ようこそ' })}, {data.user?.name}</h1>
+              <div className="flex items-center gap-3">
+                <CosmeticSlot
+                  productId={currentEquipped?.emblemProductId ?? null}
+                  size={40}
+                  fallbackLabel={data.user?.name?.slice(0, 2) || '·'}
+                  fallbackHex={activeConstructors[0]?.color || '#334155'}
+                />
+                <h1 className="text-2xl font-bold text-white">{t({ en: 'Welcome', it: 'Benvenuto', fr: 'Bienvenue', de: 'Willkommen', es: 'Bienvenido', ru: 'Добро пожаловать', zh: '欢迎', ar: 'مرحباً', ja: 'ようこそ' })}, {data.user?.name}</h1>
+              </div>
               <p className="text-slate-400 relative">
                 {data.user?.isAdmin ? `${t({ en: 'Admin of', it: 'Admin di' })} ` : t({ en: 'Member of', it: 'Membro di' })}
                 
@@ -1817,6 +1852,30 @@ const App: React.FC = () => {
                 <span className="font-mono text-white text-lg">{data.team.driverIds.length}/5</span>
               </div>
             </div>
+
+            {/* Cosmetics storefront CTA (Phase 4b) */}
+            <button
+              onClick={() => setShowStorefront(true)}
+              className="w-full bg-slate-800 hover:bg-slate-700 p-4 rounded-xl border border-slate-700 flex items-center justify-between gap-3 text-left transition"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <CosmeticSlot
+                  productId={currentEquipped?.emblemProductId ?? null}
+                  size={36}
+                  fallbackLabel="🎨"
+                  fallbackHex="#1E293B"
+                />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-white truncate">
+                    {t({ en: 'Customize your team', it: 'Personalizza il tuo team', fr: 'Personnaliser votre équipe', de: 'Team anpassen', es: 'Personaliza tu equipo' })}
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {t({ en: 'Emblems, helmets, suits, colors', it: 'Emblemi, caschi, tute, colori' })}
+                  </div>
+                </div>
+              </div>
+              <span className="text-slate-400 text-sm shrink-0">→</span>
+            </button>
 
             {!isPremium && (
               <div className="bg-gradient-to-r from-yellow-900/40 to-amber-900/40 p-4 rounded-xl border border-yellow-700/50">
@@ -2901,6 +2960,12 @@ const App: React.FC = () => {
     `}} />
   );
 
+  // Cosmetics: equipped row (and therefore teamId) for the currently-active league.
+  const currentEquipped = cosmeticsState && data?.user?.leagueId
+    ? cosmeticsState.equipped.find((e) => e.leagueId === data.user!.leagueId) ?? null
+    : null;
+  const currentTeamId = currentEquipped?.teamId ?? null;
+
   return (
     <>
       <ErrorBoundary>
@@ -2912,16 +2977,24 @@ const App: React.FC = () => {
              setActiveTab(tab);
              // Aggressive Monetization: Show ad on tab change (50% chance)
              if (!isPremium) {
-                showInterstitialWithProbability(0.4); 
+                showInterstitialWithProbability(0.4);
              }
           }}
           showAdmin={data?.user?.isAdmin}
           lang={language}
           t={t}
-        > 
+        >
           <AdBanner isPremium={isPremium} />
           {renderContent()}
         </Layout>
+        <Storefront
+          isOpen={showStorefront}
+          onClose={() => setShowStorefront(false)}
+          state={cosmeticsState}
+          equippedForTeam={currentEquipped}
+          teamId={currentTeamId}
+          onStateChange={setCosmeticsState}
+        />
       </ErrorBoundary>
     </>
   );

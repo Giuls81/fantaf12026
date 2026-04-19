@@ -16,4 +16,9 @@ export const isLikelyRevenueCatPublicKey = (value: string): boolean => {
   return key.startsWith('appl_') || key.startsWith('goog_');
 };
 
-export const ENTITLEMENT_ID = 'premium'; // Set in RevenueCat Dashboard
+export const ENTITLEMENT_ID = 'premium'; // Ad-removal pass. Set in RevenueCat Dashboard.
+
+// Season-long entitlement that unlocks every cosmetic item (Phase 4b).
+// Map the fantaf1.cosmetic.pass.season2026 product to this entitlement in
+// the RevenueCat Dashboard.
+export const COSMETIC_PASS_ENTITLEMENT_ID = 'cosmetic_pass_2026';

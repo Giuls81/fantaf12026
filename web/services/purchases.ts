@@ -1,6 +1,11 @@
 import { Purchases, LOG_LEVEL, PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
-import { REVENUECAT_API_KEYS, ENTITLEMENT_ID, isLikelyRevenueCatPublicKey } from '../constants_iap';
+import {
+  REVENUECAT_API_KEYS,
+  ENTITLEMENT_ID,
+  COSMETIC_PASS_ENTITLEMENT_ID,
+  isLikelyRevenueCatPublicKey,
+} from '../constants_iap';
 
 let purchasesInitIssue: string | null = null;
 
@@ -146,4 +151,102 @@ export const restorePurchases = async (): Promise<boolean> => {
      alert("Restore failed: " + (e as any).message);
   }
   return false;
+};
+
+// --- Cosmetics (Phase 4b, added 2026-04-17) -----------------------------
+//
+// RevenueCat treats the fantasy app's own User.id as `appUserID`. The
+// server-side /revenuecat/webhook uses that value to grant UserCosmetic
+// rows, so we MUST call logInUser(user.id) after the user authenticates
+// (or signs up) and before any cosmetic purchase. Safe to call multiple
+// times — RevenueCat de-dupes.
+export const logInUser = async (userId: string): Promise<void> => {
+  if (Capacitor.getPlatform() === 'web') return;
+  if (!userId) return;
+  try {
+    await Purchases.logIn({ appUserID: userId });
+  } catch (e) {
+    console.warn('Purchases.logIn failed', e);
+  }
+};
+
+export const logOutUser = async (): Promise<void> => {
+  if (Capacitor.getPlatform() === 'web') return;
+  try {
+    await Purchases.logOut();
+  } catch (e) {
+    console.warn('Purchases.logOut failed', e);
+  }
+};
+
+// Buy a cosmetic product by productId. Cosmetics aren't necessarily in the
+// current offering (we keep the current offering reserved for the season
+// ad-removal pass), so we purchase via the store product directly.
+//
+// Returns:
+//   { ok: true, productId }                  on success
+//   { ok: false, reason: 'user_cancelled' }  if user hit cancel
+//   { ok: false, reason: 'unsupported_web' } if running in web preview
+//   { ok: false, reason: 'not_found' }       if the store doesn't sell it
+//   { ok: false, reason: string, error? }    on any other failure
+export const purchaseCosmeticProduct = async (
+  productId: string,
+): Promise<{ ok: true; productId: string } | { ok: false; reason: string; error?: unknown }> => {
+  if (Capacitor.getPlatform() === 'web') {
+    return { ok: false, reason: 'unsupported_web' };
+  }
+  try {
+    // v12 SDK: getProducts returns { products: StoreProduct[] }
+    const { products } = await Purchases.getProducts({
+      productIdentifiers: [productId],
+    });
+    const product = (products || []).find(
+      (p) => (p as { identifier?: string }).identifier === productId,
+    );
+    if (!product) {
+      return { ok: false, reason: 'not_found' };
+    }
+
+    // v12 SDK: purchaseStoreProduct({ product }) returns { customerInfo, ... }
+    const result = await (Purchases as unknown as {
+      purchaseStoreProduct: (args: { product: unknown }) => Promise<{
+        customerInfo: { entitlements: { active: Record<string, unknown> } };
+      }>;
+    }).purchaseStoreProduct({ product });
+
+    // Validate: either the cosmetic entitlement is now active (pass purchase),
+    // or the customer info contains the product (individual purchase). The
+    // webhook handles the DB grant regardless.
+    const entitlements = result?.customerInfo?.entitlements?.active || {};
+    if (
+      productId === 'fantaf1.cosmetic.pass.season2026' &&
+      typeof entitlements[COSMETIC_PASS_ENTITLEMENT_ID] === 'undefined'
+    ) {
+      console.warn(
+        'Season pass purchased but cosmetic_pass_2026 entitlement not active yet. Webhook should grant it shortly.',
+      );
+    }
+    return { ok: true, productId };
+  } catch (e: unknown) {
+    const err = e as { userCancelled?: boolean; message?: string };
+    if (err?.userCancelled) {
+      return { ok: false, reason: 'user_cancelled' };
+    }
+    console.error('purchaseCosmeticProduct failed', e);
+    return { ok: false, reason: 'purchase_failed', error: e };
+  }
+};
+
+// True if the authenticated RevenueCat user currently holds the season
+// aesthetic pass entitlement. The pass grants instant access to every
+// catalog item client-side even before the webhook populates UserCosmetic.
+export const hasCosmeticPassActive = async (): Promise<boolean> => {
+  if (Capacitor.getPlatform() === 'web') return false;
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    return typeof customerInfo.customerInfo.entitlements.active[COSMETIC_PASS_ENTITLEMENT_ID] !== 'undefined';
+  } catch (e) {
+    console.warn('hasCosmeticPassActive check failed', e);
+    return false;
+  }
 };

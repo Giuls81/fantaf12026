@@ -118,3 +118,28 @@ export interface AppData {
   currentRaceIndex: number;
   rules: ScoringRules;
 }
+
+// --- Cosmetics (Phase 4b, 2026-04-17) ---
+
+export type CosmeticCategory = 'emblem' | 'helmet' | 'suit' | 'color';
+
+export interface OwnedCosmetic {
+  productId: string;
+  category: CosmeticCategory;
+  purchasedAt: string;
+}
+
+// One entry per Team (user × league). Null slots mean "default".
+export interface EquippedCosmetics {
+  teamId: string;
+  leagueId: string;
+  emblemProductId: string | null;
+  helmetProductId: string | null;
+  suitProductId: string | null;
+  colorProductId: string | null;
+}
+
+export interface CosmeticsState {
+  owned: OwnedCosmetic[];
+  equipped: EquippedCosmetics[];
+}

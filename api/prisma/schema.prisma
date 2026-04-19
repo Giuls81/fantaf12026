@@ -23,6 +23,7 @@ model User {
 
   memberships LeagueMember[]
   teams       Team[]
+  cosmetics   UserCosmetic[]
 }
 
 model League {
@@ -78,6 +79,12 @@ model Team {
   totalPoints Float @default(0)
   captainId String?
   reserveId String?
+
+  // Equipped cosmetics (null = default). Added 2026-04-17 Phase 4a.
+  emblemProductId String?
+  helmetProductId String?
+  suitProductId   String?
+  colorProductId  String?
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
@@ -161,4 +168,29 @@ model TeamResultDriver {
   @@unique([teamResultId, driverId])
   @@index([teamResultId])
   @@index([driverId])
+}
+
+// --- Cosmetics (Phase 4a, 2026-04-17) ---
+//
+// Ownership table. One row per (user, product) pair. Pass purchases explode
+// into one row per contained product at grant time so the equip flow doesn't
+// need to know about bundles.
+model UserCosmetic {
+  id          String   @id @default(cuid())
+  userId      String
+  productId   String
+  category    String   // 'emblem' | 'helmet' | 'suit' | 'color' — DB CHECK enforced
+  purchasedAt DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// Webhook idempotency log. Dedup by event id (e.g. RevenueCat's event.id).
+model WebhookEvent {
+  id         String   @id
+  source     String
+  receivedAt DateTime @default(now())
 }

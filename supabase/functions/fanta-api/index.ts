@@ -226,6 +226,165 @@ const ensureTeamPenaltyTable = async (db: SqlExecutor): Promise<boolean> => {
   }
 };
 
+// --- Cosmetics (Phase 4a, added 2026-04-17) -----------------------------
+//
+// Catalog is the single server-side source of truth for product IDs,
+// category, and bundle/pass expansion. Mirrors Appendix A.1 of the takeover
+// plan. Keep in sync with:
+//   - RevenueCat dashboard product entries
+//   - web/constants_iap.ts when the web storefront is added
+//
+// Categories 'bundle' and 'pass' are never written to UserCosmetic.category;
+// they expand into one row per contained item at grant time.
+
+type CosmeticCategory = "emblem" | "helmet" | "suit" | "color" | "bundle" | "pass";
+
+interface CosmeticCatalogEntry {
+  category: CosmeticCategory;
+  contains?: string[]; // only set for bundle/pass
+}
+
+const COSMETIC_EMBLEMS = [
+  "fantaf1.cosmetic.emblem.lightning",
+  "fantaf1.cosmetic.emblem.mountain",
+  "fantaf1.cosmetic.emblem.wave",
+  "fantaf1.cosmetic.emblem.compass",
+  "fantaf1.cosmetic.emblem.flame",
+  "fantaf1.cosmetic.emblem.wolf",
+  "fantaf1.cosmetic.emblem.checkered",
+  "fantaf1.cosmetic.emblem.octane",
+];
+
+const COSMETIC_HELMETS = [
+  "fantaf1.cosmetic.helmet.carbon",
+  "fantaf1.cosmetic.helmet.storm",
+  "fantaf1.cosmetic.helmet.gold",
+  "fantaf1.cosmetic.helmet.chrome",
+  "fantaf1.cosmetic.helmet.midnight",
+  "fantaf1.cosmetic.helmet.rainbow",
+  "fantaf1.cosmetic.helmet.fire",
+  "fantaf1.cosmetic.helmet.ocean",
+  "fantaf1.cosmetic.helmet.forest",
+  "fantaf1.cosmetic.helmet.volcano",
+];
+
+const COSMETIC_SUITS = [
+  "fantaf1.cosmetic.suit.monochrome",
+  "fantaf1.cosmetic.suit.retro70",
+  "fantaf1.cosmetic.suit.mosaic",
+  "fantaf1.cosmetic.suit.sunrise",
+  "fantaf1.cosmetic.suit.digicamo",
+  "fantaf1.cosmetic.suit.tuxedo",
+];
+
+const COSMETIC_COLORS = [
+  "fantaf1.cosmetic.color.electric",
+  "fantaf1.cosmetic.color.emerald",
+  "fantaf1.cosmetic.color.royal",
+  "fantaf1.cosmetic.color.molten",
+  "fantaf1.cosmetic.color.rosegold",
+  "fantaf1.cosmetic.color.pure",
+];
+
+const COSMETIC_CATALOG: Record<string, CosmeticCatalogEntry> = {
+  // Individual items
+  ...Object.fromEntries(COSMETIC_EMBLEMS.map((id) => [id, { category: "emblem" as const }])),
+  ...Object.fromEntries(COSMETIC_HELMETS.map((id) => [id, { category: "helmet" as const }])),
+  ...Object.fromEntries(COSMETIC_SUITS.map((id) => [id, { category: "suit" as const }])),
+  ...Object.fromEntries(COSMETIC_COLORS.map((id) => [id, { category: "color" as const }])),
+  // Bundle: subset of items
+  "fantaf1.cosmetic.bundle.starter": {
+    category: "bundle",
+    contains: [
+      "fantaf1.cosmetic.emblem.lightning",
+      "fantaf1.cosmetic.emblem.flame",
+      "fantaf1.cosmetic.emblem.wave",
+      "fantaf1.cosmetic.emblem.compass",
+      "fantaf1.cosmetic.helmet.carbon",
+      "fantaf1.cosmetic.helmet.storm",
+      "fantaf1.cosmetic.helmet.gold",
+      "fantaf1.cosmetic.helmet.ocean",
+      "fantaf1.cosmetic.color.electric",
+      "fantaf1.cosmetic.color.emerald",
+    ],
+  },
+  // Season Pass: everything above (helmets+emblems+suits+colors). Drops released
+  // later require a separate admin endpoint to backfill pass holders.
+  "fantaf1.cosmetic.pass.season2026": {
+    category: "pass",
+    contains: [
+      ...COSMETIC_EMBLEMS,
+      ...COSMETIC_HELMETS,
+      ...COSMETIC_SUITS,
+      ...COSMETIC_COLORS,
+    ],
+  },
+};
+
+const isEquipCategory = (
+  cat: string,
+): cat is "emblem" | "helmet" | "suit" | "color" =>
+  cat === "emblem" || cat === "helmet" || cat === "suit" || cat === "color";
+
+// Expand a purchased product ID into the concrete list of equippable product
+// IDs it grants. Bundles/passes expand recursively (one level deep suffices
+// given current catalog shape).
+const expandCosmeticProduct = (productId: string): string[] => {
+  const entry = COSMETIC_CATALOG[productId];
+  if (!entry) return [];
+  if (isEquipCategory(entry.category)) return [productId];
+  return (entry.contains ?? []).flatMap((c) => expandCosmeticProduct(c));
+};
+
+const ensureUserCosmeticTable = async (db: SqlExecutor): Promise<boolean> => {
+  try {
+    await db`
+      CREATE TABLE IF NOT EXISTS "UserCosmetic" (
+        "id"          TEXT PRIMARY KEY,
+        "userId"      TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+        "productId"   TEXT NOT NULL,
+        "category"    TEXT NOT NULL CHECK ("category" IN ('emblem','helmet','suit','color')),
+        "purchasedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `;
+    await db`CREATE UNIQUE INDEX IF NOT EXISTS "UserCosmetic_user_product_idx" ON "UserCosmetic"("userId","productId");`;
+    await db`CREATE INDEX IF NOT EXISTS "UserCosmetic_user_idx" ON "UserCosmetic"("userId");`;
+    return true;
+  } catch (e) {
+    console.error("UserCosmetic table unavailable:", e);
+    return false;
+  }
+};
+
+const ensureTeamCosmeticColumns = async (db: SqlExecutor): Promise<boolean> => {
+  try {
+    await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "emblemProductId" TEXT;`;
+    await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "helmetProductId" TEXT;`;
+    await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "suitProductId" TEXT;`;
+    await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "colorProductId" TEXT;`;
+    return true;
+  } catch (e) {
+    console.error("Team cosmetic columns unavailable:", e);
+    return false;
+  }
+};
+
+const ensureWebhookEventTable = async (db: SqlExecutor): Promise<boolean> => {
+  try {
+    await db`
+      CREATE TABLE IF NOT EXISTS "WebhookEvent" (
+        "id"         TEXT PRIMARY KEY,
+        "source"     TEXT NOT NULL,
+        "receivedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `;
+    return true;
+  } catch (e) {
+    console.error("WebhookEvent table unavailable:", e);
+    return false;
+  }
+};
+
 const syncTeamTotalPoints = async (db: SqlExecutor, teamId: string, includePenalties = true) => {
   const rows = includePenalties
     ? await db`
@@ -1676,6 +1835,225 @@ app.post("/cron/sync-all", async (c) => {
     });
     return c.json({ ok: true, raceId: race.id });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// --- Cosmetics endpoints (Phase 4a, added 2026-04-17) -------------------
+
+// GET /me/cosmetics — list the authenticated user's owned cosmetic items
+// plus the currently-equipped product IDs across all of their teams.
+app.get("/me/cosmetics", requireUser, async (c) => {
+  try {
+    const user = c.get("user");
+    await ensureUserCosmeticTable(sql as unknown as SqlExecutor);
+    await ensureTeamCosmeticColumns(sql as unknown as SqlExecutor);
+
+    const owned = await sql`
+      SELECT "productId", "category", "purchasedAt"
+      FROM "UserCosmetic"
+      WHERE "userId" = ${user.id}
+      ORDER BY "purchasedAt" ASC
+    `;
+
+    const teams = await sql`
+      SELECT id, "leagueId", "emblemProductId", "helmetProductId", "suitProductId", "colorProductId"
+      FROM "Team"
+      WHERE "userId" = ${user.id}
+    `;
+
+    return c.json({
+      owned: owned.map((r) => ({
+        productId: r.productId,
+        category: r.category,
+        purchasedAt: r.purchasedAt,
+      })),
+      equipped: teams.map((t) => ({
+        teamId: t.id,
+        leagueId: t.leagueId,
+        emblemProductId: t.emblemProductId,
+        helmetProductId: t.helmetProductId,
+        suitProductId: t.suitProductId,
+        colorProductId: t.colorProductId,
+      })),
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// POST /me/cosmetics/equip — set or clear an equipped cosmetic on the
+// caller's team. Body: { teamId, category, productId|null }.
+// - productId null clears the slot (revert to default).
+// - productId must be owned by the caller.
+// - category must be one of emblem|helmet|suit|color and must match the
+//   product's category.
+app.post("/me/cosmetics/equip", requireUser, async (c) => {
+  try {
+    const user = c.get("user");
+    const body = await c.req.json();
+    const teamId = typeof body?.teamId === "string" ? body.teamId : null;
+    const category = typeof body?.category === "string" ? body.category : null;
+    const productId = body?.productId === null ? null : (typeof body?.productId === "string" ? body.productId : undefined);
+
+    if (!teamId || !category || productId === undefined) {
+      return c.json({ error: "missing_fields" }, 400);
+    }
+    if (!isEquipCategory(category)) {
+      return c.json({ error: "invalid_category" }, 400);
+    }
+
+    await ensureTeamCosmeticColumns(sql as unknown as SqlExecutor);
+
+    // Team must belong to caller
+    const [team] = await sql`
+      SELECT id FROM "Team" WHERE id = ${teamId} AND "userId" = ${user.id}
+    `;
+    if (!team) return c.json({ error: "team_not_found" }, 404);
+
+    // If setting a product, verify ownership and category match.
+    if (productId !== null) {
+      const entry = COSMETIC_CATALOG[productId];
+      if (!entry || entry.category !== category) {
+        return c.json({ error: "product_category_mismatch" }, 400);
+      }
+      await ensureUserCosmeticTable(sql as unknown as SqlExecutor);
+      const [owned] = await sql`
+        SELECT 1 FROM "UserCosmetic"
+        WHERE "userId" = ${user.id} AND "productId" = ${productId}
+        LIMIT 1
+      `;
+      if (!owned) return c.json({ error: "not_owned" }, 403);
+    }
+
+    const column =
+      category === "emblem" ? "emblemProductId" :
+      category === "helmet" ? "helmetProductId" :
+      category === "suit"   ? "suitProductId"   :
+      "colorProductId";
+
+    // Postgres.js does not allow dynamic column names inside tagged templates,
+    // so we branch. The value is still safely parameterised.
+    if (category === "emblem") {
+      await sql`UPDATE "Team" SET "emblemProductId" = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
+    } else if (category === "helmet") {
+      await sql`UPDATE "Team" SET "helmetProductId" = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
+    } else if (category === "suit") {
+      await sql`UPDATE "Team" SET "suitProductId"   = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
+    } else {
+      await sql`UPDATE "Team" SET "colorProductId"  = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
+    }
+
+    return c.json({ ok: true, teamId, category, productId, column });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// POST /revenuecat/webhook — server-to-server callback from RevenueCat.
+// Auth: `Authorization: Bearer ${REVENUECAT_WEBHOOK_AUTH_SECRET}`. Set the
+// same secret in the RevenueCat dashboard webhook config.
+// Idempotency: deduped by event.id via WebhookEvent table.
+// Payload contract (v1): https://www.revenuecat.com/docs/integrations/webhooks
+//   event.type         — "INITIAL_PURCHASE" | "NON_RENEWING_PURCHASE" | ...
+//   event.id           — unique per delivery
+//   event.product_id   — the SKU purchased
+//   event.app_user_id  — the User.id we set via Purchases.logIn(user.id)
+//                        on the client BEFORE purchase. Required.
+app.post("/revenuecat/webhook", async (c) => {
+  try {
+    const expected = Deno.env.get("REVENUECAT_WEBHOOK_AUTH_SECRET");
+    if (!expected) {
+      console.error("REVENUECAT_WEBHOOK_AUTH_SECRET not set in function env");
+      return c.json({ error: "server_misconfigured" }, 500);
+    }
+    const authHeader = c.req.header("Authorization") || "";
+    const provided = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : authHeader;
+    if (provided !== expected) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
+
+    const body = await c.req.json();
+    const event = body?.event;
+    const eventId: string | undefined = event?.id;
+    const eventType: string | undefined = event?.type;
+    const productId: string | undefined = event?.product_id;
+    const appUserId: string | undefined = event?.app_user_id;
+
+    if (!eventId || !eventType || !productId || !appUserId) {
+      return c.json({ error: "malformed_event" }, 400);
+    }
+
+    // Only act on purchase-type events. Ignore TEST, RENEWAL of subscriptions,
+    // CANCELLATION, etc. Non-consumables only fire INITIAL_PURCHASE once per user.
+    const purchaseTypes = new Set([
+      "INITIAL_PURCHASE",
+      "NON_RENEWING_PURCHASE",
+      "UNCANCELLATION",
+    ]);
+    if (!purchaseTypes.has(eventType)) {
+      return c.json({ ok: true, ignored: true, type: eventType });
+    }
+
+    // Only act on our cosmetic products. Anything else (e.g. the existing
+    // ad-removal "premium" entitlement) is handled elsewhere.
+    if (!productId.startsWith("fantaf1.cosmetic.")) {
+      return c.json({ ok: true, ignored: true, reason: "non_cosmetic_product" });
+    }
+
+    const catalogEntry = COSMETIC_CATALOG[productId];
+    if (!catalogEntry) {
+      console.warn("Unknown cosmetic product in webhook:", productId);
+      return c.json({ ok: true, ignored: true, reason: "unknown_product" });
+    }
+
+    await ensureWebhookEventTable(sql as unknown as SqlExecutor);
+    await ensureUserCosmeticTable(sql as unknown as SqlExecutor);
+
+    // Idempotency gate — one row per event id.
+    const inserted = await sql`
+      INSERT INTO "WebhookEvent" (id, source)
+      VALUES (${eventId}, 'revenuecat')
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    `;
+    if (inserted.length === 0) {
+      return c.json({ ok: true, deduped: true });
+    }
+
+    // User must exist (client should call Purchases.logIn(user.id) pre-purchase).
+    const [user] = await sql`SELECT id FROM "User" WHERE id = ${appUserId}`;
+    if (!user) {
+      return c.json({ error: "user_not_found", appUserId }, 404);
+    }
+
+    // Expand bundle/pass to individual product IDs.
+    const productsToGrant = expandCosmeticProduct(productId);
+    if (productsToGrant.length === 0) {
+      return c.json({ ok: true, granted: 0 });
+    }
+
+    let grantedCount = 0;
+    await sql.begin(async (tx) => {
+      for (const pid of productsToGrant) {
+        const entry = COSMETIC_CATALOG[pid];
+        if (!entry || !isEquipCategory(entry.category)) continue;
+        const id = crypto.randomUUID();
+        const result = await tx`
+          INSERT INTO "UserCosmetic" (id, "userId", "productId", category)
+          VALUES (${id}, ${appUserId}, ${pid}, ${entry.category})
+          ON CONFLICT ("userId","productId") DO NOTHING
+          RETURNING id
+        `;
+        if (result.length > 0) grantedCount += 1;
+      }
+    });
+
+    return c.json({ ok: true, granted: grantedCount, productId });
+  } catch (e) {
+    console.error("RevenueCat webhook error:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
 });
 
 serve(app.fetch);
