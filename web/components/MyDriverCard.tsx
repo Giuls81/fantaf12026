@@ -30,6 +30,7 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
   const helmetId = equipped?.helmetProductId ?? null;
   const suitId = equipped?.suitProductId ?? null;
   const colorId = equipped?.colorProductId ?? null;
+  const liveryId = equipped?.liveryProductId ?? null;
 
   const colorItem = getCosmeticById(colorId);
   const accentHex = colorItem?.swatchHex ?? '#64748B'; // slate-500 fallback
@@ -46,6 +47,20 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
     : {
         background:
           'linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(15,23,42,0.6) 100%)',
+      };
+
+  // Livery: wider + asymmetric rounded corner on the right to hint at a
+  // car's nose profile. Same background fallback pattern as suit.
+  const liveryBgStyle: React.CSSProperties = liveryId
+    ? {
+        backgroundImage: `url(/cosmetics/${liveryId}@256.png)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }
+    : {
+        background:
+          'linear-gradient(90deg, rgba(30,41,59,0.7) 0%, rgba(71,85,105,0.7) 100%)',
       };
 
   const clickable = typeof onClick === 'function';
@@ -106,6 +121,22 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
         style={suitBgStyle}
         title={t({ en: 'Suit', it: 'Tuta', fr: 'Combinaison', de: 'Anzug', es: 'Traje', ru: 'Комбинезон', zh: '赛服', ar: 'بدلة', ja: 'スーツ' })}
       />
+
+      {/* Car livery — wider, asymmetric rounded corner hints at car nose */}
+      <div className="mx-4 mb-3 relative">
+        <div
+          className="h-12 border border-slate-700 relative overflow-hidden"
+          style={{
+            ...liveryBgStyle,
+            borderRadius: '6px 22px 6px 6px',
+          }}
+          title={t({ en: 'Car livery', it: 'Livrea auto', fr: 'Livrée voiture', de: 'Auto-Lackierung', es: 'Librea del coche', ru: 'Ливрея машины', zh: '赛车涂装', ar: 'طلاء السيارة', ja: 'カーリバリー' })}
+        >
+          {/* Wheel hint: two subtle dark circles at the bottom to suggest tyres */}
+          <div className="absolute bottom-0 left-3 w-4 h-2 bg-slate-950/60 rounded-full" />
+          <div className="absolute bottom-0 right-4 w-4 h-2 bg-slate-950/60 rounded-full" />
+        </div>
+      </div>
 
       {/* Accent colour bar */}
       <div className="px-4 pb-3 flex items-center gap-2">

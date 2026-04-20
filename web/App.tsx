@@ -2975,6 +2975,7 @@ const App: React.FC = () => {
     helmetProductId: 'fantaf1.cosmetic.helmet.chrome',
     suitProductId: 'fantaf1.cosmetic.suit.mosaic',
     colorProductId: 'fantaf1.cosmetic.color.emerald',
+    liveryProductId: 'fantaf1.cosmetic.livery.carbon',
   };
   const displayEquipped = {
     teamId: currentEquipped?.teamId ?? '',
@@ -2983,6 +2984,7 @@ const App: React.FC = () => {
     helmetProductId: currentEquipped?.helmetProductId ?? PREVIEW_SKIN.helmetProductId,
     suitProductId: currentEquipped?.suitProductId ?? PREVIEW_SKIN.suitProductId,
     colorProductId: currentEquipped?.colorProductId ?? PREVIEW_SKIN.colorProductId,
+    liveryProductId: currentEquipped?.liveryProductId ?? PREVIEW_SKIN.liveryProductId,
   };
 
   return (

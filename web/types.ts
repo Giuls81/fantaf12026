@@ -121,7 +121,7 @@ export interface AppData {
 
 // --- Cosmetics (Phase 4b, 2026-04-17) ---
 
-export type CosmeticCategory = 'emblem' | 'helmet' | 'suit' | 'color';
+export type CosmeticCategory = 'emblem' | 'helmet' | 'suit' | 'color' | 'livery';
 
 export interface OwnedCosmetic {
   productId: string;
@@ -137,6 +137,7 @@ export interface EquippedCosmetics {
   helmetProductId: string | null;
   suitProductId: string | null;
   colorProductId: string | null;
+  liveryProductId: string | null;
 }
 
 export interface CosmeticsState {

@@ -237,7 +237,7 @@ const ensureTeamPenaltyTable = async (db: SqlExecutor): Promise<boolean> => {
 // Categories 'bundle' and 'pass' are never written to UserCosmetic.category;
 // they expand into one row per contained item at grant time.
 
-type CosmeticCategory = "emblem" | "helmet" | "suit" | "color" | "bundle" | "pass";
+type CosmeticCategory = "emblem" | "helmet" | "suit" | "color" | "livery" | "bundle" | "pass";
 
 interface CosmeticCatalogEntry {
   category: CosmeticCategory;
@@ -286,12 +286,22 @@ const COSMETIC_COLORS = [
   "fantaf1.cosmetic.color.pure",
 ];
 
+const COSMETIC_LIVERIES = [
+  "fantaf1.cosmetic.livery.classic",
+  "fantaf1.cosmetic.livery.stealth",
+  "fantaf1.cosmetic.livery.racing",
+  "fantaf1.cosmetic.livery.rainbow",
+  "fantaf1.cosmetic.livery.carbon",
+  "fantaf1.cosmetic.livery.neon",
+];
+
 const COSMETIC_CATALOG: Record<string, CosmeticCatalogEntry> = {
   // Individual items
   ...Object.fromEntries(COSMETIC_EMBLEMS.map((id) => [id, { category: "emblem" as const }])),
   ...Object.fromEntries(COSMETIC_HELMETS.map((id) => [id, { category: "helmet" as const }])),
   ...Object.fromEntries(COSMETIC_SUITS.map((id) => [id, { category: "suit" as const }])),
   ...Object.fromEntries(COSMETIC_COLORS.map((id) => [id, { category: "color" as const }])),
+  ...Object.fromEntries(COSMETIC_LIVERIES.map((id) => [id, { category: "livery" as const }])),
   // Bundle: subset of items
   "fantaf1.cosmetic.bundle.starter": {
     category: "bundle",
@@ -317,14 +327,15 @@ const COSMETIC_CATALOG: Record<string, CosmeticCatalogEntry> = {
       ...COSMETIC_HELMETS,
       ...COSMETIC_SUITS,
       ...COSMETIC_COLORS,
+      ...COSMETIC_LIVERIES,
     ],
   },
 };
 
 const isEquipCategory = (
   cat: string,
-): cat is "emblem" | "helmet" | "suit" | "color" =>
-  cat === "emblem" || cat === "helmet" || cat === "suit" || cat === "color";
+): cat is "emblem" | "helmet" | "suit" | "color" | "livery" =>
+  cat === "emblem" || cat === "helmet" || cat === "suit" || cat === "color" || cat === "livery";
 
 // Expand a purchased product ID into the concrete list of equippable product
 // IDs it grants. Bundles/passes expand recursively (one level deep suffices
@@ -343,7 +354,7 @@ const ensureUserCosmeticTable = async (db: SqlExecutor): Promise<boolean> => {
         "id"          TEXT PRIMARY KEY,
         "userId"      TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
         "productId"   TEXT NOT NULL,
-        "category"    TEXT NOT NULL CHECK ("category" IN ('emblem','helmet','suit','color')),
+        "category"    TEXT NOT NULL CHECK ("category" IN ('emblem','helmet','suit','color','livery')),
         "purchasedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
       );
     `;
@@ -362,6 +373,7 @@ const ensureTeamCosmeticColumns = async (db: SqlExecutor): Promise<boolean> => {
     await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "helmetProductId" TEXT;`;
     await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "suitProductId" TEXT;`;
     await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "colorProductId" TEXT;`;
+    await db`ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "liveryProductId" TEXT;`;
     return true;
   } catch (e) {
     console.error("Team cosmetic columns unavailable:", e);
@@ -1855,7 +1867,7 @@ app.get("/me/cosmetics", requireUser, async (c) => {
     `;
 
     const teams = await sql`
-      SELECT id, "leagueId", "emblemProductId", "helmetProductId", "suitProductId", "colorProductId"
+      SELECT id, "leagueId", "emblemProductId", "helmetProductId", "suitProductId", "colorProductId", "liveryProductId"
       FROM "Team"
       WHERE "userId" = ${user.id}
     `;
@@ -1873,6 +1885,7 @@ app.get("/me/cosmetics", requireUser, async (c) => {
         helmetProductId: t.helmetProductId,
         suitProductId: t.suitProductId,
         colorProductId: t.colorProductId,
+        liveryProductId: t.liveryProductId,
       })),
     });
   } catch (e) {
@@ -1928,7 +1941,8 @@ app.post("/me/cosmetics/equip", requireUser, async (c) => {
       category === "emblem" ? "emblemProductId" :
       category === "helmet" ? "helmetProductId" :
       category === "suit"   ? "suitProductId"   :
-      "colorProductId";
+      category === "color"  ? "colorProductId"  :
+      "liveryProductId";
 
     // Postgres.js does not allow dynamic column names inside tagged templates,
     // so we branch. The value is still safely parameterised.
@@ -1938,8 +1952,10 @@ app.post("/me/cosmetics/equip", requireUser, async (c) => {
       await sql`UPDATE "Team" SET "helmetProductId" = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
     } else if (category === "suit") {
       await sql`UPDATE "Team" SET "suitProductId"   = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
-    } else {
+    } else if (category === "color") {
       await sql`UPDATE "Team" SET "colorProductId"  = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
+    } else {
+      await sql`UPDATE "Team" SET "liveryProductId" = ${productId}, "updatedAt" = ${new Date().toISOString()} WHERE id = ${teamId}`;
     }
 
     return c.json({ ok: true, teamId, category, productId, column });

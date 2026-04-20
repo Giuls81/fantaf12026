@@ -90,6 +90,12 @@ const Storefront: React.FC<StorefrontProps> = ({
       tileSize: 56,
       columns: 4,
     },
+    {
+      key: 'livery',
+      label: t({ en: 'Liveries', it: 'Livree', fr: 'Livrées', de: 'Lackierungen', es: 'Libreas', ru: 'Ливреи', zh: '涂装', ar: 'طلاءات السيارة', ja: 'リバリー' }),
+      tileSize: 80,
+      columns: 2,
+    },
   ];
 
   if (!isOpen) return null;

@@ -72,6 +72,14 @@ export const COSMETIC_CATALOG: CosmeticItem[] = [
   mk('fantaf1.cosmetic.color.rosegold', 'color', 'Rose Gold', 0.99, { swatchHex: '#B76E79' }),
   mk('fantaf1.cosmetic.color.pure', 'color', 'Pure White', 0.99, { swatchHex: '#FFFFFF' }),
 
+  // Liveries (€2.99) — car paint schemes, rendered as a wide strip in the UI
+  mk('fantaf1.cosmetic.livery.classic', 'livery', 'Classic Stripes', 2.99),
+  mk('fantaf1.cosmetic.livery.stealth', 'livery', 'Stealth Matte', 2.99),
+  mk('fantaf1.cosmetic.livery.racing', 'livery', 'Racing Red', 2.99),
+  mk('fantaf1.cosmetic.livery.rainbow', 'livery', 'Rainbow Flow', 2.99),
+  mk('fantaf1.cosmetic.livery.carbon', 'livery', 'Carbon Weave', 2.99),
+  mk('fantaf1.cosmetic.livery.neon', 'livery', 'Neon Circuit', 2.99),
+
   // Bundle (€7.99)
   mk('fantaf1.cosmetic.bundle.starter', 'bundle', 'Starter Aesthetic Bundle', 7.99, {
     containedProductIds: [
@@ -88,7 +96,7 @@ export const COSMETIC_CATALOG: CosmeticItem[] = [
     ],
   }),
 
-  // Season Pass (€19.99) — unlocks everything current + future drops
+  // Season Pass (€19.99) — unlocks all emblems/helmets/suits/colors/liveries
   mk('fantaf1.cosmetic.pass.season2026', 'pass', 'Season Aesthetic Pass 2026', 19.99),
 ];
 
