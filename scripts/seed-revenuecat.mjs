@@ -75,6 +75,13 @@ const CATALOG = [
   { id: 'fantaf1.cosmetic.color.molten', name: 'Molten Orange' },
   { id: 'fantaf1.cosmetic.color.rosegold', name: 'Rose Gold' },
   { id: 'fantaf1.cosmetic.color.pure', name: 'Pure White' },
+  // Liveries (€2.99)
+  { id: 'fantaf1.cosmetic.livery.classic', name: 'Classic Stripes' },
+  { id: 'fantaf1.cosmetic.livery.stealth', name: 'Stealth Matte' },
+  { id: 'fantaf1.cosmetic.livery.racing', name: 'Racing Red' },
+  { id: 'fantaf1.cosmetic.livery.rainbow', name: 'Rainbow Flow' },
+  { id: 'fantaf1.cosmetic.livery.carbon', name: 'Carbon Weave' },
+  { id: 'fantaf1.cosmetic.livery.neon', name: 'Neon Circuit' },
   // Bundle (€7.99)
   { id: 'fantaf1.cosmetic.bundle.starter', name: 'Starter Aesthetic Bundle' },
   // Season Pass (€19.99) — will be attached to the cosmetic_pass_2026 entitlement
