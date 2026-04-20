@@ -47,12 +47,22 @@ for (const source of sources) {
   const srcPath = join(SRC_DIR, source);
   const stem = basename(source, '.png'); // e.g. fantaf1.cosmetic.emblem.lightning
 
+  // Livery sources are often portrait (AI keeps generating them rectangular).
+  // Use `cover` so the square output is edge-to-edge without transparent
+  // margins — we lose some top/bottom content but livery patterns are
+  // repetitive enough that center-cropping looks fine. All other categories
+  // (emblem/helmet/suit) keep `contain` so the subject stays centered and
+  // unclipped against a transparent background.
+  const isLivery = stem.startsWith('fantaf1.cosmetic.livery.');
+  const fit = isLivery ? 'cover' : 'contain';
+
   for (const size of SIZES) {
     const outPath = join(OUT_DIR, `${stem}@${size}.png`);
     try {
       await sharp(srcPath)
         .resize(size, size, {
-          fit: 'contain',
+          fit,
+          position: 'center',
           background: { r: 0, g: 0, b: 0, alpha: 0 },
         })
         .png({ compressionLevel: 9, adaptiveFiltering: true })
