@@ -218,6 +218,18 @@ workflows:
         VITE_ADS_TEST_MODE: "false"
         VITE_ADS_DEBUG_LOGS: "false"
         CAPGO_CHANNEL: "production"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+      changeset:
+        includes:
+          - 'web/**'
+          - 'codemagic.yaml'
     scripts:
       - name: Install deps
         script: |
