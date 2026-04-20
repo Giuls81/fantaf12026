@@ -264,10 +264,17 @@ workflows:
             echo "Missing CAPGO_APP_ID"
             exit 1
           fi
+          # Capgo rejects duplicate bundle versions. Append the short commit
+          # SHA so every OTA upload gets a unique version string like
+          # "1.0.0-b7ad2fc". Falls back to a timestamp if git isn't available.
+          BUNDLE_SUFFIX="$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
+          BUNDLE_VERSION="1.0.0-${BUNDLE_SUFFIX}"
+          echo "Uploading bundle version: $BUNDLE_VERSION"
           npx @capgo/cli@latest bundle upload "$CAPGO_APP_ID" \
             -a "$CAPGO_API_KEY" \
             -p web/dist \
             -c "$CAPGO_CHANNEL" \
+            -b "$BUNDLE_VERSION" \
             --package-json web/package.json \
             --node-modules web/node_modules \
             --delta
