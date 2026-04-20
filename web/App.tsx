@@ -1166,7 +1166,7 @@ const App: React.FC = () => {
                    const canClick = !!selectedRaceId;
                    const isMe = s.userId === data?.user?.id;
                    const myAccentHex = isMe
-                     ? getCosmeticById(currentEquipped?.colorProductId ?? null)?.swatchHex ?? null
+                     ? getCosmeticById(displayEquipped.colorProductId)?.swatchHex ?? null
                      : null;
                    return (
                     <div
@@ -1861,7 +1861,7 @@ const App: React.FC = () => {
 
             {/* Cosmetics showcase (Phase 4b + driver card) */}
             <MyDriverCard
-              equipped={currentEquipped}
+              equipped={displayEquipped}
               t={t}
               onClick={() => setShowStorefront(true)}
             />
@@ -2024,13 +2024,11 @@ const App: React.FC = () => {
                       <li key={id} className="bg-slate-800 p-3 rounded flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <div className={`w-1 h-8 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
-                          {currentEquipped?.helmetProductId && (
-                            <CosmeticSlot
-                              productId={currentEquipped.helmetProductId}
-                              size={28}
-                              title={t({ en: 'Your helmet', it: 'Il tuo casco' })}
-                            />
-                          )}
+                          <CosmeticSlot
+                            productId={displayEquipped.helmetProductId}
+                            size={28}
+                            title={t({ en: 'Your helmet', it: 'Il tuo casco' })}
+                          />
                           <div>
                             <div className="text-white font-medium">{d?.name}</div>
                             <div className="text-xs text-slate-400">{c?.name}</div>
@@ -2114,13 +2112,11 @@ const App: React.FC = () => {
                     <div key={id} className={`bg-slate-800 p-3 rounded flex justify-between items-center border ${isCaptain ? 'border-yellow-500' : isReserve ? 'border-green-500' : 'border-slate-700'}`}>
                       <div className="flex items-center gap-2">
                         <div className={`w-1 h-8 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
-                        {currentEquipped?.helmetProductId && (
-                          <CosmeticSlot
-                            productId={currentEquipped.helmetProductId}
-                            size={28}
-                            title={t({ en: 'Your helmet', it: 'Il tuo casco' })}
-                          />
-                        )}
+                        <CosmeticSlot
+                          productId={displayEquipped.helmetProductId}
+                          size={28}
+                          title={t({ en: 'Your helmet', it: 'Il tuo casco' })}
+                        />
                         <div>
                           <div className="text-white font-medium flex items-center gap-2">
                             {d?.name}
@@ -2968,6 +2964,26 @@ const App: React.FC = () => {
     ? cosmeticsState.equipped.find((e) => e.leagueId === data.user!.leagueId) ?? null
     : null;
   const currentTeamId = currentEquipped?.teamId ?? null;
+
+  // Preview skin — default cosmetics shown when a slot is empty, so the UI
+  // isn't full of placeholders while nobody has purchased anything yet.
+  // Does NOT grant ownership; Storefront still shows real "In use" / "Buy"
+  // states against `currentEquipped`. Remove or gate behind a feature flag
+  // once users have real ownership data.
+  const PREVIEW_SKIN = {
+    emblemProductId: 'fantaf1.cosmetic.emblem.compass',
+    helmetProductId: 'fantaf1.cosmetic.helmet.chrome',
+    suitProductId: 'fantaf1.cosmetic.suit.mosaic',
+    colorProductId: 'fantaf1.cosmetic.color.emerald',
+  };
+  const displayEquipped = {
+    teamId: currentEquipped?.teamId ?? '',
+    leagueId: currentEquipped?.leagueId ?? (data?.user?.leagueId ?? ''),
+    emblemProductId: currentEquipped?.emblemProductId ?? PREVIEW_SKIN.emblemProductId,
+    helmetProductId: currentEquipped?.helmetProductId ?? PREVIEW_SKIN.helmetProductId,
+    suitProductId: currentEquipped?.suitProductId ?? PREVIEW_SKIN.suitProductId,
+    colorProductId: currentEquipped?.colorProductId ?? PREVIEW_SKIN.colorProductId,
+  };
 
   return (
     <>
