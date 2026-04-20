@@ -115,26 +115,44 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
         />
       </div>
 
-      {/* Suit pattern — full-width strip */}
-      <div
-        className="mx-4 mb-2 h-10 rounded-lg border border-slate-700"
-        style={suitBgStyle}
-        title={t({ en: 'Suit', it: 'Tuta', fr: 'Combinaison', de: 'Anzug', es: 'Traje', ru: 'Комбинезон', zh: '赛服', ar: 'بدلة', ja: 'スーツ' })}
-      />
-
-      {/* Car livery — wider, asymmetric rounded corner hints at car nose */}
+      {/* Suit pattern — wrapped in a vest-like V-neck silhouette + label */}
       <div className="mx-4 mb-3 relative">
         <div
-          className="h-12 border border-slate-700 relative overflow-hidden"
+          className="h-14 border border-slate-700 relative overflow-hidden rounded-lg"
+          style={suitBgStyle}
+          title={t({ en: 'Suit', it: 'Tuta', fr: 'Combinaison', de: 'Anzug', es: 'Traje', ru: 'Комбинезон', zh: '赛服', ar: 'بدلة', ja: 'スーツ' })}
+        >
+          {/* V-neck hint at the top center, shoulders rounded */}
+          <div
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-3 bg-slate-900/80"
+            style={{ clipPath: 'polygon(0 0, 100% 0, 60% 100%, 40% 100%)' }}
+          />
+          {/* Label pill */}
+          <div className="absolute top-1 left-2 bg-slate-950/75 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-slate-100 uppercase">
+            🧥 {t({ en: 'Suit', it: 'Tuta', fr: 'Combinaison', de: 'Anzug', es: 'Traje', ru: 'Костюм', zh: '赛服', ar: 'بدلة', ja: 'スーツ' })}
+          </div>
+        </div>
+      </div>
+
+      {/* Car livery — shaped like an F1 side profile: cockpit bump,
+          rear wing, bigger tyres + front nose cone */}
+      <div className="mx-4 mb-3 relative">
+        <div
+          className="h-16 border border-slate-700 relative overflow-hidden"
           style={{
             ...liveryBgStyle,
-            borderRadius: '6px 22px 6px 6px',
+            // Shape: flat bottom, rising cockpit bump, rear wing, tapered nose
+            clipPath:
+              'polygon(0% 75%, 0% 55%, 8% 55%, 10% 25%, 12% 20%, 50% 20%, 55% 40%, 80% 40%, 92% 50%, 100% 65%, 100% 75%, 90% 75%, 87% 85%, 78% 85%, 75% 75%, 25% 75%, 22% 85%, 13% 85%, 10% 75%)',
           }}
           title={t({ en: 'Car livery', it: 'Livrea auto', fr: 'Livrée voiture', de: 'Auto-Lackierung', es: 'Librea del coche', ru: 'Ливрея машины', zh: '赛车涂装', ar: 'طلاء السيارة', ja: 'カーリバリー' })}
-        >
-          {/* Wheel hint: two subtle dark circles at the bottom to suggest tyres */}
-          <div className="absolute bottom-0 left-3 w-4 h-2 bg-slate-950/60 rounded-full" />
-          <div className="absolute bottom-0 right-4 w-4 h-2 bg-slate-950/60 rounded-full" />
+        />
+        {/* Two visible tyres overlaid on top (not clipped) */}
+        <div className="absolute bottom-0 left-[11%] w-5 h-5 bg-slate-950 rounded-full border-2 border-slate-800" />
+        <div className="absolute bottom-0 right-[16%] w-5 h-5 bg-slate-950 rounded-full border-2 border-slate-800" />
+        {/* Label pill */}
+        <div className="absolute top-1 left-2 bg-slate-950/75 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-slate-100 uppercase">
+          🏎️ {t({ en: 'Livery', it: 'Livrea', fr: 'Livrée', de: 'Lackierung', es: 'Librea', ru: 'Ливрея', zh: '涂装', ar: 'طلاء', ja: 'リバリー' })}
         </div>
       </div>
 
