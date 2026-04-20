@@ -11,9 +11,10 @@ import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './con
 import { getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
 import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings, getPurchasesInitIssue, logInUser } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
-import { fetchMyCosmetics } from './services/cosmetics';
+import { fetchMyCosmetics, getCosmeticById } from './services/cosmetics';
 import Storefront from './components/Storefront';
 import CosmeticSlot from './components/CosmeticSlot';
+import MyDriverCard from './components/MyDriverCard';
 import type { CosmeticsState } from './types';
 // RACES_2026 removed
 
@@ -1163,9 +1164,13 @@ const App: React.FC = () => {
                 {standings.map((s, idx) => {
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
                    const canClick = !!selectedRaceId;
+                   const isMe = s.userId === data?.user?.id;
+                   const myAccentHex = isMe
+                     ? getCosmeticById(currentEquipped?.colorProductId ?? null)?.swatchHex ?? null
+                     : null;
                    return (
-                    <div 
-                      key={s.userId} 
+                    <div
+                      key={s.userId}
                       onClick={async () => {
                         if (!canClick || !data?.user?.leagueId) return;
                         // If we already have results, show immediately
@@ -1186,7 +1191,8 @@ const App: React.FC = () => {
                           setViewingResult({ userId: s.userId, userName: s.userName, points: 0, drivers: [] });
                         }
                       }}
-                      className={`p-4 flex justify-between items-center ${s.userId === data?.user?.id ? 'bg-blue-900/10' : ''} ${canClick ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
+                      className={`p-4 flex justify-between items-center ${isMe ? 'bg-blue-900/10' : ''} ${canClick ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
+                      style={myAccentHex ? { borderLeft: `4px solid ${myAccentHex}`, paddingLeft: 12 } : undefined}
                     >
                        <div className="flex items-center gap-4">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
@@ -1853,29 +1859,12 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Cosmetics storefront CTA (Phase 4b) */}
-            <button
+            {/* Cosmetics showcase (Phase 4b + driver card) */}
+            <MyDriverCard
+              equipped={currentEquipped}
+              t={t}
               onClick={() => setShowStorefront(true)}
-              className="w-full bg-slate-800 hover:bg-slate-700 p-4 rounded-xl border border-slate-700 flex items-center justify-between gap-3 text-left transition"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <CosmeticSlot
-                  productId={currentEquipped?.emblemProductId ?? null}
-                  size={36}
-                  fallbackLabel="🎨"
-                  fallbackHex="#1E293B"
-                />
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-white truncate">
-                    {t({ en: 'Customize your team', it: 'Personalizza il tuo team', fr: 'Personnaliser votre équipe', de: 'Team anpassen', es: 'Personaliza tu equipo' })}
-                  </div>
-                  <div className="text-[11px] text-slate-400 truncate">
-                    {t({ en: 'Emblems, helmets, suits, colors', it: 'Emblemi, caschi, tute, colori' })}
-                  </div>
-                </div>
-              </div>
-              <span className="text-slate-400 text-sm shrink-0">→</span>
-            </button>
+            />
 
             {!isPremium && (
               <div className="bg-gradient-to-r from-yellow-900/40 to-amber-900/40 p-4 rounded-xl border border-yellow-700/50">
@@ -2035,6 +2024,13 @@ const App: React.FC = () => {
                       <li key={id} className="bg-slate-800 p-3 rounded flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <div className={`w-1 h-8 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
+                          {currentEquipped?.helmetProductId && (
+                            <CosmeticSlot
+                              productId={currentEquipped.helmetProductId}
+                              size={28}
+                              title={t({ en: 'Your helmet', it: 'Il tuo casco' })}
+                            />
+                          )}
                           <div>
                             <div className="text-white font-medium">{d?.name}</div>
                             <div className="text-xs text-slate-400">{c?.name}</div>
@@ -2118,6 +2114,13 @@ const App: React.FC = () => {
                     <div key={id} className={`bg-slate-800 p-3 rounded flex justify-between items-center border ${isCaptain ? 'border-yellow-500' : isReserve ? 'border-green-500' : 'border-slate-700'}`}>
                       <div className="flex items-center gap-2">
                         <div className={`w-1 h-8 rounded-full ${c ? `constr-bg-${c.id}` : 'constr-bg-default'}`}></div>
+                        {currentEquipped?.helmetProductId && (
+                          <CosmeticSlot
+                            productId={currentEquipped.helmetProductId}
+                            size={28}
+                            title={t({ en: 'Your helmet', it: 'Il tuo casco' })}
+                          />
+                        )}
                         <div>
                           <div className="text-white font-medium flex items-center gap-2">
                             {d?.name}
