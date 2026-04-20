@@ -6,6 +6,7 @@
 // the new row appears (up to ~20s across retries), then updates state.
 //
 // Added 2026-04-17 — Phase 4b.
+// Localised 2026-04-20 — accepts t() prop, mirrors App.tsx's 9-language setup.
 
 import React, { useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
@@ -23,6 +24,8 @@ import type {
   EquippedCosmetics,
 } from '../types';
 
+type Translator = (dict: Record<string, string>) => string;
+
 interface StorefrontProps {
   isOpen: boolean;
   onClose: () => void;
@@ -30,19 +33,13 @@ interface StorefrontProps {
   equippedForTeam: EquippedCosmetics | null;
   teamId: string | null;
   onStateChange: (next: CosmeticsState) => void;
+  t: Translator;
 }
 
 type BusyState =
   | { kind: 'idle' }
   | { kind: 'buying'; productId: string }
   | { kind: 'equipping'; productId: string };
-
-const CATEGORY_ORDER: { key: CosmeticCategory; label: string; tileSize: number; columns: number }[] = [
-  { key: 'emblem', label: 'Emblemi', tileSize: 64, columns: 4 },
-  { key: 'helmet', label: 'Caschi', tileSize: 64, columns: 4 },
-  { key: 'suit', label: 'Tute', tileSize: 72, columns: 3 },
-  { key: 'color', label: 'Colori', tileSize: 56, columns: 4 },
-];
 
 const formatPrice = (eur: number): string =>
   `€${eur.toFixed(2).replace('.', ',')}`;
@@ -54,6 +51,7 @@ const Storefront: React.FC<StorefrontProps> = ({
   equippedForTeam,
   teamId,
   onStateChange,
+  t,
 }) => {
   const [busy, setBusy] = useState<BusyState>({ kind: 'idle' });
   const [flash, setFlash] = useState<string | null>(null);
@@ -65,11 +63,50 @@ const Storefront: React.FC<StorefrontProps> = ({
 
   const isNative = Capacitor.getPlatform() !== 'web';
 
+  // Localised category metadata. Keep the label generation inside the
+  // component so every render picks up the current language.
+  const categoryGroups: { key: CosmeticCategory; label: string; tileSize: number; columns: number }[] = [
+    {
+      key: 'emblem',
+      label: t({ en: 'Emblems', it: 'Emblemi', fr: 'Emblèmes', de: 'Embleme', es: 'Emblemas', ru: 'Эмблемы', zh: '徽章', ar: 'شعارات', ja: 'エンブレム' }),
+      tileSize: 64,
+      columns: 4,
+    },
+    {
+      key: 'helmet',
+      label: t({ en: 'Helmets', it: 'Caschi', fr: 'Casques', de: 'Helme', es: 'Cascos', ru: 'Шлемы', zh: '头盔', ar: 'خوذ', ja: 'ヘルメット' }),
+      tileSize: 64,
+      columns: 4,
+    },
+    {
+      key: 'suit',
+      label: t({ en: 'Suits', it: 'Tute', fr: 'Combinaisons', de: 'Anzüge', es: 'Trajes', ru: 'Комбинезоны', zh: '赛服', ar: 'بدلات', ja: 'スーツ' }),
+      tileSize: 72,
+      columns: 3,
+    },
+    {
+      key: 'color',
+      label: t({ en: 'Colors', it: 'Colori', fr: 'Couleurs', de: 'Farben', es: 'Colores', ru: 'Цвета', zh: '颜色', ar: 'ألوان', ja: 'カラー' }),
+      tileSize: 56,
+      columns: 4,
+    },
+  ];
+
   if (!isOpen) return null;
 
   const handleBuy = async (item: CosmeticItem) => {
     if (!isNative) {
-      setFlash('Gli acquisti sono disponibili solo nell\'app mobile.');
+      setFlash(t({
+        en: 'Purchases are only available in the mobile app.',
+        it: "Gli acquisti sono disponibili solo nell'app mobile.",
+        fr: "Les achats sont disponibles uniquement dans l'application mobile.",
+        de: 'Käufe sind nur in der mobilen App verfügbar.',
+        es: 'Las compras están disponibles solo en la app móvil.',
+        ru: 'Покупки доступны только в мобильном приложении.',
+        zh: '购买仅在移动应用中可用。',
+        ar: 'عمليات الشراء متاحة فقط في التطبيق الجوّال.',
+        ja: '購入はモバイルアプリでのみ可能です。',
+      }));
       setTimeout(() => setFlash(null), 3000);
       return;
     }
@@ -79,21 +116,70 @@ const Storefront: React.FC<StorefrontProps> = ({
       const result = await buyCosmeticAndRefresh(item.productId);
       if (result.ok) {
         onStateChange(result.state);
-        setFlash(`✓ Sbloccato: ${item.displayName}`);
+        setFlash(t({
+          en: `✓ Unlocked: ${item.displayName}`,
+          it: `✓ Sbloccato: ${item.displayName}`,
+          fr: `✓ Débloqué : ${item.displayName}`,
+          de: `✓ Freigeschaltet: ${item.displayName}`,
+          es: `✓ Desbloqueado: ${item.displayName}`,
+          ru: `✓ Разблокировано: ${item.displayName}`,
+          zh: `✓ 已解锁：${item.displayName}`,
+          ar: `✓ تم الفتح: ${item.displayName}`,
+          ja: `✓ 解除済み: ${item.displayName}`,
+        }));
       } else if (result.reason === 'user_cancelled') {
         // Silent
       } else if (result.reason === 'not_found') {
-        setFlash('Prodotto non disponibile nello store. Riprova tra qualche minuto.');
+        setFlash(t({
+          en: 'Product not available in the store yet. Try again in a few minutes.',
+          it: 'Prodotto non disponibile nello store. Riprova tra qualche minuto.',
+          fr: "Produit non encore disponible dans la boutique. Réessayez dans quelques minutes.",
+          de: 'Produkt im Store noch nicht verfügbar. Bitte in ein paar Minuten erneut versuchen.',
+          es: 'Producto aún no disponible en la tienda. Inténtalo de nuevo en unos minutos.',
+          ru: 'Товар пока недоступен в магазине. Повторите попытку через несколько минут.',
+          zh: '商店中暂时无此商品，请稍后再试。',
+          ar: 'المنتج غير متاح في المتجر حاليًا. حاول مرة أخرى بعد دقائق.',
+          ja: 'ストアでまだ購入できません。しばらくしてから再度お試しください。',
+        }));
       } else if (result.reason === 'webhook_timeout' && result.state) {
-        // Grant may still land; show current state anyway
         onStateChange(result.state);
-        setFlash('Acquisto in elaborazione — controlla tra un minuto.');
+        setFlash(t({
+          en: 'Purchase is being processed — check back in a minute.',
+          it: 'Acquisto in elaborazione — controlla tra un minuto.',
+          fr: "Achat en cours de traitement — revenez dans une minute.",
+          de: 'Kauf wird verarbeitet — in einer Minute erneut prüfen.',
+          es: 'Compra en proceso — vuelve a comprobar en un minuto.',
+          ru: 'Покупка обрабатывается — проверьте через минуту.',
+          zh: '购买处理中，请一分钟后再查看。',
+          ar: 'جاري معالجة الشراء — عاود التحقق بعد دقيقة.',
+          ja: '購入を処理中です。1分後に再度ご確認ください。',
+        }));
       } else {
-        setFlash('Acquisto non riuscito. Riprova.');
+        setFlash(t({
+          en: 'Purchase failed. Try again.',
+          it: 'Acquisto non riuscito. Riprova.',
+          fr: 'Échec de l’achat. Réessayez.',
+          de: 'Kauf fehlgeschlagen. Bitte erneut versuchen.',
+          es: 'La compra falló. Inténtalo de nuevo.',
+          ru: 'Не удалось выполнить покупку. Повторите попытку.',
+          zh: '购买失败，请重试。',
+          ar: 'فشل الشراء. حاول مرة أخرى.',
+          ja: '購入に失敗しました。もう一度お試しください。',
+        }));
       }
     } catch (e) {
       console.error('handleBuy error', e);
-      setFlash('Acquisto non riuscito. Riprova.');
+      setFlash(t({
+        en: 'Purchase failed. Try again.',
+        it: 'Acquisto non riuscito. Riprova.',
+        fr: 'Échec de l’achat. Réessayez.',
+        de: 'Kauf fehlgeschlagen. Bitte erneut versuchen.',
+        es: 'La compra falló. Inténtalo de nuevo.',
+        ru: 'Не удалось выполнить покупку. Повторите попытку.',
+        zh: '购买失败,请重试。',
+        ar: 'فشل الشراء. حاول مرة أخرى.',
+        ja: '購入に失敗しました。もう一度お試しください。',
+      }));
     } finally {
       setBusy({ kind: 'idle' });
       setTimeout(() => setFlash(null), 4000);
@@ -106,7 +192,6 @@ const Storefront: React.FC<StorefrontProps> = ({
     setBusy({ kind: 'equipping', productId: item.productId });
     try {
       await equipCosmetic(teamId, item.category, item.productId);
-      // Optimistic local update (state change reflected on next refetch)
       if (equippedForTeam && state) {
         const field =
           item.category === 'emblem' ? 'emblemProductId' :
@@ -118,10 +203,30 @@ const Storefront: React.FC<StorefrontProps> = ({
         );
         onStateChange({ ...state, equipped: nextEquipped });
       }
-      setFlash(`Equipaggiato: ${item.displayName}`);
+      setFlash(t({
+        en: `Equipped: ${item.displayName}`,
+        it: `Equipaggiato: ${item.displayName}`,
+        fr: `Équipé : ${item.displayName}`,
+        de: `Ausgerüstet: ${item.displayName}`,
+        es: `Equipado: ${item.displayName}`,
+        ru: `Экипировано: ${item.displayName}`,
+        zh: `已装备：${item.displayName}`,
+        ar: `تم التجهيز: ${item.displayName}`,
+        ja: `装備しました: ${item.displayName}`,
+      }));
     } catch (e) {
       console.error('handleEquip error', e);
-      setFlash('Impossibile equipaggiare.');
+      setFlash(t({
+        en: 'Could not equip.',
+        it: 'Impossibile equipaggiare.',
+        fr: 'Impossible d’équiper.',
+        de: 'Ausrüsten nicht möglich.',
+        es: 'No se pudo equipar.',
+        ru: 'Не удалось экипировать.',
+        zh: '无法装备。',
+        ar: 'تعذّر التجهيز.',
+        ja: '装備できませんでした。',
+      }));
     } finally {
       setBusy({ kind: 'idle' });
       setTimeout(() => setFlash(null), 3000);
@@ -176,13 +281,17 @@ const Storefront: React.FC<StorefrontProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
           <div>
-            <h2 className="text-lg font-bold">Personalizza il tuo team</h2>
-            <p className="text-xs text-slate-400">Emblemi, caschi, tute, colori</p>
+            <h2 className="text-lg font-bold">
+              {t({ en: 'Customize your team', it: 'Personalizza il tuo team', fr: 'Personnaliser votre équipe', de: 'Team anpassen', es: 'Personaliza tu equipo', ru: 'Настройте команду', zh: '自定义你的车队', ar: 'خصّص فريقك', ja: 'チームをカスタマイズ' })}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {t({ en: 'Emblems, helmets, suits, colors', it: 'Emblemi, caschi, tute, colori', fr: 'Emblèmes, casques, combinaisons, couleurs', de: 'Embleme, Helme, Anzüge, Farben', es: 'Emblemas, cascos, trajes, colores', ru: 'Эмблемы, шлемы, комбинезоны, цвета', zh: '徽章、头盔、赛服、颜色', ar: 'شعارات وخوذ وبدلات وألوان', ja: 'エンブレム・ヘルメット・スーツ・カラー' })}
+            </p>
           </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center"
-            aria-label="Chiudi"
+            aria-label={t({ en: 'Close', it: 'Chiudi', fr: 'Fermer', de: 'Schließen', es: 'Cerrar', ru: 'Закрыть', zh: '关闭', ar: 'إغلاق', ja: '閉じる' })}
           >
             ✕
           </button>
@@ -194,11 +303,13 @@ const Storefront: React.FC<StorefrontProps> = ({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold text-amber-300 uppercase tracking-wide">
-                  Season Pass 2026
+                  {t({ en: 'Season Pass 2026', it: 'Season Pass 2026', fr: 'Season Pass 2026', de: 'Season Pass 2026', es: 'Season Pass 2026', ru: 'Season Pass 2026', zh: 'Season Pass 2026', ar: 'Season Pass 2026', ja: 'Season Pass 2026' })}
                 </div>
-                <div className="text-base font-bold">Sblocca tutto subito</div>
+                <div className="text-base font-bold">
+                  {t({ en: 'Unlock everything now', it: 'Sblocca tutto subito', fr: 'Débloquez tout maintenant', de: 'Alles sofort freischalten', es: 'Desbloquea todo ahora', ru: 'Разблокируйте всё сейчас', zh: '立即解锁全部', ar: 'افتح كل شيء الآن', ja: '今すぐすべて解除' })}
+                </div>
                 <div className="text-xs text-slate-300 mt-1">
-                  Tutti gli emblemi, caschi, tute e colori del catalogo 2026.
+                  {t({ en: 'All emblems, helmets, suits and colors from the 2026 catalog.', it: 'Tutti gli emblemi, caschi, tute e colori del catalogo 2026.', fr: 'Tous les emblèmes, casques, combinaisons et couleurs du catalogue 2026.', de: 'Alle Embleme, Helme, Anzüge und Farben aus dem Katalog 2026.', es: 'Todos los emblemas, cascos, trajes y colores del catálogo 2026.', ru: 'Все эмблемы, шлемы, комбинезоны и цвета из каталога 2026.', zh: '2026 系列的全部徽章、头盔、赛服和颜色。', ar: 'جميع الشعارات والخوذ والبدلات والألوان من كتالوج 2026.', ja: '2026年カタログのすべてのエンブレム、ヘルメット、スーツ、カラー。' })}
                 </div>
               </div>
               <button
@@ -215,22 +326,24 @@ const Storefront: React.FC<StorefrontProps> = ({
         )}
         {seasonPass && ownedIds.has(seasonPass.productId) && (
           <div className="mx-3 my-2 px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-600/40 text-xs text-emerald-300 font-semibold">
-            ✓ Season Pass attivo — tutti i cosmetici sbloccati
+            {t({ en: '✓ Season Pass active — every cosmetic unlocked', it: '✓ Season Pass attivo — tutti i cosmetici sbloccati', fr: '✓ Season Pass actif — tous les cosmétiques débloqués', de: '✓ Season Pass aktiv — alle Kosmetika freigeschaltet', es: '✓ Season Pass activo — todos los cosméticos desbloqueados', ru: '✓ Season Pass активен — все косметические предметы разблокированы', zh: '✓ Season Pass 已启用 — 所有装饰均已解锁', ar: '✓ تمريرة الموسم مفعّلة — جميع التجميلات مفتوحة', ja: '✓ シーズンパス有効 — すべてのコスメ解除済み' })}
           </div>
         )}
 
-        {/* Starter bundle (only shown if pass not owned) */}
+        {/* Starter bundle */}
         {starterBundle && !ownedIds.has(starterBundle.productId) &&
           seasonPass && !ownedIds.has(seasonPass.productId) && (
           <div className="mx-3 mb-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  Bundle starter
+                  {t({ en: 'Starter bundle', it: 'Bundle starter', fr: 'Pack de démarrage', de: 'Starter-Bundle', es: 'Pack inicial', ru: 'Стартовый набор', zh: '入门礼包', ar: 'حزمة البداية', ja: 'スターターバンドル' })}
                 </div>
-                <div className="text-sm font-bold">10 cosmetici selezionati</div>
+                <div className="text-sm font-bold">
+                  {t({ en: '10 curated cosmetics', it: '10 cosmetici selezionati', fr: '10 cosmétiques sélectionnés', de: '10 ausgewählte Kosmetika', es: '10 cosméticos seleccionados', ru: '10 отборных косметических предметов', zh: '10 件精选装饰', ar: '10 تجميلات مختارة', ja: '厳選コスメ10点' })}
+                </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
-                  4 emblemi · 4 caschi · 2 colori
+                  {t({ en: '4 emblems · 4 helmets · 2 colors', it: '4 emblemi · 4 caschi · 2 colori', fr: '4 emblèmes · 4 casques · 2 couleurs', de: '4 Embleme · 4 Helme · 2 Farben', es: '4 emblemas · 4 cascos · 2 colores', ru: '4 эмблемы · 4 шлема · 2 цвета', zh: '4 徽章 · 4 头盔 · 2 颜色', ar: '4 شعارات · 4 خوذ · 2 لون', ja: 'エンブレム4 · ヘルメット4 · カラー2' })}
                 </div>
               </div>
               <button
@@ -244,7 +357,7 @@ const Storefront: React.FC<StorefrontProps> = ({
           </div>
         )}
 
-        {/* Flash message */}
+        {/* Flash */}
         {flash && (
           <div className="mx-3 mb-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200">
             {flash}
@@ -253,7 +366,7 @@ const Storefront: React.FC<StorefrontProps> = ({
 
         {/* Category grids */}
         <div className="overflow-y-auto px-3 pb-4" style={{ overscrollBehavior: 'contain' }}>
-          {CATEGORY_ORDER.map(({ key, label, tileSize, columns }) => {
+          {categoryGroups.map(({ key, label, tileSize, columns }) => {
             const items = getCosmeticsByCategory(key);
             if (items.length === 0) return null;
             return (
@@ -269,7 +382,7 @@ const Storefront: React.FC<StorefrontProps> = ({
                         onClick={() => handleUnequip(key)}
                         className="text-[11px] text-slate-400 hover:text-slate-200 underline"
                       >
-                        rimuovi
+                        {t({ en: 'remove', it: 'rimuovi', fr: 'retirer', de: 'entfernen', es: 'quitar', ru: 'убрать', zh: '移除', ar: 'إزالة', ja: '外す' })}
                       </button>
                     )}
                 </div>
@@ -305,7 +418,7 @@ const Storefront: React.FC<StorefrontProps> = ({
                         </div>
                         {equipped ? (
                           <div className="text-[10px] font-bold text-emerald-400">
-                            ✓ In uso
+                            {t({ en: '✓ In use', it: '✓ In uso', fr: '✓ Utilisé', de: '✓ In Gebrauch', es: '✓ En uso', ru: '✓ Используется', zh: '✓ 使用中', ar: '✓ قيد الاستخدام', ja: '✓ 使用中' })}
                           </div>
                         ) : owned ? (
                           <button
@@ -313,7 +426,9 @@ const Storefront: React.FC<StorefrontProps> = ({
                             disabled={isBusyHere}
                             className="w-full text-[10px] font-bold py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-60"
                           >
-                            {isBusyHere ? '...' : 'Usa'}
+                            {isBusyHere
+                              ? '...'
+                              : t({ en: 'Use', it: 'Usa', fr: 'Utiliser', de: 'Nutzen', es: 'Usar', ru: 'Надеть', zh: '使用', ar: 'استخدم', ja: '使う' })}
                           </button>
                         ) : (
                           <button
@@ -336,7 +451,7 @@ const Storefront: React.FC<StorefrontProps> = ({
 
           {!isNative && (
             <p className="text-[11px] text-center text-slate-500 mt-4">
-              Gli acquisti funzionano solo nell'app mobile (iOS / Android).
+              {t({ en: 'Purchases only work in the mobile app (iOS / Android).', it: "Gli acquisti funzionano solo nell'app mobile (iOS / Android).", fr: "Les achats ne fonctionnent que dans l'application mobile (iOS / Android).", de: 'Käufe funktionieren nur in der mobilen App (iOS / Android).', es: 'Las compras solo funcionan en la app móvil (iOS / Android).', ru: 'Покупки работают только в мобильном приложении (iOS / Android).', zh: '购买仅在移动应用中可用（iOS / Android）。', ar: 'عمليات الشراء تعمل في التطبيق الجوّال فقط (iOS / Android).', ja: '購入はモバイルアプリ (iOS / Android) でのみ有効です。' })}
             </p>
           )}
         </div>

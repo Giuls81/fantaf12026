@@ -2994,6 +2994,7 @@ const App: React.FC = () => {
           equippedForTeam={currentEquipped}
           teamId={currentTeamId}
           onStateChange={setCosmeticsState}
+          t={t}
         />
       </ErrorBoundary>
     </>
