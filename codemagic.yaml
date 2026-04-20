@@ -226,10 +226,6 @@ workflows:
           include: true
           source: true
       cancel_previous_builds: true
-      changeset:
-        includes:
-          - 'web/**'
-          - 'codemagic.yaml'
     scripts:
       - name: Install deps
         script: |
