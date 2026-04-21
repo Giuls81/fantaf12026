@@ -198,6 +198,8 @@ async function ensureEntitlement() {
   die(`Entitlement create failed: ${status} ${JSON.stringify(body)}`);
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function createProductForApp(appId, appLabel, product) {
   const payload = {
     store_identifier: product.id,
@@ -210,16 +212,33 @@ async function createProductForApp(appId, appLabel, product) {
     console.log('  DRY-RUN body:', JSON.stringify(payload));
     return { id: `DRYRUN_${appLabel}_${product.id}` };
   }
-  const { status, ok, body } = await rc(`/projects/${projectId}/products`, {
-    method: 'POST',
-    body: payload,
-  });
-  if (ok) return body;
-  if (status === 409 || /exist/i.test(body?.message ?? '')) {
-    log('·', `[${appLabel}] already exists, skipping`);
+
+  // Attempt up to 3 times, honouring the server's backoff_ms on 429.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { status, ok, body } = await rc(`/projects/${projectId}/products`, {
+      method: 'POST',
+      body: payload,
+    });
+    if (ok) {
+      // Gentle pacing between successful creations so we don't burst into
+      // RC's 429 rate limiter on large catalogs.
+      await sleep(250);
+      return body;
+    }
+    if (status === 409 || /exist/i.test(body?.message ?? '')) {
+      log('·', `[${appLabel}] already exists, skipping`);
+      return null;
+    }
+    if (status === 429) {
+      const backoffMs = Number(body?.backoff_ms) || 2000;
+      log('·', `[${appLabel}] rate-limited, sleeping ${backoffMs}ms then retrying (attempt ${attempt + 1}/3)`);
+      await sleep(backoffMs + 500);
+      continue;
+    }
+    console.error(`  ✖ [${appLabel}] ${status} ${JSON.stringify(body)}`);
     return null;
   }
-  console.error(`  ✖ [${appLabel}] ${status} ${JSON.stringify(body)}`);
+  console.error(`  ✖ [${appLabel}] gave up after 3 rate-limit retries`);
   return null;
 }
 

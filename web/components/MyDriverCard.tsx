@@ -1,16 +1,14 @@
-// MyDriverCard — compact "showcase" component that shows all 4 cosmetic
-// categories the user has equipped in one visible scene on the HOME tab.
+// MyDriverCard — scenic showcase using AI-generated line-art silhouettes
+// of a racing driver (front view) and an F1 car (side view) as bases.
+// The user's suit pattern is multiplied over the driver, masked to the
+// driver's alpha so the pattern stays inside the silhouette. Same for
+// the livery on the car. The user's helmet PNG is overlaid on top of
+// the driver's head, covering the line-art helmet from the AI image.
 //
-// Layout (top → bottom):
-//   - tiny label "YOUR STYLE" + emblem badge in the top-right corner
-//   - centered helmet icon
-//   - suit pattern strip (full-width rectangle filled with the suit image)
-//   - thin accent-color bar at the bottom
+// Source art in /scene/driver.png and /scene/car.png (web/public/scene/).
 //
-// Uses the equipped team cosmetics; falls back to placeholders for any
-// slot the user hasn't equipped yet (CosmeticSlot handles that).
-//
-// Added 2026-04-20.
+// Added 2026-04-17 — Phase 4b.
+// Rewritten 2026-04-21 with AI-generated scene art.
 
 import React from 'react';
 import CosmeticSlot from './CosmeticSlot';
@@ -22,8 +20,18 @@ type Translator = (dict: Record<string, string>) => string;
 interface MyDriverCardProps {
   equipped: EquippedCosmetics | null;
   t: Translator;
-  onClick?: () => void; // optional — opens the storefront
+  onClick?: () => void;
 }
+
+const DRIVER_SRC = '/scene/driver.png';
+const CAR_SRC = '/scene/car.png';
+
+// Pattern masks exclude dark details (tyres, visor, gloves, boots, exhausts)
+// so the suit / livery pattern only fills the paintable bodywork. The visual
+// base image still displays those dark details untouched — the mask is
+// applied only to the pattern overlay layer.
+const DRIVER_MASK = '/scene/driver-bodymask.png';
+const CAR_MASK = '/scene/car-bodymask.png';
 
 const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => {
   const emblemId = equipped?.emblemProductId ?? null;
@@ -33,37 +41,31 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
   const liveryId = equipped?.liveryProductId ?? null;
 
   const colorItem = getCosmeticById(colorId);
-  const accentHex = colorItem?.swatchHex ?? '#64748B'; // slate-500 fallback
-
-  // Suit: render as a CSS background-image so we can shape it as a strip
-  // rather than a fixed square. Null → gradient fallback.
-  const suitBgStyle: React.CSSProperties = suitId
-    ? {
-        backgroundImage: `url(/cosmetics/${suitId}@256.png)`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }
-    : {
-        background:
-          'linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(15,23,42,0.6) 100%)',
-      };
-
-  // Livery: wider + asymmetric rounded corner on the right to hint at a
-  // car's nose profile. Same background fallback pattern as suit.
-  const liveryBgStyle: React.CSSProperties = liveryId
-    ? {
-        backgroundImage: `url(/cosmetics/${liveryId}@256.png)`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }
-    : {
-        background:
-          'linear-gradient(90deg, rgba(30,41,59,0.7) 0%, rgba(71,85,105,0.7) 100%)',
-      };
+  const accentHex = colorItem?.swatchHex ?? '#64748B';
 
   const clickable = typeof onClick === 'function';
+
+  // Pattern-fill style for the suit/livery overlay. Uses the scene PNG as
+  // an alpha mask so the pattern stays inside the silhouette, and
+  // mix-blend-mode multiply so underlying outlines / shading still show.
+  const maskOverlayStyle = (patternPath: string, maskPath: string): React.CSSProperties => ({
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: `url(${patternPath})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    mixBlendMode: 'multiply',
+    WebkitMaskImage: `url(${maskPath})`,
+    maskImage: `url(${maskPath})`,
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    pointerEvents: 'none',
+  });
 
   return (
     <div
@@ -72,91 +74,86 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
         'relative rounded-2xl border border-slate-700 overflow-hidden bg-slate-900 ' +
         (clickable ? 'cursor-pointer hover:border-slate-500 transition-colors' : '')
       }
-      style={{
-        // Soft radial tint from accent colour in the background
-        boxShadow: `inset 0 0 80px -20px ${accentHex}33`,
-      }}
+      style={{ boxShadow: `inset 0 0 80px -20px ${accentHex}33` }}
     >
-      {/* Header row: label + emblem badge */}
+      {/* Header row */}
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span
-          className="text-[10px] font-bold tracking-widest uppercase"
-          style={{ color: accentHex }}
-        >
-          {t({
-            en: 'Your style',
-            it: 'Il tuo stile',
-            fr: 'Votre style',
-            de: 'Dein Style',
-            es: 'Tu estilo',
-            ru: 'Ваш стиль',
-            zh: '你的风格',
-            ar: 'أسلوبك',
-            ja: 'あなたのスタイル',
-          })}
+        <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentHex }}>
+          {t({ en: 'Your style', it: 'Il tuo stile', fr: 'Votre style', de: 'Dein Style', es: 'Tu estilo', ru: 'Ваш стиль', zh: '你的风格', ar: 'أسلوبك', ja: 'あなたのスタイル' })}
         </span>
         <CosmeticSlot
           productId={emblemId}
           size={32}
           fallbackHex="#1E293B"
           fallbackLabel="·"
-          title={t({ en: 'Emblem', it: 'Emblema', fr: 'Emblème', de: 'Emblem', es: 'Emblema', ru: 'Эмблема', zh: '徽章', ar: 'شعار', ja: 'エンブレム' })}
+          title={t({ en: 'Emblem', it: 'Emblema' })}
         />
       </div>
 
-      {/* Helmet — centered, prominent */}
-      <div className="flex justify-center pt-2 pb-3">
-        <CosmeticSlot
-          productId={helmetId}
-          size={80}
-          fallbackHex="#1E293B"
-          fallbackLabel="HL"
-          title={t({ en: 'Helmet', it: 'Casco', fr: 'Casque', de: 'Helm', es: 'Casco', ru: 'Шлем', zh: '头盔', ar: 'خوذة', ja: 'ヘルメット' })}
-        />
-      </div>
-
-      {/* Suit pattern — wrapped in a vest-like V-neck silhouette + label */}
-      <div className="mx-4 mb-3 relative">
-        <div
-          className="h-14 border border-slate-700 relative overflow-hidden rounded-lg"
-          style={suitBgStyle}
-          title={t({ en: 'Suit', it: 'Tuta', fr: 'Combinaison', de: 'Anzug', es: 'Traje', ru: 'Комбинезон', zh: '赛服', ar: 'بدلة', ja: 'スーツ' })}
-        >
-          {/* V-neck hint at the top center, shoulders rounded */}
-          <div
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-3 bg-slate-900/80"
-            style={{ clipPath: 'polygon(0 0, 100% 0, 60% 100%, 40% 100%)' }}
-          />
-          {/* Label pill */}
-          <div className="absolute top-1 left-2 bg-slate-950/75 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-slate-100 uppercase">
-            🧥 {t({ en: 'Suit', it: 'Tuta', fr: 'Combinaison', de: 'Anzug', es: 'Traje', ru: 'Костюм', zh: '赛服', ar: 'بدلة', ja: 'スーツ' })}
+      {/* Scene container */}
+      <div className="relative mx-3 mb-2 rounded-xl bg-gradient-to-b from-slate-950/40 via-slate-900/30 to-slate-950/60 border border-slate-800 overflow-hidden" style={{ aspectRatio: '4 / 5' }}>
+        {/* --- Driver: centered, occupies roughly the top 70% of the scene --- */}
+        <div className="absolute top-0 left-0 right-0 bottom-[38%] flex items-start justify-center pt-2">
+          <div className="relative h-full" style={{ aspectRatio: '832 / 1216' }}>
+            {/* Base driver art */}
+            <img
+              src={DRIVER_SRC}
+              alt=""
+              className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
+              draggable={false}
+            />
+            {/* Suit pattern multiplied + masked to driver body-only alpha */}
+            {suitId && (
+              <div
+                style={maskOverlayStyle(`/cosmetics/${suitId}@256.png`, DRIVER_MASK)}
+                aria-hidden
+              />
+            )}
+            {/* User's helmet — sits on the shoulders, bottom of helmet
+                faded to hide the PNG crop edge. */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2"
+              style={{
+                top: '0%',
+                WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
+                maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
+              }}
+            >
+              <CosmeticSlot
+                productId={helmetId}
+                size={96}
+                fallbackHex="#334155"
+                fallbackLabel="HL"
+                title={t({ en: 'Helmet', it: 'Casco' })}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Car livery — shaped like an F1 side profile: cockpit bump,
-          rear wing, bigger tyres + front nose cone */}
-      <div className="mx-4 mb-3 relative">
-        <div
-          className="h-16 border border-slate-700 relative overflow-hidden"
-          style={{
-            ...liveryBgStyle,
-            // Shape: flat bottom, rising cockpit bump, rear wing, tapered nose
-            clipPath:
-              'polygon(0% 75%, 0% 55%, 8% 55%, 10% 25%, 12% 20%, 50% 20%, 55% 40%, 80% 40%, 92% 50%, 100% 65%, 100% 75%, 90% 75%, 87% 85%, 78% 85%, 75% 75%, 25% 75%, 22% 85%, 13% 85%, 10% 75%)',
-          }}
-          title={t({ en: 'Car livery', it: 'Livrea auto', fr: 'Livrée voiture', de: 'Auto-Lackierung', es: 'Librea del coche', ru: 'Ливрея машины', zh: '赛车涂装', ar: 'طلاء السيارة', ja: 'カーリバリー' })}
-        />
-        {/* Two visible tyres overlaid on top (not clipped) */}
-        <div className="absolute bottom-0 left-[11%] w-5 h-5 bg-slate-950 rounded-full border-2 border-slate-800" />
-        <div className="absolute bottom-0 right-[16%] w-5 h-5 bg-slate-950 rounded-full border-2 border-slate-800" />
-        {/* Label pill */}
-        <div className="absolute top-1 left-2 bg-slate-950/75 px-2 py-0.5 rounded text-[9px] font-bold tracking-wider text-slate-100 uppercase">
-          🏎️ {t({ en: 'Livery', it: 'Livrea', fr: 'Livrée', de: 'Lackierung', es: 'Librea', ru: 'Ливрея', zh: '涂装', ar: 'طلاء', ja: 'リバリー' })}
+        {/* --- Car: bottom strip, full width --- */}
+        <div className="absolute left-0 right-0 bottom-0 h-[38%]">
+          <div className="relative w-full h-full">
+            <img
+              src={CAR_SRC}
+              alt=""
+              className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
+              draggable={false}
+            />
+            {liveryId && (
+              <div
+                style={maskOverlayStyle(`/cosmetics/${liveryId}@256.png`, CAR_MASK)}
+                aria-hidden
+              />
+            )}
+          </div>
         </div>
+
+        {/* Tiny floor shadow between driver and car */}
+        <div className="absolute left-[15%] right-[15%] bottom-[38%] h-[2px] rounded-full"
+             style={{ background: `radial-gradient(ellipse at center, ${accentHex}55 0%, transparent 70%)` }} />
       </div>
 
-      {/* Accent colour bar */}
+      {/* Accent colour bar + edit hint */}
       <div className="px-4 pb-3 flex items-center gap-2">
         <div
           className="h-1.5 flex-1 rounded-full"
@@ -164,17 +161,7 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
         />
         {clickable && (
           <span className="text-[10px] text-slate-500">
-            {t({
-              en: 'Edit',
-              it: 'Modifica',
-              fr: 'Modifier',
-              de: 'Bearbeiten',
-              es: 'Editar',
-              ru: 'Изменить',
-              zh: '编辑',
-              ar: 'تعديل',
-              ja: '編集',
-            })} →
+            {t({ en: 'Edit', it: 'Modifica', fr: 'Modifier', de: 'Bearbeiten', es: 'Editar', ru: 'Изменить', zh: '编辑', ar: 'تعديل', ja: '編集' })} →
           </span>
         )}
       </div>
