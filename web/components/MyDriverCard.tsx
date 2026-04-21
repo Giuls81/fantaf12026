@@ -76,22 +76,37 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
       }
       style={{ boxShadow: `inset 0 0 80px -20px ${accentHex}33` }}
     >
-      {/* Header row */}
+      {/* Header row — only the label; emblem moved next to the driver below */}
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentHex }}>
           {t({ en: 'Your style', it: 'Il tuo stile', fr: 'Votre style', de: 'Dein Style', es: 'Tu estilo', ru: 'Ваш стиль', zh: '你的风格', ar: 'أسلوبك', ja: 'あなたのスタイル' })}
         </span>
-        <CosmeticSlot
-          productId={emblemId}
-          size={32}
-          fallbackHex="#1E293B"
-          fallbackLabel="·"
-          title={t({ en: 'Emblem', it: 'Emblema' })}
-        />
       </div>
 
       {/* Scene container */}
       <div className="relative mx-3 mb-2 rounded-xl bg-gradient-to-b from-slate-950/40 via-slate-900/30 to-slate-950/60 border border-slate-800 overflow-hidden" style={{ aspectRatio: '4 / 5' }}>
+        {/* Emblem — bigger, next to the driver on the left side at chest height */}
+        <div className="absolute left-[6%] top-[15%] z-10">
+          {emblemId ? (
+            <CosmeticSlot
+              productId={emblemId}
+              size={72}
+              title={t({ en: 'Emblem', it: 'Emblema' })}
+            />
+          ) : (
+            <svg
+              width={72}
+              height={72}
+              viewBox="0 0 72 72"
+              aria-label={t({ en: 'Emblem (none equipped)', it: 'Emblema (nessuno equipaggiato)' })}
+            >
+              <circle cx="36" cy="36" r="31" fill="#475569" stroke="#1E293B" strokeWidth="3" />
+              <circle cx="36" cy="36" r="22" fill="none" stroke="#64748B" strokeWidth="1.5" />
+              <circle cx="36" cy="36" r="5" fill="#94A3B8" />
+            </svg>
+          )}
+        </div>
+
         {/* --- Driver: centered, occupies roughly the top 70% of the scene --- */}
         <div className="absolute top-0 left-0 right-0 bottom-[38%] flex items-start justify-center pt-2">
           <div className="relative h-full" style={{ aspectRatio: '832 / 1216' }}>
@@ -110,22 +125,34 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
               />
             )}
             {/* User's helmet — sits on the shoulders, bottom of helmet
-                faded to hide the PNG crop edge. */}
+                faded to hide the PNG crop edge. When nothing is equipped
+                we render a neutral helmet silhouette SVG instead of the
+                default CosmeticSlot "HL" letters. */}
             <div
               className="absolute left-1/2 -translate-x-1/2"
               style={{
-                top: '0%',
+                top: '-3%',
                 WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
                 maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
               }}
             >
-              <CosmeticSlot
-                productId={helmetId}
-                size={96}
-                fallbackHex="#334155"
-                fallbackLabel="HL"
-                title={t({ en: 'Helmet', it: 'Casco' })}
-              />
+              {helmetId ? (
+                <CosmeticSlot
+                  productId={helmetId}
+                  size={96}
+                  title={t({ en: 'Helmet', it: 'Casco' })}
+                />
+              ) : (
+                <img
+                  src="/scene/helmet-placeholder.png"
+                  width={96}
+                  height={96}
+                  alt=""
+                  draggable={false}
+                  style={{ objectFit: 'contain' }}
+                  title={t({ en: 'Helmet (none equipped)', it: 'Casco (nessuno equipaggiato)' })}
+                />
+              )}
             </div>
           </div>
         </div>
