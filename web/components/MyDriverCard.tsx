@@ -131,7 +131,7 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
             <div
               className="absolute left-1/2 -translate-x-1/2"
               style={{
-                top: '-3%',
+                top: '-4%',
                 WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
                 maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
               }}
