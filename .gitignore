@@ -34,3 +34,7 @@ api/breakdown_v*.txt
 
 # Build Artifacts
 eas.json
+
+# App Store Connect API private keys (NEVER commit)
+AuthKey_*.p8
+*.p8
