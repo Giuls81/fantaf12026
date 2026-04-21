@@ -71,10 +71,14 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
     <div
       onClick={onClick}
       className={
-        'relative rounded-2xl border border-slate-700 overflow-hidden bg-slate-900 ' +
-        (clickable ? 'cursor-pointer hover:border-slate-500 transition-colors' : '')
+        'relative rounded-2xl overflow-hidden bg-slate-900 ' +
+        (clickable ? 'cursor-pointer transition-transform' : '')
       }
-      style={{ boxShadow: `inset 0 0 80px -20px ${accentHex}33` }}
+      style={{
+        // Coloured outer ring + outer glow + soft inner halo
+        border: `2px solid ${accentHex}`,
+        boxShadow: `0 0 20px ${accentHex}55, inset 0 0 80px -20px ${accentHex}55`,
+      }}
     >
       {/* Header row — only the label; emblem moved next to the driver below */}
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
@@ -180,14 +184,18 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
              style={{ background: `radial-gradient(ellipse at center, ${accentHex}55 0%, transparent 70%)` }} />
       </div>
 
-      {/* Accent colour bar + edit hint */}
-      <div className="px-4 pb-3 flex items-center gap-2">
+      {/* Accent colour bar — thicker + strong glow, the signature of the skin */}
+      <div className="px-4 pb-3 flex items-center gap-3">
         <div
-          className="h-1.5 flex-1 rounded-full"
-          style={{ backgroundColor: accentHex, boxShadow: `0 0 8px ${accentHex}66` }}
+          className="flex-1 rounded-full"
+          style={{
+            height: 10,
+            background: `linear-gradient(90deg, ${accentHex}cc 0%, ${accentHex} 50%, ${accentHex}cc 100%)`,
+            boxShadow: `0 0 18px ${accentHex}, 0 0 4px ${accentHex}`,
+          }}
         />
         {clickable && (
-          <span className="text-[10px] text-slate-500">
+          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: accentHex }}>
             {t({ en: 'Edit', it: 'Modifica', fr: 'Modifier', de: 'Bearbeiten', es: 'Editar', ru: 'Изменить', zh: '编辑', ar: 'تعديل', ja: '編集' })} →
           </span>
         )}
