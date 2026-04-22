@@ -1,11 +1,25 @@
 #!/usr/bin/env node
 // Seeds the App Store Connect in-app purchase catalog for FantaF1 2026
 // cosmetics. Creates 38 non-consumable IAPs (36 cosmetics + Starter Bundle
-// + Season Aesthetic Pass) with EN + IT localizations. Does NOT set pricing
-// or review screenshots — those are easier to bulk-edit in the ASC web UI.
+// + Season Aesthetic Pass) with EN + IT localizations AND the territory
+// availability resource so the IAP flips to READY_TO_SUBMIT once pricing
+// + screenshot are set. Does NOT set pricing or review screenshots —
+// those are handled by asc-pricing-and-screenshots.mjs.
 //
 // Idempotent: each POST returns 409 if the IAP already exists; the script
 // resolves the existing id and continues. Safe to re-run.
+//
+// Apple gotchas (learned the hard way 2026-04-22):
+//   - IAP without inAppPurchaseAvailability stays MISSING_METADATA even
+//     with all other fields set. The web UI creates it automatically;
+//     the API does not. The script now calls POST /v1/inAppPurchaseAvailabilities
+//     after every create.
+//   - Description max length is 55 characters; Apple returns 409
+//     ENTITY_ERROR.ATTRIBUTE.INVALID.TOO_LONG. Earlier versions of this
+//     script conflated every 409 with "already exists, skipping" and
+//     silently left the IAP with zero localizations.
+//   - Review screenshot must be 1290×2796 (iPhone 6.7"); 1242×2208 is
+//     deprecated and produces MISSING_METADATA too. See generate-review-screenshots.mjs.
 //
 // --- Prerequisites ---
 //
@@ -59,8 +73,8 @@ const DESC_EN_BY_CATEGORY = {
   suit: 'Race suit pattern for FantaF1 2026',
   color: 'Team accent color for FantaF1 2026',
   livery: 'Car livery for FantaF1 2026',
-  bundle: 'Starter cosmetic bundle — emblems, helmets and colors for FantaF1 2026',
-  pass: 'Season Aesthetic Pass 2026 — unlocks all current cosmetics (emblems, helmets, suits, colors, liveries)',
+  bundle: 'Emblems, helmets and colors bundle',
+  pass: 'All cosmetics unlocked for FantaF1 2026',
 };
 const DESC_IT_BY_CATEGORY = {
   emblem: 'Emblema squadra per FantaF1 2026',
@@ -68,9 +82,19 @@ const DESC_IT_BY_CATEGORY = {
   suit: 'Pattern tuta da gara per FantaF1 2026',
   color: 'Colore accento squadra per FantaF1 2026',
   livery: 'Livrea auto per FantaF1 2026',
-  bundle: 'Bundle cosmetico iniziale — emblemi, caschi e colori per FantaF1 2026',
-  pass: 'Season Aesthetic Pass 2026 — sblocca tutti i cosmetici attuali (emblemi, caschi, tute, colori, livree)',
+  bundle: 'Bundle emblemi, caschi e colori',
+  pass: 'Sblocca tutti i cosmetici FantaF1 2026',
 };
+// Apple hard-limits each IAP localization description to 55 characters.
+// Keep every entry above under that ceiling; a length check is applied at
+// startup to fail fast if somebody adds an over-long description.
+const MAX_DESCRIPTION_LEN = 55;
+for (const [k, v] of Object.entries({ ...DESC_EN_BY_CATEGORY, ...DESC_IT_BY_CATEGORY })) {
+  if (v.length > MAX_DESCRIPTION_LEN) {
+    console.error(`Description too long (${v.length} > ${MAX_DESCRIPTION_LEN}): ${k}: "${v}"`);
+    process.exit(1);
+  }
+}
 
 const CATALOG = [
   // Emblems
@@ -237,6 +261,57 @@ async function createIap(appId, product) {
   return { id: null, created: false };
 }
 
+// Cached list of all ASC territory ids (fetched lazily on first call). An
+// IAP that lacks an associated inAppPurchaseAvailability stays MISSING_METADATA
+// even when price + localization + screenshot are all set, confirmed
+// via ASC API diagnostic 2026-04-22.
+let territoryIdsCache = null;
+async function allTerritoryIds() {
+  if (territoryIdsCache) return territoryIdsCache;
+  const ids = [];
+  let url = '/v1/territories?limit=200';
+  while (url) {
+    const r = await asc(url);
+    for (const d of r.body?.data || []) ids.push(d.id);
+    url = r.body?.links?.next ? r.body.links.next.replace(API_ROOT, '') : null;
+  }
+  territoryIdsCache = ids;
+  return ids;
+}
+
+async function ensureAvailability(iapId) {
+  // Skip if already present.
+  const existing = await asc(`/v2/inAppPurchases/${iapId}/inAppPurchaseAvailability`);
+  if (existing.ok && existing.body?.data) {
+    console.log(`    · availability already set, skipping`);
+    return { ok: true };
+  }
+  const territories = await allTerritoryIds();
+  console.log(`    → POST availability (${territories.length} territories)`);
+  if (DRY_RUN) return { ok: true };
+  const r = await asc('/v1/inAppPurchaseAvailabilities', {
+    method: 'POST',
+    body: {
+      data: {
+        type: 'inAppPurchaseAvailabilities',
+        attributes: { availableInNewTerritories: true },
+        relationships: {
+          inAppPurchase: { data: { type: 'inAppPurchases', id: iapId } },
+          availableTerritories: {
+            data: territories.map((id) => ({ type: 'territories', id })),
+          },
+        },
+      },
+    },
+  });
+  if (r.ok) {
+    console.log(`      ✓ availability created`);
+    return { ok: true };
+  }
+  console.error(`      ✖ ${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
+  return { ok: false };
+}
+
 async function addLocalization(iapId, locale, name, description) {
   const payload = {
     data: {
@@ -261,7 +336,12 @@ async function addLocalization(iapId, locale, name, description) {
     return { ok: true };
   }
   const errMsg = JSON.stringify(body);
-  if (/already exist/i.test(errMsg) || /DUPLICATE/i.test(errMsg) || status === 409) {
+  // Only swallow the error if it is actually a duplicate. Previous versions
+  // treated every 409 as "already exists", which hid real issues such as
+  // description-too-long validation errors — those rejections left the
+  // IAP with zero localizations and stuck in MISSING_METADATA.
+  const isDuplicate = /already exist/i.test(errMsg) || /DUPLICATE/i.test(errMsg);
+  if (isDuplicate) {
     console.log(`    · ${locale} localisation already exists, skipping`);
     return { ok: true };
   }
@@ -284,6 +364,9 @@ async function addLocalization(iapId, locale, name, description) {
       console.error(`  ✖ skipping localizations for ${product.productId} (no id)`);
       continue;
     }
+
+    await ensureAvailability(iapId);
+    await sleep(250);
 
     await addLocalization(
       iapId,

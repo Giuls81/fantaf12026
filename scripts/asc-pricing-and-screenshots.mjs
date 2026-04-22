@@ -214,6 +214,20 @@ async function uploadScreenshot(iap, imgBytes, fileName, fileSize, checksumHex) 
     return true;
   }
 
+  // 0. Delete existing screenshot if present (Apple allows only one per IAP
+  // and a second POST returns 409). Required when re-uploading after the
+  // image dimensions or content changes.
+  const existing = await asc(`/v2/inAppPurchases/${iap.id}/appStoreReviewScreenshot`);
+  const existingId = existing.body?.data?.id;
+  if (existingId) {
+    const del = await asc(`/v1/inAppPurchaseAppStoreReviewScreenshots/${existingId}`, { method: 'DELETE' });
+    if (!del.ok && del.status !== 204) {
+      console.error(`    ✖ delete existing ${del.status} ${JSON.stringify(del.body).slice(0, 200)}`);
+      return false;
+    }
+    console.log(`    · deleted old screenshot ${existingId}`);
+  }
+
   // 1. Reserve
   const reserveRes = await asc('/v1/inAppPurchaseAppStoreReviewScreenshots', {
     method: 'POST',

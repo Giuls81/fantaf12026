@@ -1168,7 +1168,17 @@ const App: React.FC = () => {
         {/* Global Standings Card (compact rows for rank 4+) */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
            <div className="bg-slate-700/50 p-3 border-b border-slate-700 font-bold text-xs uppercase tracking-widest text-slate-300">
-              {t({ en: 'Global Rankings', it: 'Classifica Globale' })}
+              {t({
+                en: 'Rest of Standings',
+                it: 'Resto Classifica',
+                fr: 'Reste du classement',
+                de: 'Restliche Rangliste',
+                es: 'Resto clasificación',
+                ru: 'Остальные',
+                zh: '其余排名',
+                ar: 'بقية الترتيب',
+                ja: '残りの順位',
+              })}
            </div>
            {loadingStandings ? (
              <div className="p-8 text-center text-slate-500 animate-pulse">{t({ en: 'Loading standings...', it: 'Caricamento classifica...' })}</div>

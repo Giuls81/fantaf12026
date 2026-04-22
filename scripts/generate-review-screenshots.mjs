@@ -15,8 +15,14 @@ import sharp from 'sharp';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const WIDTH = 1242;
-const HEIGHT = 2208;
+// 1290×2796 = iPhone 6.7" (14/15 Pro Max). This is the current canonical
+// dimension Apple requires for IAP review screenshots; the older 1242×2208
+// iPhone 6.5" size produces MISSING_METADATA on all 38 cosmetic IAPs even
+// when every other field is correctly set. Confirmed via ASC API diagnostic
+// 2026-04-22 — the only Ready-to-Submit IAP (Premium Season) had a
+// 1290×2796 shot while all 38 MISSING_METADATA ones had 1242×2208.
+const WIDTH = 1290;
+const HEIGHT = 2796;
 const OUT_DIR = 'assets';
 
 mkdirSync(OUT_DIR, { recursive: true });
