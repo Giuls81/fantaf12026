@@ -15,7 +15,9 @@ import { fetchMyCosmetics, getCosmeticById } from './services/cosmetics';
 import Storefront from './components/Storefront';
 import CosmeticSlot from './components/CosmeticSlot';
 import MyDriverCard from './components/MyDriverCard';
-import type { CosmeticsState } from './types';
+import StandingPodium from './components/StandingPodium';
+import DriverCardModal from './components/DriverCardModal';
+import type { CosmeticsState, LeagueStanding } from './types';
 // RACES_2026 removed
 
 const INITIAL_TEAM: UserTeam = {
@@ -340,8 +342,9 @@ const App: React.FC = () => {
   const [isPurchasingPremium, setIsPurchasingPremium] = useState(false);
   
   // Standings & History States
-  const [standings, setStandings] = useState<any[]>([]);
+  const [standings, setStandings] = useState<LeagueStanding[]>([]);
   const [loadingStandings, setLoadingStandings] = useState(false);
+  const [viewingTeamScene, setViewingTeamScene] = useState<LeagueStanding | null>(null);
   const [selectedRaceId, setSelectedRaceId] = useState<string | null>(null);
   const [raceResults, setRaceResults] = useState<any[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
@@ -1152,7 +1155,17 @@ const App: React.FC = () => {
         </div>
       </div>
 
-        {/* Global Standings Card */}
+        {/* Podium top 3 — shows MyDriverCard for each */}
+        {!loadingStandings && standings.length > 0 && (
+          <StandingPodium
+            top={standings.slice(0, 3)}
+            t={t}
+            onCardClick={(s) => setViewingTeamScene(s)}
+            currentUserId={data?.user?.id ?? null}
+          />
+        )}
+
+        {/* Global Standings Card (compact rows for rank 4+) */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
            <div className="bg-slate-700/50 p-3 border-b border-slate-700 font-bold text-xs uppercase tracking-widest text-slate-300">
               {t({ en: 'Global Rankings', it: 'Classifica Globale' })}
@@ -1161,18 +1174,16 @@ const App: React.FC = () => {
              <div className="p-8 text-center text-slate-500 animate-pulse">{t({ en: 'Loading standings...', it: 'Caricamento classifica...' })}</div>
            ) : (
              <div className="divide-y divide-slate-700">
-                {standings.map((s, idx) => {
+                {standings.slice(3).map((s) => {
                    const userResult = raceResults.find((r: any) => r.userId === s.userId);
-                   const canClick = !!selectedRaceId;
+                   const canClickRace = !!selectedRaceId;
                    const isMe = s.userId === data?.user?.id;
-                   const myAccentHex = isMe
-                     ? getCosmeticById(currentEquipped?.colorProductId ?? null)?.swatchHex ?? null
-                     : null;
+                   const accentHex = getCosmeticById(s.colorProductId)?.swatchHex ?? null;
                    return (
                     <div
                       key={s.userId}
                       onClick={async () => {
-                        if (!canClick || !data?.user?.leagueId) return;
+                        if (!canClickRace || !data?.user?.leagueId) return;
                         // If we already have results, show immediately
                         if (userResult) {
                           setViewingResult(userResult);
@@ -1191,22 +1202,59 @@ const App: React.FC = () => {
                           setViewingResult({ userId: s.userId, userName: s.userName, points: 0, drivers: [] });
                         }
                       }}
-                      className={`p-4 flex justify-between items-center ${isMe ? 'bg-blue-900/10' : ''} ${canClick ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
-                      style={myAccentHex ? { borderLeft: `4px solid ${myAccentHex}`, paddingLeft: 12 } : undefined}
+                      className={`p-4 flex justify-between items-center gap-3 ${isMe ? 'bg-blue-900/10' : ''} ${canClickRace ? 'cursor-pointer hover:bg-slate-700/30 active:bg-slate-700/50 transition-colors' : ''}`}
+                      style={accentHex ? { borderLeft: `4px solid ${accentHex}`, paddingLeft: 12 } : undefined}
                     >
-                       <div className="flex items-center gap-4">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                       <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-slate-700 text-slate-300 shrink-0">
                              {s.rank}
                           </div>
-                          <div>
-                             <div className="text-white font-bold">
-                               {s.userName} {s.userId === data?.user?.id && <span className="text-[10px] bg-blue-500 text-white px-1 rounded ml-1">TU</span>}
-                               {canClick && <span className="text-[10px] text-slate-500 ml-2">▸</span>}
+                          {/* Mini helmet — tap to open scene modal */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingTeamScene(s);
+                            }}
+                            className="shrink-0 rounded-full hover:ring-2 hover:ring-blue-400 transition"
+                            title={t({ en: 'View driver scene', it: 'Vedi scena pilota', fr: 'Voir scène', de: 'Szene ansehen', es: 'Ver escena', ru: 'Смотреть', zh: '查看场景', ar: 'عرض', ja: 'シーン表示' })}
+                            aria-label={t({ en: 'View driver scene', it: 'Vedi scena pilota' })}
+                          >
+                            {s.helmetProductId ? (
+                              <CosmeticSlot productId={s.helmetProductId} size={36} />
+                            ) : (
+                              <img
+                                src="/scene/helmet-placeholder.png"
+                                width={36}
+                                height={36}
+                                alt=""
+                                draggable={false}
+                                style={{ objectFit: 'contain' }}
+                              />
+                            )}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                             <div className="text-white font-bold flex items-center gap-2 min-w-0">
+                               {/* Mini emblem — tap to open scene modal */}
+                               {s.emblemProductId && (
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setViewingTeamScene(s);
+                                   }}
+                                   className="shrink-0 rounded-full hover:ring-2 hover:ring-blue-400 transition"
+                                   aria-label={t({ en: 'View driver scene', it: 'Vedi scena pilota' })}
+                                 >
+                                   <CosmeticSlot productId={s.emblemProductId} size={22} />
+                                 </button>
+                               )}
+                               <span className="truncate">{s.userName}</span>
+                               {isMe && <span className="text-[10px] bg-blue-500 text-white px-1 rounded shrink-0">TU</span>}
+                               {canClickRace && <span className="text-[10px] text-slate-500 shrink-0">▸</span>}
                              </div>
                              <div className="text-[10px] text-slate-500 uppercase font-bold">{t({ en: 'Total Points', it: 'Punti Totali' })}</div>
                           </div>
                        </div>
-                       <div className="text-right">
+                       <div className="text-right shrink-0">
                           <div className="text-xl font-mono font-bold text-blue-400">{Number(s.totalPoints || 0).toFixed(1)}</div>
                           <div className="text-[10px] text-slate-500 font-mono">
                             {t({ en: 'Penalty', it: 'Penalità' })}: {Number(s.penaltyPoints || 0).toFixed(1)}
@@ -1217,9 +1265,31 @@ const App: React.FC = () => {
                    );
                 })}
                 {standings.length === 0 && <div className="p-8 text-center text-slate-500 italic">{t({ en: 'No users found in this league.', it: 'Nessun utente trovato in questa lega.' })}</div>}
+                {standings.length > 0 && standings.length <= 3 && (
+                  <div className="p-6 text-center text-slate-500 text-xs italic">
+                    {t({
+                      en: 'Only the podium so far — invite more managers to your league.',
+                      it: 'Per ora solo il podio — invita altri manager nella tua lega.',
+                      fr: 'Uniquement le podium — invitez d\u0027autres managers.',
+                      de: 'Bisher nur das Podium — lade weitere Manager ein.',
+                      es: 'Solo el podio — invita a más managers.',
+                      ru: 'Пока только подиум — пригласите других менеджеров.',
+                      zh: '目前只有领奖台 — 邀请更多经理加入。',
+                      ar: 'المنصة فقط — ادعُ مدراء آخرين.',
+                      ja: '現状は表彰台のみ — 他のマネージャーを招待しましょう。',
+                    })}
+                  </div>
+                )}
              </div>
            )}
         </div>
+
+        {/* Scene modal — click on any user's helmet/emblem/podium opens this */}
+        <DriverCardModal
+          standing={viewingTeamScene}
+          t={t}
+          onClose={() => setViewingTeamScene(null)}
+        />
 
         {/* Modal: Team Lineup Detail */}
         {viewingResult && (() => {

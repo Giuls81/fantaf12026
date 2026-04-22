@@ -700,6 +700,13 @@ app.get("/leagues/:id/standings", requireUser, async (c) => {
     standings = await sql`
       SELECT
         t."userId",
+        t.id AS "teamId",
+        t.name AS "teamName",
+        t."emblemProductId",
+        t."helmetProductId",
+        t."suitProductId",
+        t."colorProductId",
+        t."liveryProductId",
         u."displayName" AS "userName",
         (COALESCE(tr."basePoints", 0) + COALESCE(tp."penaltyPoints", 0))::double precision AS "totalPoints",
         COALESCE(tp."penaltyPoints", 0)::double precision AS "penaltyPoints"
@@ -716,25 +723,56 @@ app.get("/leagues/:id/standings", requireUser, async (c) => {
         GROUP BY "teamId"
       ) tp ON tp."teamId" = t.id
       WHERE t."leagueId" = ${leagueId}
-      ORDER BY 3 DESC
+      ORDER BY "totalPoints" DESC
     `;
   } catch (_e) {
-    standings = await sql`
-      SELECT
-        t."userId",
-        u."displayName" as "userName",
-        t."totalPoints",
-        0::double precision AS "penaltyPoints"
-      FROM "Team" t
-      JOIN "User" u ON t."userId" = u.id
-      WHERE t."leagueId" = ${leagueId}
-      ORDER BY t."totalPoints" DESC
-    `;
+    // Fallback: older DBs without cosmetic columns or TeamResult/TeamPenalty missing
+    try {
+      standings = await sql`
+        SELECT
+          t."userId",
+          t.id AS "teamId",
+          t.name AS "teamName",
+          t."emblemProductId",
+          t."helmetProductId",
+          t."suitProductId",
+          t."colorProductId",
+          t."liveryProductId",
+          u."displayName" as "userName",
+          t."totalPoints",
+          0::double precision AS "penaltyPoints"
+        FROM "Team" t
+        JOIN "User" u ON t."userId" = u.id
+        WHERE t."leagueId" = ${leagueId}
+        ORDER BY t."totalPoints" DESC
+      `;
+    } catch (_e2) {
+      standings = await sql`
+        SELECT
+          t."userId",
+          t.id AS "teamId",
+          t.name AS "teamName",
+          u."displayName" as "userName",
+          t."totalPoints",
+          0::double precision AS "penaltyPoints"
+        FROM "Team" t
+        JOIN "User" u ON t."userId" = u.id
+        WHERE t."leagueId" = ${leagueId}
+        ORDER BY t."totalPoints" DESC
+      `;
+    }
   }
-  
+
   return c.json(standings.map((s, idx) => {
     const row = s as {
       userId?: string;
+      teamId?: string | null;
+      teamName?: string | null;
+      emblemProductId?: string | null;
+      helmetProductId?: string | null;
+      suitProductId?: string | null;
+      colorProductId?: string | null;
+      liveryProductId?: string | null;
       userName?: string | null;
       totalPoints?: number | string | null;
       penaltyPoints?: number | string | null;
@@ -745,6 +783,11 @@ app.get("/leagues/:id/standings", requireUser, async (c) => {
       penaltyPoints: Number(row.penaltyPoints ?? 0),
       rank: idx + 1,
       userName: row.userName || "User " + String(row.userId || "").slice(0, 4),
+      emblemProductId: row.emblemProductId ?? null,
+      helmetProductId: row.helmetProductId ?? null,
+      suitProductId: row.suitProductId ?? null,
+      colorProductId: row.colorProductId ?? null,
+      liveryProductId: row.liveryProductId ?? null,
     };
   }));
 });

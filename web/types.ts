@@ -144,3 +144,20 @@ export interface CosmeticsState {
   owned: OwnedCosmetic[];
   equipped: EquippedCosmetics[];
 }
+
+// Standings row returned by GET /leagues/:id/standings. Includes the
+// equipped cosmetics of each team so other league members can see them.
+export interface LeagueStanding {
+  userId: string;
+  userName: string;
+  teamId: string | null;
+  teamName: string | null;
+  totalPoints: number;
+  penaltyPoints: number;
+  rank: number;
+  emblemProductId: string | null;
+  helmetProductId: string | null;
+  suitProductId: string | null;
+  colorProductId: string | null;
+  liveryProductId: string | null;
+}
