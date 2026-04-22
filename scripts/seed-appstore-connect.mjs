@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // Seeds the App Store Connect in-app purchase catalog for FantaF1 2026
-// cosmetics. Creates 38 non-consumable IAPs (32 cosmetics + 6 liveries)
-// with EN + IT localizations. Does NOT set pricing or review screenshots
-// — those are easier to bulk-edit in the ASC web UI.
+// cosmetics. Creates 38 non-consumable IAPs (36 cosmetics + Starter Bundle
+// + Season Aesthetic Pass) with EN + IT localizations. Does NOT set pricing
+// or review screenshots — those are easier to bulk-edit in the ASC web UI.
+//
+// Idempotent: each POST returns 409 if the IAP already exists; the script
+// resolves the existing id and continues. Safe to re-run.
 //
 // --- Prerequisites ---
 //
@@ -56,6 +59,8 @@ const DESC_EN_BY_CATEGORY = {
   suit: 'Race suit pattern for FantaF1 2026',
   color: 'Team accent color for FantaF1 2026',
   livery: 'Car livery for FantaF1 2026',
+  bundle: 'Starter cosmetic bundle — emblems, helmets and colors for FantaF1 2026',
+  pass: 'Season Aesthetic Pass 2026 — unlocks all current cosmetics (emblems, helmets, suits, colors, liveries)',
 };
 const DESC_IT_BY_CATEGORY = {
   emblem: 'Emblema squadra per FantaF1 2026',
@@ -63,6 +68,8 @@ const DESC_IT_BY_CATEGORY = {
   suit: 'Pattern tuta da gara per FantaF1 2026',
   color: 'Colore accento squadra per FantaF1 2026',
   livery: 'Livrea auto per FantaF1 2026',
+  bundle: 'Bundle cosmetico iniziale — emblemi, caschi e colori per FantaF1 2026',
+  pass: 'Season Aesthetic Pass 2026 — sblocca tutti i cosmetici attuali (emblemi, caschi, tute, colori, livree)',
 };
 
 const CATALOG = [
@@ -107,6 +114,12 @@ const CATALOG = [
   { productId: 'fantaf1.cosmetic.livery.rainbow', name: 'Rainbow Flow', cat: 'livery' },
   { productId: 'fantaf1.cosmetic.livery.carbon', name: 'Carbon Weave', cat: 'livery' },
   { productId: 'fantaf1.cosmetic.livery.neon', name: 'Neon Circuit', cat: 'livery' },
+  // Bundles + Pass — registered as plain NON_CONSUMABLE on Apple. The
+  // "contains multiple cosmetics" semantics is expanded server-side by
+  // expandCosmeticProduct() in fanta-api/index.ts when the RC webhook fires
+  // on purchase, so from Apple's POV these are just normal single IAPs.
+  { productId: 'fantaf1.cosmetic.bundle.starter', name: 'Starter Aesthetic Bundle', cat: 'bundle' },
+  { productId: 'fantaf1.cosmetic.pass.season2026', name: 'Season Aesthetic Pass 2026', cat: 'pass' },
 ];
 
 // --- JWT signing (ES256) ---------------------------------------------------
@@ -293,6 +306,7 @@ async function addLocalization(iapId, locale, name, description) {
   console.log('Next manual steps in App Store Connect:');
   console.log('  1. Pricing: select all IAPs → set default price per tier');
   console.log('     emblem €0.99, helmet/suit €1.99, livery €2.99, color €0.99');
+  console.log('     bundle.starter €7.99, pass.season2026 €19.99');
   console.log('  2. Review Screenshot: use the same storefront screenshot for all');
   console.log('  3. Flip each to "Ready to Submit" (auto when metadata complete)');
 })().catch((e) => {

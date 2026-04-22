@@ -41,14 +41,24 @@ const SCREENSHOTS_BY_CATEGORY = {
   helmet: SCREENSHOT_PATH || 'assets/iap-review-shot-helmets-suits.png',
   suit: SCREENSHOT_PATH || 'assets/iap-review-shot-helmets-suits.png',
   livery: SCREENSHOT_PATH || 'assets/iap-review-shot-liveries.png',
+  // Bundle and season pass reuse existing screenshots — the bundle contains
+  // mostly emblems + colors, and the pass is visually represented by the
+  // full-livery shot to emphasize the "everything is unlocked" pitch.
+  bundle: SCREENSHOT_PATH || 'assets/iap-review-shot-emblems-colors.png',
+  pass: SCREENSHOT_PATH || 'assets/iap-review-shot-liveries.png',
 };
 
-const args = new Set(process.argv.slice(2));
+const argsArr = process.argv.slice(2);
+const args = new Set(argsArr);
 const DRY_RUN = args.has('--dry-run');
 const PRICES_ONLY = args.has('--prices-only');
 const SCREENSHOTS_ONLY = args.has('--screenshots-only');
 const DO_PRICES = !SCREENSHOTS_ONLY;
 const DO_SCREENSHOTS = !PRICES_ONLY;
+// Filter to a single product ID with --only=fantaf1.cosmetic.bundle.starter
+// (repeatable comma-separated). Leave empty to process every cosmetic IAP.
+const onlyArg = argsArr.find((a) => a.startsWith('--only='));
+const ONLY_IDS = onlyArg ? new Set(onlyArg.slice('--only='.length).split(',').filter(Boolean)) : null;
 
 if (!KEY_ID || !ISSUER_ID || !KEY_PATH) {
   console.error('Missing env: ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY_PATH');
@@ -65,6 +75,8 @@ const PRICE_USD_BY_CATEGORY = {
   suit: '1.99',
   color: '0.99',
   livery: '2.99',
+  bundle: '7.99',   // Starter Aesthetic Bundle
+  pass: '19.99',    // Season Aesthetic Pass 2026
 };
 function categoryOf(productId) {
   const parts = productId.split('.');
@@ -273,8 +285,12 @@ async function uploadScreenshot(iap, imgBytes, fileName, fileSize, checksumHex) 
   console.log(`App id: ${appId}\n`);
 
   let iaps = await fetchAllIaps(appId);
-  // Only act on cosmetic IAPs — leave the premium pass alone
+  // Only act on cosmetic IAPs — leave the ad-removal premium pass alone
   iaps = iaps.filter((i) => i.productId && i.productId.startsWith('fantaf1.cosmetic.'));
+  if (ONLY_IDS) {
+    iaps = iaps.filter((i) => ONLY_IDS.has(i.productId));
+    console.log(`--only filter active, ${iaps.length} IAPs will be processed: ${[...ONLY_IDS].join(', ')}`);
+  }
   console.log(`Found ${iaps.length} cosmetic IAPs.\n`);
 
   // Pre-load each per-category screenshot exactly once so we don't hit disk
