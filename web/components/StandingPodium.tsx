@@ -28,24 +28,22 @@ const toEquipped = (s: LeagueStanding): EquippedCosmetics => ({
   liveryProductId: s.liveryProductId,
 });
 
-const rankStyles: Record<number, { ring: string; badge: string; label: string; scale: string }> = {
-  1: { ring: 'ring-yellow-400/80', badge: 'bg-yellow-500 text-black', label: 'text-yellow-300', scale: 'lg:scale-[1.06]' },
-  2: { ring: 'ring-slate-300/70', badge: 'bg-slate-300 text-black', label: 'text-slate-200', scale: '' },
-  3: { ring: 'ring-orange-500/70', badge: 'bg-orange-600 text-white', label: 'text-orange-300', scale: '' },
+const rankStyles: Record<number, { ring: string; badge: string; label: string }> = {
+  1: { ring: 'ring-yellow-400/80', badge: 'bg-yellow-500 text-black', label: 'text-yellow-300' },
+  2: { ring: 'ring-slate-300/70', badge: 'bg-slate-300 text-black', label: 'text-slate-200' },
+  3: { ring: 'ring-orange-500/70', badge: 'bg-orange-600 text-white', label: 'text-orange-300' },
 };
 
 const StandingPodium: React.FC<StandingPodiumProps> = ({ top, t, onCardClick, currentUserId }) => {
   if (top.length === 0) return null;
 
-  // Visual order: silver (2) — gold (1) — bronze (3), so gold sits in the centre.
-  // If we have fewer than 3, render what we have in rank order.
-  const ordered: LeagueStanding[] =
-    top.length === 3
-      ? [top[1], top[0], top[2]]
-      : top;
+  // Natural rank order: 1 — 2 — 3 left-to-right. This matches classifica
+  // order and avoids the "silver left / gold centre" visual that confuses
+  // users expecting 1st place to appear first.
+  const ordered: LeagueStanding[] = top;
 
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
+    <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 sm:p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
           <span className="text-lg">🏁</span>
@@ -76,42 +74,39 @@ const StandingPodium: React.FC<StandingPodiumProps> = ({ top, t, onCardClick, cu
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {ordered.map((s) => {
           const style = rankStyles[s.rank] ?? rankStyles[3];
           const isMe = currentUserId != null && s.userId === currentUserId;
           return (
-            <div
-              key={s.userId}
-              className={`relative ${style.scale} transition-transform`}
-            >
+            <div key={s.userId} className="relative">
               {/* Rank badge overlay */}
               <div
-                className={`absolute -top-2 -left-2 z-20 w-9 h-9 rounded-full flex items-center justify-center font-bold text-base shadow-lg ${style.badge}`}
+                className={`absolute -top-2 -left-2 z-20 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-sm sm:text-base shadow-lg ${style.badge}`}
               >
                 {s.rank}
               </div>
 
               {/* "TU" chip if it's the current user */}
               {isMe && (
-                <div className="absolute -top-2 right-2 z-20 text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full shadow">
+                <div className="absolute -top-2 right-1 z-20 text-[9px] sm:text-[10px] font-bold bg-blue-500 text-white px-1.5 sm:px-2 py-0.5 rounded-full shadow">
                   {t({ en: 'YOU', it: 'TU', fr: 'TOI', de: 'DU', es: 'TÚ', ru: 'ТЫ', zh: '你', ar: 'أنت', ja: 'あなた' })}
                 </div>
               )}
 
               <div
-                className={`rounded-2xl ring-2 ${style.ring} overflow-hidden`}
+                className={`rounded-2xl ring-2 ${style.ring} overflow-hidden cursor-pointer`}
                 onClick={() => onCardClick(s)}
               >
-                <MyDriverCard equipped={toEquipped(s)} t={t} onClick={() => onCardClick(s)} />
+                <MyDriverCard equipped={toEquipped(s)} t={t} onClick={() => onCardClick(s)} compact />
               </div>
 
               {/* Footer strip with name + points */}
-              <div className="mt-2 flex items-baseline justify-between gap-2 px-1">
-                <div className={`text-xs font-bold truncate ${style.label}`}>
+              <div className="mt-2 flex flex-col gap-0.5 px-1">
+                <div className={`text-[11px] sm:text-xs font-bold truncate ${style.label}`}>
                   {s.userName}
                 </div>
-                <div className="text-sm font-mono font-bold text-blue-300 shrink-0">
+                <div className="text-xs sm:text-sm font-mono font-bold text-blue-300">
                   {Number(s.totalPoints).toFixed(1)}
                 </div>
               </div>

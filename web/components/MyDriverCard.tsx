@@ -21,6 +21,10 @@ interface MyDriverCardProps {
   equipped: EquippedCosmetics | null;
   t: Translator;
   onClick?: () => void;
+  // When true, renders a smaller version suited for the Standings podium —
+  // header label is hidden, emblem and helmet shrink, and the bottom edit
+  // label is hidden. The scene itself (driver + car + patterns) is unchanged.
+  compact?: boolean;
 }
 
 const DRIVER_SRC = '/scene/driver.png';
@@ -33,7 +37,7 @@ const CAR_SRC = '/scene/car.png';
 const DRIVER_MASK = '/scene/driver-bodymask.png';
 const CAR_MASK = '/scene/car-bodymask.png';
 
-const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => {
+const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick, compact = false }) => {
   const emblemId = equipped?.emblemProductId ?? null;
   const helmetId = equipped?.helmetProductId ?? null;
   const suitId = equipped?.suitProductId ?? null;
@@ -44,6 +48,18 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
   const accentHex = colorItem?.swatchHex ?? '#64748B';
 
   const clickable = typeof onClick === 'function';
+
+  // Compact-aware sizes. In compact mode we size emblem and helmet using CSS
+  // percentages of the scene container so they scale with the card regardless
+  // of viewport width (iPhone = ~90px card, desktop = ~200px card). In full
+  // mode we keep the established fixed px sizes so HOME stays unchanged.
+  const barHeight = compact ? 6 : 10;
+  const emblemContainerStyle: React.CSSProperties = compact
+    ? { width: '24%', aspectRatio: '1 / 1' }
+    : { width: 72, height: 72 };
+  const helmetContainerStyle: React.CSSProperties = compact
+    ? { width: '42%', aspectRatio: '1 / 1' }
+    : { width: 96, height: 96 };
 
   // Pattern-fill style for the suit/livery overlay. Uses the scene PNG as
   // an alpha mask so the pattern stays inside the silhouette, and
@@ -80,18 +96,39 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
         boxShadow: `0 0 20px ${accentHex}55, inset 0 0 80px -20px ${accentHex}55`,
       }}
     >
-      {/* Header row — only the label; emblem moved next to the driver below */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentHex }}>
-          {t({ en: 'Your style', it: 'Il tuo stile', fr: 'Votre style', de: 'Dein Style', es: 'Tu estilo', ru: 'Ваш стиль', zh: '你的风格', ar: 'أسلوبك', ja: 'あなたのスタイル' })}
-        </span>
-      </div>
+      {/* Header row — only the label; emblem moved next to the driver below.
+          Hidden in compact mode to save vertical space in the podium. */}
+      {!compact && (
+        <div className="flex items-center justify-between px-4 pt-3 pb-1">
+          <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentHex }}>
+            {t({ en: 'Your style', it: 'Il tuo stile', fr: 'Votre style', de: 'Dein Style', es: 'Tu estilo', ru: 'Ваш стиль', zh: '你的风格', ar: 'أسلوبك', ja: 'あなたのスタイル' })}
+          </span>
+        </div>
+      )}
 
       {/* Scene container */}
-      <div className="relative mx-3 mb-2 rounded-xl bg-gradient-to-b from-slate-950/40 via-slate-900/30 to-slate-950/60 border border-slate-800 overflow-hidden" style={{ aspectRatio: '4 / 5' }}>
-        {/* Emblem — bigger, next to the driver on the left side at chest height */}
-        <div className="absolute left-[6%] top-[15%] z-10">
-          {emblemId ? (
+      <div className={`relative rounded-xl bg-gradient-to-b from-slate-950/40 via-slate-900/30 to-slate-950/60 border border-slate-800 overflow-hidden ${compact ? 'mx-1.5 my-1.5' : 'mx-3 mb-2'}`} style={{ aspectRatio: '4 / 5' }}>
+        {/* Emblem — positioned on the left side at chest height. In compact
+            mode it scales with the scene via % width; in full mode we keep the
+            fixed CosmeticSlot/SVG 72px render for HOME. */}
+        <div className="absolute left-[6%] top-[15%] z-10" style={emblemContainerStyle}>
+          {compact ? (
+            emblemId ? (
+              <img
+                src={`/cosmetics/${emblemId}@128.png`}
+                alt=""
+                draggable={false}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+            ) : (
+              <svg viewBox="0 0 72 72" style={{ width: '100%', height: '100%' }}
+                   aria-label={t({ en: 'Emblem (none equipped)', it: 'Emblema (nessuno equipaggiato)' })}>
+                <circle cx="36" cy="36" r="31" fill="#475569" stroke="#1E293B" strokeWidth="3" />
+                <circle cx="36" cy="36" r="22" fill="none" stroke="#64748B" strokeWidth="1.5" />
+                <circle cx="36" cy="36" r="5" fill="#94A3B8" />
+              </svg>
+            )
+          ) : emblemId ? (
             <CosmeticSlot
               productId={emblemId}
               size={72}
@@ -129,18 +166,27 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
               />
             )}
             {/* User's helmet — sits on the shoulders, bottom of helmet
-                faded to hide the PNG crop edge. When nothing is equipped
-                we render a neutral helmet silhouette SVG instead of the
-                default CosmeticSlot "HL" letters. */}
+                faded to hide the PNG crop edge. Compact mode scales the
+                helmet with the scene via % width so it stays readable at
+                any viewport; full mode keeps the 96px HOME render. */}
             <div
               className="absolute left-1/2 -translate-x-1/2"
               style={{
                 top: '-4%',
+                ...helmetContainerStyle,
                 WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
                 maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
               }}
             >
-              {helmetId ? (
+              {compact ? (
+                <img
+                  src={helmetId ? `/cosmetics/${helmetId}@128.png` : '/scene/helmet-placeholder.png'}
+                  alt=""
+                  draggable={false}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  title={helmetId ? t({ en: 'Helmet', it: 'Casco' }) : t({ en: 'Helmet (none equipped)', it: 'Casco (nessuno equipaggiato)' })}
+                />
+              ) : helmetId ? (
                 <CosmeticSlot
                   productId={helmetId}
                   size={96}
@@ -184,17 +230,20 @@ const MyDriverCard: React.FC<MyDriverCardProps> = ({ equipped, t, onClick }) => 
              style={{ background: `radial-gradient(ellipse at center, ${accentHex}55 0%, transparent 70%)` }} />
       </div>
 
-      {/* Accent colour bar — thicker + strong glow, the signature of the skin */}
-      <div className="px-4 pb-3 flex items-center gap-3">
+      {/* Accent colour bar — thicker + strong glow, the signature of the skin.
+          In compact mode the "Modifica →" label is hidden and the bar is thinner. */}
+      <div className={`flex items-center gap-3 ${compact ? 'px-2 pb-2' : 'px-4 pb-3'}`}>
         <div
           className="flex-1 rounded-full"
           style={{
-            height: 10,
+            height: barHeight,
             background: `linear-gradient(90deg, ${accentHex}cc 0%, ${accentHex} 50%, ${accentHex}cc 100%)`,
-            boxShadow: `0 0 18px ${accentHex}, 0 0 4px ${accentHex}`,
+            boxShadow: compact
+              ? `0 0 8px ${accentHex}, 0 0 2px ${accentHex}`
+              : `0 0 18px ${accentHex}, 0 0 4px ${accentHex}`,
           }}
         />
-        {clickable && (
+        {clickable && !compact && (
           <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: accentHex }}>
             {t({ en: 'Edit', it: 'Modifica', fr: 'Modifier', de: 'Bearbeiten', es: 'Editar', ru: 'Изменить', zh: '编辑', ar: 'تعديل', ja: '編集' })} →
           </span>
