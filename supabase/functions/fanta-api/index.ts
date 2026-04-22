@@ -219,6 +219,11 @@ const ensureTeamPenaltyTable = async (db: SqlExecutor): Promise<boolean> => {
         "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
       );
     `;
+    // RLS must be enabled even on auto-created tables — without it anyone
+    // with the anon key can read/write via the REST API. No policies are
+    // needed because the backend uses the session pooler (service_role
+    // bypasses RLS) and the anon API should never hit this table.
+    await db`ALTER TABLE "TeamPenalty" ENABLE ROW LEVEL SECURITY`;
     return true;
   } catch (e) {
     console.error("TeamPenalty table unavailable:", e);
