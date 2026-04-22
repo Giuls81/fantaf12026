@@ -16,8 +16,10 @@ import {
   CosmeticItem,
   buyCosmeticAndRefresh,
   equipCosmetic,
+  fetchMyCosmetics,
   getCosmeticsByCategory,
 } from '../services/cosmetics';
+import { restorePurchases } from '../services/purchases';
 import type {
   CosmeticCategory,
   CosmeticsState,
@@ -39,7 +41,8 @@ interface StorefrontProps {
 type BusyState =
   | { kind: 'idle' }
   | { kind: 'buying'; productId: string }
-  | { kind: 'equipping'; productId: string };
+  | { kind: 'equipping'; productId: string }
+  | { kind: 'restoring' };
 
 const formatPrice = (eur: number): string =>
   `€${eur.toFixed(2).replace('.', ',')}`;
@@ -275,6 +278,59 @@ const Storefront: React.FC<StorefrontProps> = ({
     (c) => c.productId === 'fantaf1.cosmetic.bundle.starter',
   );
 
+  // Apple 3.1.1 requires a user-accessible "Restore Purchases" action
+  // on any screen offering IAPs. We run RevenueCat's restore (which pulls
+  // the receipt from the device) and then refetch /me/cosmetics so the
+  // UI reflects anything the webhook may have granted out-of-band.
+  const handleRestore = async () => {
+    if (!isNative) {
+      setFlash(t({
+        en: 'Restore is only available in the mobile app.',
+        it: 'Il ripristino è disponibile solo nell\u0027app mobile.',
+        fr: 'La restauration n\u0027est disponible que dans l\u0027app mobile.',
+        de: 'Wiederherstellung ist nur in der mobilen App verfügbar.',
+        es: 'La restauración solo está disponible en la app móvil.',
+        ru: 'Восстановление доступно только в мобильном приложении.',
+        zh: '恢复购买仅在移动应用中可用。',
+        ar: 'الاستعادة متاحة في التطبيق الجوّال فقط.',
+        ja: '復元はモバイルアプリでのみ利用できます。',
+      }));
+      return;
+    }
+    setBusy({ kind: 'restoring' });
+    try {
+      await restorePurchases();
+      const refreshed = await fetchMyCosmetics();
+      onStateChange(refreshed);
+      setFlash(t({
+        en: 'Purchases restored.',
+        it: 'Acquisti ripristinati.',
+        fr: 'Achats restaurés.',
+        de: 'Käufe wiederhergestellt.',
+        es: 'Compras restauradas.',
+        ru: 'Покупки восстановлены.',
+        zh: '已恢复购买。',
+        ar: 'تمت استعادة المشتريات.',
+        ja: '購入を復元しました。',
+      }));
+    } catch (e) {
+      console.error('Restore failed', e);
+      setFlash(t({
+        en: 'Restore failed. Try again in a moment.',
+        it: 'Ripristino fallito. Riprova tra poco.',
+        fr: 'Échec de la restauration. Réessayez.',
+        de: 'Wiederherstellung fehlgeschlagen. Versuche es erneut.',
+        es: 'Restauración fallida. Inténtalo de nuevo.',
+        ru: 'Восстановление не удалось. Попробуйте снова.',
+        zh: '恢复失败，请稍后重试。',
+        ar: 'فشلت الاستعادة. حاول مرة أخرى.',
+        ja: '復元に失敗しました。もう一度お試しください。',
+      }));
+    } finally {
+      setBusy({ kind: 'idle' });
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -294,13 +350,29 @@ const Storefront: React.FC<StorefrontProps> = ({
               {t({ en: 'Emblems, helmets, suits, colors', it: 'Emblemi, caschi, tute, colori', fr: 'Emblèmes, casques, combinaisons, couleurs', de: 'Embleme, Helme, Anzüge, Farben', es: 'Emblemas, cascos, trajes, colores', ru: 'Эмблемы, шлемы, комбинезоны, цвета', zh: '徽章、头盔、赛服、颜色', ar: 'شعارات وخوذ وبدلات وألوان', ja: 'エンブレム・ヘルメット・スーツ・カラー' })}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center"
-            aria-label={t({ en: 'Close', it: 'Chiudi', fr: 'Fermer', de: 'Schließen', es: 'Cerrar', ru: 'Закрыть', zh: '关闭', ar: 'إغلاق', ja: '閉じる' })}
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Restore Purchases — required by Apple guideline 3.1.1.
+                Runs RevenueCat restore + refetches /me/cosmetics so any
+                purchase Apple/Google has on record but we missed (webhook
+                down, reinstall, device change) reappears in the UI. */}
+            <button
+              onClick={handleRestore}
+              disabled={busy.kind === 'restoring'}
+              className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 disabled:opacity-50"
+              title={t({ en: 'Restore purchases', it: 'Ripristina acquisti', fr: 'Restaurer les achats', de: 'Käufe wiederherstellen', es: 'Restaurar compras', ru: 'Восстановить покупки', zh: '恢复购买', ar: 'استعادة المشتريات', ja: '購入を復元' })}
+            >
+              {busy.kind === 'restoring'
+                ? '…'
+                : t({ en: 'Restore', it: 'Ripristina', fr: 'Restaurer', de: 'Wiederherstellen', es: 'Restaurar', ru: 'Восстановить', zh: '恢复', ar: 'استعادة', ja: '復元' })}
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center"
+              aria-label={t({ en: 'Close', it: 'Chiudi', fr: 'Fermer', de: 'Schließen', es: 'Cerrar', ru: 'Закрыть', zh: '关闭', ar: 'إغلاق', ja: '閉じる' })}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Season pass hero */}
