@@ -37,6 +37,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, showA
 
   return (
     <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-slate-900 shadow-2xl overflow-hidden">
+      {/* Top Branding Header */}
+      <header className="fixed top-0 w-full max-w-md bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 flex justify-center items-center z-40 pt-[env(safe-area-inset-top,0px)]">
+        <div className="h-14 flex items-center justify-center">
+          <span className="text-xl font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-red-500">
+            FantaGP
+          </span>
+          <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">2026</span>
+        </div>
+      </header>
+
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-32 pt-[calc(3.5rem+env(safe-area-inset-top,0px))]">
         {children}
