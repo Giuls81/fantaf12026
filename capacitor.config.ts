@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.fantaf1.app',
-  appName: 'Fanta F1',
+  appName: 'FantaGP',
   webDir: 'web/dist',
   plugins: {
     CapacitorUpdater: {

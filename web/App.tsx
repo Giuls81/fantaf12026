@@ -1729,7 +1729,7 @@ const App: React.FC = () => {
       <div className="flex flex-col h-screen bg-slate-900 text-white items-center justify-center p-6">
         {LangMenu}
         <h1 className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-red-500">
-          FantaF1
+          FantaGP
         </h1>
         <p className="text-slate-400 mb-8">{t({ en: '2026 Season Manager', it: 'Manager Stagione 2026', fr: 'Manager Saison 2026', de: 'Saisonmanager 2026', es: 'Gestor Temporada 2026', ru: 'Менеджер сезона 2026', zh: '2026赛季经理', ar: 'مدير موسم 2026', ja: '2026シーズンマネージャー' })}</p>
 
