@@ -955,6 +955,76 @@ app.post("/league/delete", requireUser, async (c) => {
   return c.json({ ok: true });
 });
 
+// Required by Apple Guideline 5.1.1(v) and Google Play account-deletion policy:
+// any user who can create an account must be able to delete it from within
+// the app. Client must send { confirm: "DELETE" } to prove intent.
+//
+// Deletion order mirrors the cascade of the Prisma schema: cosmetics,
+// team results, team penalties, teams, league memberships, and finally the
+// user row itself. Leagues the user solely admins are emptied and deleted
+// so they don't become orphans. Purchase receipts remain with RevenueCat
+// and the store providers as required by tax/refund law.
+app.post("/account/delete", requireUser, async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}));
+  if (body?.confirm !== "DELETE") {
+    return c.json({ error: "confirmation_required" }, 400);
+  }
+
+  await sql.begin(async sql => {
+    // 1. Find leagues where the user is the only ADMIN
+    const soloAdminLeagues = await sql`
+      SELECT l.id
+      FROM "League" l
+      JOIN "LeagueMember" m ON m."leagueId" = l.id AND m."userId" = ${user.id} AND m.role = 'ADMIN'
+      WHERE (
+        SELECT COUNT(*) FROM "LeagueMember" m2
+        WHERE m2."leagueId" = l.id AND m2.role = 'ADMIN'
+      ) = 1
+    `;
+    const orphanLeagueIds = soloAdminLeagues.map(r => r.id);
+
+    // 2. For each orphan league, delete all its data
+    if (orphanLeagueIds.length > 0) {
+      const orphanTeams = await sql`SELECT id FROM "Team" WHERE "leagueId" IN ${sql(orphanLeagueIds)}`;
+      const orphanTeamIds = orphanTeams.map(t => t.id);
+      if (orphanTeamIds.length > 0) {
+        await sql`DELETE FROM "TeamResult" WHERE "teamId" IN ${sql(orphanTeamIds)}`;
+      }
+      try {
+        await sql`DELETE FROM "TeamPenalty" WHERE "leagueId" IN ${sql(orphanLeagueIds)}`;
+      } catch (_e) { }
+      await sql`DELETE FROM "Team" WHERE "leagueId" IN ${sql(orphanLeagueIds)}`;
+      await sql`DELETE FROM "LeagueMember" WHERE "leagueId" IN ${sql(orphanLeagueIds)}`;
+      await sql`DELETE FROM "League" WHERE id IN ${sql(orphanLeagueIds)}`;
+    }
+
+    // 3. Delete the user's own teams in leagues that still have other admins
+    const userTeams = await sql`SELECT id FROM "Team" WHERE "userId" = ${user.id}`;
+    const userTeamIds = userTeams.map(t => t.id);
+    if (userTeamIds.length > 0) {
+      await sql`DELETE FROM "TeamResult" WHERE "teamId" IN ${sql(userTeamIds)}`;
+      try {
+        await sql`DELETE FROM "TeamPenalty" WHERE "teamId" IN ${sql(userTeamIds)}`;
+      } catch (_e) { }
+      await sql`DELETE FROM "Team" WHERE id IN ${sql(userTeamIds)}`;
+    }
+
+    // 4. Remove remaining league memberships
+    await sql`DELETE FROM "LeagueMember" WHERE "userId" = ${user.id}`;
+
+    // 5. Remove cosmetics ownership
+    try {
+      await sql`DELETE FROM "UserCosmetic" WHERE "userId" = ${user.id}`;
+    } catch (_e) { }
+
+    // 6. Finally, the user row itself
+    await sql`DELETE FROM "User" WHERE id = ${user.id}`;
+  });
+
+  return c.json({ ok: true });
+});
+
 // Helper constants for Sync
 const OPENF1_BASE = "https://api.openf1.org/v1";
 const OPENF1_MAX_RETRIES = 3;

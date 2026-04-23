@@ -8,7 +8,7 @@ import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
-import { getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules } from "./api";
+import { getRaces, getDrivers, register, login, createLeague, joinLeague, getMe, updateMarket, updateLineup, updateDriverInfo, updateTeamName, syncRaceResults, getLeagueStandings, getRaceResults, getRaceBreakdown, kickMember, deleteLeague, addPenalty, updateLeagueRules, deleteMyAccount } from "./api";
 import { initializePurchases, checkPremiumStatus, purchasePackage, restorePurchases, getOfferings, getPurchasesInitIssue, logInUser } from './services/purchases';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { fetchMyCosmetics, getCosmeticById } from './services/cosmetics';
@@ -440,6 +440,10 @@ const App: React.FC = () => {
 
   // UI State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteAccountInput, setDeleteAccountInput] = useState("");
+  const [deleteAccountPending, setDeleteAccountPending] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const [showLeagueSelector, setShowLeagueSelector] = useState(false);
   const [teamNameEdit, setTeamNameEdit] = useState("");
@@ -802,6 +806,30 @@ const App: React.FC = () => {
     setLoginMode('create');
     setIsRegistering(true);
     setShowResetConfirm(false);
+    setShowDeleteAccountConfirm(false);
+    setDeleteAccountInput('');
+    setDeleteAccountError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteAccountInput !== 'DELETE') {
+      setDeleteAccountError(t({ en: 'Type DELETE to confirm.', it: 'Scrivi DELETE per confermare.' }));
+      return;
+    }
+    setDeleteAccountPending(true);
+    setDeleteAccountError('');
+    try {
+      await deleteMyAccount();
+      // Server-side data is gone. Fall through to the same cleanup as logout.
+      handleLogout();
+    } catch (e) {
+      setDeleteAccountPending(false);
+      const msg = (e as Error)?.message || 'unknown error';
+      setDeleteAccountError(t({
+        en: `Deletion failed: ${msg}`,
+        it: `Eliminazione fallita: ${msg}`,
+      }));
+    }
   };
 
   const switchLeague = (leagueId: string) => {
@@ -2043,6 +2071,66 @@ const App: React.FC = () => {
                     className="w-full bg-red-900/50 hover:bg-red-800/50 text-red-200 font-bold py-2 px-4 rounded transition-colors border border-red-900"
                   >
                     {t({ en: 'Reset All Data (Logout)', it: 'Resetta Dati (Logout)', fr: 'Réinitialiser (Déconnexion)', de: 'Reset (Abmelden)', es: 'Reiniciar (Salir)', ru: 'Сброс (Выход)', zh: '重置所有数据', ar: 'إعادة تعيين (خروج)', ja: 'リセット (ログアウト)' })}
+                  </button>
+                )}
+
+                {/* Delete Account — required by Apple 5.1.1(v) and Google Play */}
+                {showDeleteAccountConfirm ? (
+                  <div className="bg-red-950/70 border border-red-500 p-4 rounded-lg mt-2">
+                    <p className="text-red-100 text-center mb-2 font-bold">
+                      {t({
+                        en: 'Permanently delete your account?',
+                        it: 'Eliminare definitivamente il tuo account?',
+                      })}
+                    </p>
+                    <p className="text-red-200/80 text-xs text-center mb-3">
+                      {t({
+                        en: 'This removes your account, teams, league memberships, and cosmetics. Purchase receipts kept by Apple/Google are not affected. This cannot be undone.',
+                        it: 'Questa azione elimina il tuo account, le squadre, le iscrizioni alle leghe e i cosmetici. Le ricevute di acquisto di Apple/Google restano. Non è reversibile.',
+                      })}
+                    </p>
+                    <label className="block text-xs text-red-200 mb-1">
+                      {t({ en: 'Type DELETE to confirm:', it: 'Scrivi DELETE per confermare:' })}
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteAccountInput}
+                      onChange={(e) => { setDeleteAccountInput(e.target.value); setDeleteAccountError(''); }}
+                      disabled={deleteAccountPending}
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="w-full bg-slate-900 border border-red-700 text-white px-3 py-2 rounded font-mono mb-2 disabled:opacity-50"
+                      placeholder="DELETE"
+                    />
+                    {deleteAccountError && (
+                      <p className="text-red-300 text-xs mb-2">{deleteAccountError}</p>
+                    )}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => { setShowDeleteAccountConfirm(false); setDeleteAccountInput(''); setDeleteAccountError(''); }}
+                        disabled={deleteAccountPending}
+                        className="flex-1 bg-slate-600 text-white py-2 rounded hover:bg-slate-500 disabled:opacity-50"
+                      >
+                        {t({ en: 'Cancel', it: 'Annulla' })}
+                      </button>
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={deleteAccountPending || deleteAccountInput !== 'DELETE'}
+                        className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {deleteAccountPending
+                          ? t({ en: 'Deleting...', it: 'Eliminazione...' })
+                          : t({ en: 'Delete Account', it: 'Elimina Account' })}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowDeleteAccountConfirm(true)}
+                    className="w-full bg-transparent hover:bg-red-950/40 text-red-400 font-semibold py-2 px-4 rounded transition-colors border border-red-800 mt-2"
+                  >
+                    {t({ en: 'Delete Account', it: 'Elimina Account', fr: 'Supprimer le compte', de: 'Konto löschen', es: 'Eliminar Cuenta', ru: 'Удалить аккаунт', zh: '删除账户', ar: 'حذف الحساب', ja: 'アカウント削除' })}
                   </button>
                 )}
               </div>

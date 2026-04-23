@@ -185,6 +185,13 @@ export async function deleteLeague(leagueId: string) {
   return apiPost<{ ok: true }>("/league/delete", { leagueId });
 }
 
+// Required by Apple Guideline 5.1.1(v): user must be able to delete their
+// own account from inside the app. Client must send { confirm: "DELETE" }
+// (case-sensitive) to prove intent.
+export async function deleteMyAccount() {
+  return apiPost<{ ok: true }>("/account/delete", { confirm: "DELETE" });
+}
+
 export async function addPenalty(leagueId: string, teamId: string, points: number, comment: string) {
   return apiPost<{ ok: true }>("/league/penalty", { leagueId, teamId, points, comment });
 }
