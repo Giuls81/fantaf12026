@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Seeds the App Store Connect in-app purchase catalog for FantaF1 2026
+// Seeds the App Store Connect in-app purchase catalog for FantaGP 2026
 // cosmetics. Creates 38 non-consumable IAPs (36 cosmetics + Starter Bundle
 // + Season Aesthetic Pass) with EN + IT localizations AND the territory
 // availability resource so the IAP flips to READY_TO_SUBMIT once pricing
@@ -68,22 +68,22 @@ const privateKeyPem = readFileSync(KEY_PATH, 'utf8');
 // --- Catalog ---------------------------------------------------------------
 
 const DESC_EN_BY_CATEGORY = {
-  emblem: 'Team emblem for FantaF1 2026',
-  helmet: 'Driver helmet skin for FantaF1 2026',
-  suit: 'Race suit pattern for FantaF1 2026',
-  color: 'Team accent color for FantaF1 2026',
-  livery: 'Car livery for FantaF1 2026',
+  emblem: 'Team emblem for FantaGP 2026',
+  helmet: 'Driver helmet skin for FantaGP 2026',
+  suit: 'Race suit pattern for FantaGP 2026',
+  color: 'Team accent color for FantaGP 2026',
+  livery: 'Car livery for FantaGP 2026',
   bundle: 'Emblems, helmets and colors bundle',
-  pass: 'All cosmetics unlocked for FantaF1 2026',
+  pass: 'All cosmetics unlocked for FantaGP 2026',
 };
 const DESC_IT_BY_CATEGORY = {
-  emblem: 'Emblema squadra per FantaF1 2026',
-  helmet: 'Skin casco pilota per FantaF1 2026',
-  suit: 'Pattern tuta da gara per FantaF1 2026',
-  color: 'Colore accento squadra per FantaF1 2026',
-  livery: 'Livrea auto per FantaF1 2026',
+  emblem: 'Emblema squadra per FantaGP 2026',
+  helmet: 'Skin casco pilota per FantaGP 2026',
+  suit: 'Pattern tuta da gara per FantaGP 2026',
+  color: 'Colore accento squadra per FantaGP 2026',
+  livery: 'Livrea auto per FantaGP 2026',
   bundle: 'Bundle emblemi, caschi e colori',
-  pass: 'Sblocca tutti i cosmetici FantaF1 2026',
+  pass: 'Sblocca tutti i cosmetici FantaGP 2026',
 };
 // Apple hard-limits each IAP localization description to 55 characters.
 // Keep every entry above under that ceiling; a length check is applied at
