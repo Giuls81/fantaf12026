@@ -1974,6 +1974,29 @@ const App: React.FC = () => {
               onClick={() => setShowStorefront(true)}
             />
 
+            {/* Explicit Shop button — added to satisfy Apple Guideline 2.1b:
+                App Review must be able to find the in-app purchases without
+                guessing that tapping the driver showcase opens the store. */}
+            <button
+              onClick={() => setShowStorefront(true)}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <span>
+                {t({
+                  en: 'Open Shop — Cosmetics & Season Pass',
+                  it: 'Apri Shop — Cosmetici e Season Pass',
+                  fr: 'Ouvrir la boutique — Cosmétiques et Pass',
+                  de: 'Shop öffnen — Kosmetik & Season Pass',
+                  es: 'Abrir Tienda — Cosméticos y Pase',
+                  ru: 'Магазин — косметика и пропуск сезона',
+                  zh: '打开商店 — 装饰与赛季通行证',
+                  ar: 'افتح المتجر — تجميلات وتصريح الموسم',
+                  ja: 'ショップ — コスメ & シーズンパス',
+                })}
+              </span>
+            </button>
+
             {!isPremium && (
               <div className="bg-gradient-to-r from-yellow-900/40 to-amber-900/40 p-4 rounded-xl border border-yellow-700/50">
                 <div className="flex flex-col gap-3">
