@@ -98,15 +98,22 @@ const ensureAdMobInitialized = async (): Promise<boolean> => {
       return false;
     }
 
+    // IMPORTANT: GDPR consent must come BEFORE ATT (Apple Guideline 5.1.1iv).
+    // If ATT is shown first and the user taps "Ask App Not to Track", then
+    // showing a GDPR prompt that asks for tracking permission is confusing
+    // and gets the app rejected. When GDPR comes first it addresses data
+    // collection (EU law); ATT after addresses cross-app tracking (Apple
+    // policy). The two no longer conflict.
+    //
+    // EEA/UK: request/update consent state first.
+    await refreshConsentState(true);
+
     // ATT prompt should never block SDK init.
     try {
       await AdMob.requestTrackingAuthorization();
     } catch (e) {
       console.warn('AdMob: tracking authorization request failed', e);
     }
-
-    // EEA/UK: request/update consent state before requesting ads.
-    await refreshConsentState(true);
 
     return true;
   })().finally(() => {
