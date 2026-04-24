@@ -56,7 +56,7 @@ workflows:
       - name: Auto-increment build number (iOS + Android)
         script: |
           set -e
-          APP_BUILD_NUMBER="129"
+          APP_BUILD_NUMBER="130"
           echo "Using APP_BUILD_NUMBER=$APP_BUILD_NUMBER"
 
           /usr/bin/sed -i '' -E "s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = ${APP_BUILD_NUMBER};/g" ios/App/App.xcodeproj/project.pbxproj
@@ -152,6 +152,7 @@ workflows:
     environment:
       groups:
         - ios
+        - android_signing
       node: 22
       vars:
         ANDROID_DIR: "android"
@@ -159,6 +160,7 @@ workflows:
         VITE_ADS_ENABLED: "true"
         VITE_ADS_TEST_MODE: "false"
         VITE_ADS_DEBUG_LOGS: "false"
+        ANDROID_KEY_ALIAS: "fantagp-upload"
     triggering:
       events:
         - push
@@ -191,15 +193,28 @@ workflows:
       - name: Auto-increment build number (Android)
         script: |
           set -e
-          APP_BUILD_NUMBER="129"
+          APP_BUILD_NUMBER="130"
           echo "Using APP_BUILD_NUMBER=$APP_BUILD_NUMBER"
           /usr/bin/sed -i '' -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${APP_BUILD_NUMBER}/" android/app/build.gradle
           echo "Android versionCode -> $APP_BUILD_NUMBER"
-      - name: Build Android APK (Debug & Release)
+      - name: Decode upload keystore
         script: |
+          set -e
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "Missing ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD — abort"
+            exit 1
+          fi
+          mkdir -p "$CM_BUILD_DIR/signing"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$CM_BUILD_DIR/signing/fantagp-upload.jks"
+          ls -l "$CM_BUILD_DIR/signing/fantagp-upload.jks"
+          export ANDROID_KEYSTORE_PATH="$CM_BUILD_DIR/signing/fantagp-upload.jks"
+          echo "ANDROID_KEYSTORE_PATH=$ANDROID_KEYSTORE_PATH" >> "$CM_ENV"
+      - name: Build Android AAB + APK (Release, signed)
+        script: |
+          set -e
           cd android
           ./gradlew assembleDebug
-          ./gradlew assembleRelease || echo "Release build failed (likely missing signing keys), continuing..."
+          ./gradlew bundleRelease assembleRelease
     artifacts:
       - android/app/build/outputs/apk/debug/*.apk
       - android/app/build/outputs/apk/release/*.apk

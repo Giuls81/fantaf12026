@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+// Upload signing config. Codemagic sets these env vars on every release
+// build; locally they can be left unset, in which case the release build
+// type is left unsigned (debug builds still work for local testing).
+def keystoreFile = System.getenv('ANDROID_KEYSTORE_PATH') ?: ''
+def keystorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: ''
+def keyAlias = System.getenv('ANDROID_KEY_ALIAS') ?: 'fantagp-upload'
+def keyPassword = System.getenv('ANDROID_KEY_PASSWORD') ?: keystorePassword
+
 android {
     namespace "com.fantaf1.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,10 +24,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystoreFile && file(keystoreFile).exists()) {
+                storeFile file(keystoreFile)
+                storePassword keystorePassword
+                keyAlias keyAlias
+                keyPassword keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystoreFile && file(keystoreFile).exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
