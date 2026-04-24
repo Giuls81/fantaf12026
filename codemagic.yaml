@@ -154,6 +154,10 @@ workflows:
         - ios
         - android_signing
       node: 22
+      # Capacitor 8 targets Java 21; Codemagic defaults to 17. Without this
+      # the :capacitor-android:compileDebugJavaWithJavac step fails with
+      # "invalid source release: 21".
+      java: 21
       vars:
         ANDROID_DIR: "android"
         VITE_API_URL: "https://laqjyqfnjnofmvgedunl.supabase.co/functions/v1/fanta-api"
