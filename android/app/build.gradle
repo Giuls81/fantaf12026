@@ -3,10 +3,12 @@ apply plugin: 'com.android.application'
 // Upload signing config. Codemagic sets these env vars on every release
 // build; locally they can be left unset, in which case the release build
 // type is left unsigned (debug builds still work for local testing).
-def keystoreFile = System.getenv('ANDROID_KEYSTORE_PATH') ?: ''
-def keystorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: ''
-def keyAlias = System.getenv('ANDROID_KEY_ALIAS') ?: 'fantagp-upload'
-def keyPassword = System.getenv('ANDROID_KEY_PASSWORD') ?: keystorePassword
+// Vars are prefixed "upload*" so they don't shadow the Gradle DSL setters
+// of the same name (keyAlias / keyPassword) inside signingConfigs.
+def uploadKeystoreFile = System.getenv('ANDROID_KEYSTORE_PATH') ?: ''
+def uploadStorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: ''
+def uploadKeyAlias = System.getenv('ANDROID_KEY_ALIAS') ?: 'fantagp-upload'
+def uploadKeyPassword = System.getenv('ANDROID_KEY_PASSWORD') ?: uploadStorePassword
 
 android {
     namespace "com.fantaf1.app"
@@ -26,11 +28,11 @@ android {
     }
     signingConfigs {
         release {
-            if (keystoreFile && file(keystoreFile).exists()) {
-                storeFile file(keystoreFile)
-                storePassword keystorePassword
-                keyAlias keyAlias
-                keyPassword keyPassword
+            if (uploadKeystoreFile && file(uploadKeystoreFile).exists()) {
+                storeFile file(uploadKeystoreFile)
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
             }
         }
     }
@@ -38,7 +40,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (keystoreFile && file(keystoreFile).exists()) {
+            if (uploadKeystoreFile && file(uploadKeystoreFile).exists()) {
                 signingConfig signingConfigs.release
             }
         }
