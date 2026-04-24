@@ -213,6 +213,7 @@ workflows:
         script: |
           set -e
           cd android
+          chmod +x ./gradlew
           ./gradlew assembleDebug
           ./gradlew bundleRelease assembleRelease
     artifacts:
