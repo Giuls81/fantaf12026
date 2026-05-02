@@ -56,7 +56,7 @@ workflows:
       - name: Auto-increment build number (iOS + Android)
         script: |
           set -e
-          APP_BUILD_NUMBER="131"
+          APP_BUILD_NUMBER="132"
           echo "Using APP_BUILD_NUMBER=$APP_BUILD_NUMBER"
 
           /usr/bin/sed -i '' -E "s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = ${APP_BUILD_NUMBER};/g" ios/App/App.xcodeproj/project.pbxproj
@@ -197,7 +197,7 @@ workflows:
       - name: Auto-increment build number (Android)
         script: |
           set -e
-          APP_BUILD_NUMBER="131"
+          APP_BUILD_NUMBER="132"
           echo "Using APP_BUILD_NUMBER=$APP_BUILD_NUMBER"
           /usr/bin/sed -i '' -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${APP_BUILD_NUMBER}/" android/app/build.gradle
           echo "Android versionCode -> $APP_BUILD_NUMBER"
