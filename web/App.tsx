@@ -4,7 +4,6 @@ import Layout from './components/Layout';
 import { initializeAdMob, showAppOpen, showInterstitialWithProbability } from './services/admob';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { AdBanner } from './components/AdBanner';
 import { AppData, Tab, UserTeam, Driver, Race, User, ScoringRules } from './types';
 import { DEFAULT_SCORING_RULES, DRIVERS, CONSTRUCTORS, APP_VERSION } from './constants';
@@ -191,16 +190,6 @@ const App: React.FC = () => {
 
   // Use constructors from rules (editable) fallback to constant if needed
   const activeConstructors = data?.rules?.constructors || CONSTRUCTORS;
-
-  // Live updates safety handshake:
-  // mark current bundle as healthy to avoid automatic rollback.
-  useEffect(() => {
-    if (Capacitor.getPlatform() === 'web') return;
-
-    CapacitorUpdater.notifyAppReady().catch((e) => {
-      console.warn('Capgo notifyAppReady failed', e);
-    });
-  }, []);
 
   // Initial AdMob & Premium Check
   useEffect(() => {
