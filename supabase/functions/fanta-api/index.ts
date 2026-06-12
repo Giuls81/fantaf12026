@@ -1578,13 +1578,22 @@ function calculateWeekendPoints(combinedResults: CombinedResults, rules: Scoring
     const dId = d.id;
     let racePts = 0; let qualiPts = 0; let sprintPts = 0; let overtakes = 0; let teammatePts = 0; let dnfPts = 0; let lastPts = 0; let polePts = 0; let sqPolePts = 0;
     const pos = raceRes[dId]; const grid = qualiRes[dId];
-    const hasValidRacePos = Number.isFinite(pos) && Number(pos) > 0 && Number(pos) < 900;
+    // A retired (DNF/DNS) driver must never earn race-position points, even if
+    // the results feed recorded a classification for them. OpenF1 snapshots the
+    // position held at the moment of retirement, so a driver who retires from
+    // P2 would otherwise be scored as a P2 finisher (Verstappen, Monte Carlo 2026).
+    const retired = dnfL.includes(dId) || dnsL.includes(dId);
+    const hasValidRacePos = Number.isFinite(pos) && Number(pos) > 0 && Number(pos) < 900 && !retired;
     const hasValidGridPos = Number.isFinite(grid) && Number(grid) > 0 && Number(grid) < 900;
     const hasUnclassifiedGrid = Number.isFinite(grid) && Number(grid) >= 900;
 
     if (hasValidRacePos) {
       racePts = (rules.racePositionPoints || DEFAULT_RACE_POINTS)[pos - 1] || 0;
-      const vps = Object.values(raceRes).filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 900) as number[];
+      // Last-place malus goes to the last *finisher*: retired drivers are
+      // excluded from the comparison (they already take the DNF malus).
+      const vps = Object.entries(raceRes)
+        .filter(([id, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 900 && !dnfL.includes(id) && !dnsL.includes(id))
+        .map(([, v]) => v as number);
       const mx = vps.length > 0 ? Math.max(...vps) : 0;
       if (pos === mx && mx > 10) lastPts = (rules.raceLastPlaceMalus ?? -3);
     }
@@ -1594,7 +1603,6 @@ function calculateWeekendPoints(combinedResults: CombinedResults, rules: Scoring
       else if (hasValidGridPos && grid <= 16) qualiPts += (rules.qualiQ2Reached ?? 1);
       else qualiPts += (rules.qualiQ1Eliminated ?? -3);
     }
-    const retired = dnfL.includes(dId) || dnsL.includes(dId);
     if (hasValidGridPos && hasValidRacePos && !retired) {
       const diff = grid - pos;
       if (diff > 0) {
@@ -1801,9 +1809,14 @@ app.post("/admin/sync-race", requireUser, async (c) => {
 
 app.post("/admin/recalculate-race", requireUser, async (c) => {
   const user = c.get("user");
-  const membership = await sql`SELECT "leagueId" FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  const { raceId, leagueId: requestedLeagueId } = await c.req.json();
+  if (!raceId) return c.json({ error: "missing_raceId" }, 400);
+  // Optional explicit leagueId: an admin of multiple leagues can pick which
+  // one to recalculate. Without it the first ADMIN membership is used (legacy).
+  const membership = requestedLeagueId
+    ? await sql`SELECT "leagueId" FROM "LeagueMember" WHERE "userId" = ${user.id} AND "leagueId" = ${requestedLeagueId} AND role = 'ADMIN' LIMIT 1`
+    : await sql`SELECT "leagueId" FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
   if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
-  const { raceId } = await c.req.json(); if (!raceId) return c.json({ error: "missing_raceId" }, 400);
   try {
     const [race] = await sql`SELECT * FROM "Race" WHERE id = ${raceId}`;
     if (!race || !race.results) return c.json({ error: "no_results" }, 400);
