@@ -1781,37 +1781,43 @@ app.post("/admin/sync-race", requireUser, async (c) => {
       }, 409);
     }
   }
-  const lId = membership[0].leagueId;
-  const [lD] = await sql<{ rules: ScoringRules }[]>`SELECT rules FROM "League" WHERE id = ${lId}`;
-  const rules = (lD?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
-  const lPts = calculateWeekendPoints(res, rules, teammates, allDrivers);
+  // Recompute results for EVERY league, each with its own scoring rules.
+  // Previously only the syncing admin's league was updated, leaving every
+  // other league with stale (often wrong) TeamResults after a re-sync —
+  // e.g. a DNF correction reached only one league. A race sync is global
+  // data, so all leagues must be rescored.
   const hasPenaltyTable = await ensureTeamPenaltyTable(sql as unknown as SqlExecutor);
+  const allLeagues = await sql<{ id: string; rules: ScoringRules }[]>`SELECT id, rules FROM "League"`;
   await sql.begin(async (sql) => {
-    const teams = await sql`SELECT id, "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${lId}`;
-    const tIds = teams.map((t) => t.id);
-    if (tIds.length > 0) {
-      const old = await sql`SELECT id FROM "TeamResult" WHERE "raceId" = ${race.id} AND "teamId" IN ${sql(tIds)}`;
-      if (old.length > 0) {
-        const oIds = old.map((r) => r.id);
-        await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" IN ${sql(oIds)}`;
-        await sql`DELETE FROM "TeamResult" WHERE id IN ${sql(oIds)}`;
+    for (const lg of allLeagues) {
+      const rules = (lg.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
+      const lPts = calculateWeekendPoints(res, rules, teammates, allDrivers);
+      const teams = await sql`SELECT id, "captainId", "reserveId" FROM "Team" WHERE "leagueId" = ${lg.id}`;
+      const tIds = teams.map((t) => t.id);
+      if (tIds.length > 0) {
+        const old = await sql`SELECT id FROM "TeamResult" WHERE "raceId" = ${race.id} AND "teamId" IN ${sql(tIds)}`;
+        if (old.length > 0) {
+          const oIds = old.map((r) => r.id);
+          await sql`DELETE FROM "TeamResultDriver" WHERE "teamResultId" IN ${sql(oIds)}`;
+          await sql`DELETE FROM "TeamResult" WHERE id IN ${sql(oIds)}`;
+        }
       }
-    }
-    for (const t of teams) {
-      const td = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${t.id}`;
-      const tdIds = td.map((x) => x.driverId);
-      const resA = isReserveActivatedByDns(tdIds, t.reserveId, dnsD);
-      let tP = 0; const rD = [];
-      for (const dId of tdIds) {
-        let p = Number(lPts.driverPoints[dId] || 0);
-        if (dId === t.reserveId) p = resA ? p * 0.5 : 0;
-        if (dId === t.captainId) p = p * 2.0;
-        tP += p; rD.push({ driverId: dId, points: p });
+      for (const t of teams) {
+        const td = await sql`SELECT "driverId" FROM "TeamDriver" WHERE "teamId" = ${t.id}`;
+        const tdIds = td.map((x) => x.driverId);
+        const resA = isReserveActivatedByDns(tdIds, t.reserveId, dnsD);
+        let tP = 0; const rD = [];
+        for (const dId of tdIds) {
+          let p = Number(lPts.driverPoints[dId] || 0);
+          if (dId === t.reserveId) p = resA ? p * 0.5 : 0;
+          if (dId === t.captainId) p = p * 2.0;
+          tP += p; rD.push({ driverId: dId, points: p });
+        }
+        const trId = crypto.randomUUID();
+        await sql`INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt") VALUES (${trId}, ${race.id}, ${t.id}, ${tP}, ${t.captainId}, ${t.reserveId}, ${new Date().toISOString()})`;
+        for (const d of rD) await sql`INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points) VALUES (${crypto.randomUUID()}, ${trId}, ${d.driverId}, ${d.points})`;
+        await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id, hasPenaltyTable);
       }
-      const trId = crypto.randomUUID();
-      await sql`INSERT INTO "TeamResult" (id, "raceId", "teamId", points, "captainId", "reserveId", "createdAt") VALUES (${trId}, ${race.id}, ${t.id}, ${tP}, ${t.captainId}, ${t.reserveId}, ${new Date().toISOString()})`;
-      for (const d of rD) await sql`INSERT INTO "TeamResultDriver" (id, "teamResultId", "driverId", points) VALUES (${crypto.randomUUID()}, ${trId}, ${d.driverId}, ${d.points})`;
-      await syncTeamTotalPoints(sql as unknown as SqlExecutor, t.id, hasPenaltyTable);
     }
     const offP = calculateWeekendPoints(res, DEFAULT_SCORING_RULES, teammates, allDrivers);
     const finalR = { ...res, driverPoints: offP.driverPoints, driverRacePoints: offP.driverRacePoints, driverQualiPoints: offP.driverQualiPoints, driverSprintPoints: offP.driverSprintPoints, driverSprintQualiPoints: offP.driverSprintQualiPoints, driverBreakdown: offP.driverBreakdown };
