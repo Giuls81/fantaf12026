@@ -1761,6 +1761,26 @@ app.post("/admin/sync-race", requireUser, async (c) => {
   }
   res.dnsDrivers = Array.from(dnsD); res.dnfDrivers = Array.from(dnfD);
   if (Object.keys(res).length === 0) return c.json({ error: "no_data", loc, season }, 404);
+
+  // Recurrence guard: if OpenF1's race classification is identical to the
+  // qualifying order, we fetched the starting grid, not real race results —
+  // the race has not finished (or results aren't published yet). Publishing
+  // this would score the grid as the finish (Barcelona r8 2026: Russell shown
+  // P1 instead of his P2 finish). Refuse to publish and tell the caller to
+  // re-sync once the race is final.
+  if (pub && res.quali && res.race) {
+    const qk = Object.keys(res.quali);
+    const sameAsGrid = qk.length > 0 &&
+      qk.length === Object.keys(res.race).length &&
+      qk.every((id) => res.quali![id] === res.race![id]);
+    if (sameAsGrid) {
+      return c.json({
+        error: "race_equals_grid",
+        message: "Race classification matches the qualifying grid — the race is not final yet. Re-sync after the race finishes.",
+        loc, season,
+      }, 409);
+    }
+  }
   const lId = membership[0].leagueId;
   const [lD] = await sql<{ rules: ScoringRules }[]>`SELECT rules FROM "League" WHERE id = ${lId}`;
   const rules = (lD?.rules || DEFAULT_SCORING_RULES) as unknown as ScoringRules;
