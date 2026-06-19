@@ -1705,14 +1705,17 @@ app.get("/leagues/:leagueId/breakdown/:raceId", requireUser, async (c) => {
   });
 });
 
-app.post("/admin/sync-race", requireUser, async (c) => {
-  const user = c.get("user");
-  const membership = await sql`SELECT "leagueId", role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
-  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
-  const { raceId } = await c.req.json();
-  if (!raceId) return c.json({ error: "missing_raceId" }, 400);
+// Core race-sync logic, shared by the admin endpoint and the weekly cron.
+// Re-fetches a race from OpenF1, applies the grid-guard, and rescores every
+// league. Returns a discriminated result instead of an HTTP response so both
+// callers can decide how to surface it.
+type SyncResult =
+  | { ok: true; loc: string; season: number }
+  | { ok: false; error: string; status: number; loc?: string; season?: number };
+
+async function syncRaceCore(raceId: string): Promise<SyncResult> {
   const [race] = await sql`SELECT * FROM "Race" WHERE id = ${raceId}`;
-  if (!race) return c.json({ error: "race_not_found" }, 404);
+  if (!race) return { ok: false, error: "race_not_found", status: 404 };
   try {
     await sql`ALTER TABLE "TeamResultDriver" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
     await sql`ALTER TABLE "Driver" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
@@ -1720,7 +1723,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     await sql`ALTER TABLE "TeamResult" ALTER COLUMN "points" TYPE DOUBLE PRECISION USING "points"::double precision`;
   } catch (_e) {}
   const allDrivers = await sql<Driver[]>`SELECT id, name, "constructorId" FROM "Driver"`;
-  if (allDrivers.length === 0) return c.json({ error: "no_drivers_found" }, 400);
+  if (allDrivers.length === 0) return { ok: false, error: "no_drivers_found", status: 400 };
   const teammates: Record<string, string> = {};
   const byC: Record<string, string[]> = {};
   for (const d of allDrivers) {
@@ -1760,7 +1763,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     dnsD = flg.dnsDrivers; dnfD = flg.dnfDrivers;
   }
   res.dnsDrivers = Array.from(dnsD); res.dnfDrivers = Array.from(dnfD);
-  if (Object.keys(res).length === 0) return c.json({ error: "no_data", loc, season }, 404);
+  if (Object.keys(res).length === 0) return { ok: false, error: "no_data", status: 404, loc, season };
 
   // Recurrence guard: if OpenF1's race classification is identical to the
   // qualifying order, we fetched the starting grid, not real race results —
@@ -1774,11 +1777,7 @@ app.post("/admin/sync-race", requireUser, async (c) => {
       qk.length === Object.keys(res.race).length &&
       qk.every((id) => res.quali![id] === res.race![id]);
     if (sameAsGrid) {
-      return c.json({
-        error: "race_equals_grid",
-        message: "Race classification matches the qualifying grid — the race is not final yet. Re-sync after the race finishes.",
-        loc, season,
-      }, 409);
+      return { ok: false, error: "race_equals_grid", status: 409, loc, season };
     }
   }
   // Recompute results for EVERY league, each with its own scoring rules.
@@ -1830,7 +1829,46 @@ app.post("/admin/sync-race", requireUser, async (c) => {
     }
     for (const d of allDrivers) await sql`UPDATE "Driver" SET points = ${dTot[d.id] || 0} WHERE id = ${d.id}`;
   });
-  return c.json({ ok: true, loc, season });
+  return { ok: true, loc, season };
+}
+
+app.post("/admin/sync-race", requireUser, async (c) => {
+  const user = c.get("user");
+  const membership = await sql`SELECT "leagueId", role FROM "LeagueMember" WHERE "userId" = ${user.id} AND role = 'ADMIN' LIMIT 1`;
+  if (membership.length === 0) return c.json({ error: "not_admin" }, 403);
+  const { raceId } = await c.req.json();
+  if (!raceId) return c.json({ error: "missing_raceId" }, 400);
+  const r = await syncRaceCore(raceId);
+  if (!r.ok) return c.json({ error: r.error, loc: r.loc, season: r.season }, r.status as 400 | 404 | 409);
+  return c.json({ ok: true, loc: r.loc, season: r.season });
+});
+
+// Weekly mid-week re-sync (pg_cron -> pg_net). Re-pulls every race whose date
+// is in the last ~9 days so that final DNF flags, penalties, and race-direction
+// decisions (which OpenF1 publishes hours/days after the chequered flag) land
+// in the standings without anyone clicking Sync. The grid-guard inside
+// syncRaceCore skips any race that isn't final yet. Protected by a shared
+// secret header, not user auth.
+app.post("/cron/resync-recent", async (c) => {
+  const provided = c.req.header("x-cron-secret");
+  const expected = Deno.env.get("CRON_SECRET");
+  if (!expected || provided !== expected) return c.json({ error: "unauthorized" }, 401);
+
+  const recent = await sql<{ id: string; name: string }[]>`
+    SELECT id, name FROM "Race"
+    WHERE date <= NOW() AND date >= NOW() - INTERVAL '9 days'
+    ORDER BY round
+  `;
+  const results: Array<Record<string, unknown>> = [];
+  for (const r of recent) {
+    try {
+      const out = await syncRaceCore(r.id);
+      results.push({ raceId: r.id, name: r.name, ...out });
+    } catch (e) {
+      results.push({ raceId: r.id, name: r.name, ok: false, error: (e as Error).message });
+    }
+  }
+  return c.json({ ok: true, count: results.length, results });
 });
 
 app.post("/admin/recalculate-race", requireUser, async (c) => {
