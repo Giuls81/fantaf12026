@@ -1245,7 +1245,18 @@ async function syncRaceCalendarFromOpenF1(): Promise<void> {
     ? meetings.filter((m) => Date.parse(m.raceUtc) > pivotTs)
     : meetings;
 
-  const mutableRaces = dbRaces.filter((r) => !lockedHistoricalRaceIds.has(r.id));
+  // Only slots positioned AFTER the last locked race may be (re)assigned to
+  // upcoming meetings. A non-locked race that sits at or before the last
+  // locked round is a historical hole — e.g. a cancelled GP that someone
+  // marked not-completed. Letting such a hole pick up the next upcoming
+  // meeting drags a future race back to an early round and scrambles the
+  // whole calendar (the Bahrain hole once pulled Austria to round 4).
+  const maxLockedRound = lockedHistoricalRaces.length > 0
+    ? Math.max(...lockedHistoricalRaces.map((r) => Number(r.round) || 0))
+    : 0;
+  const mutableRaces = dbRaces
+    .filter((r) => !lockedHistoricalRaceIds.has(r.id))
+    .filter((r) => (Number(r.round) || 0) > maxLockedRound);
 
   await sql.begin(async (tx) => {
     for (let index = 0; index < mutableRaces.length; index++) {
